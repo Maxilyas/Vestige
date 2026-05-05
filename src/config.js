@@ -1,7 +1,8 @@
 // Config globale du jeu Vestige
-// Centralise les constantes pour éviter les "magic numbers" éparpillés
-
-import { GameScene } from './scenes/GameScene.js';
+// Centralise les constantes pour éviter les "magic numbers" éparpillés.
+// Important : ce fichier ne doit RIEN importer du dossier scenes/ ni systems/
+// — sinon on crée une dépendance circulaire (TDZ sur PLAYER/WORLD).
+// L'enregistrement des scènes se fait dans main.js.
 
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 540;
@@ -34,6 +35,6 @@ export const gameConfig = {
             gravity: { y: WORLD.GRAVITY_Y },
             debug: false
         }
-    },
-    scene: [GameScene]
+    }
+    // Les scènes sont injectées dans main.js (cf. structure ci-dessus)
 };

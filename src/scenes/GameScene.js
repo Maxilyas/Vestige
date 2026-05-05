@@ -1,45 +1,57 @@
 // Scène principale — Monde Normal.
-// Étape MVP n°2 : un personnage rectangulaire qui se déplace et saute sur un sol.
-// Pas encore de génération procédurale, pas encore de Résonance — juste les bases.
+// Étape MVP n°3 : la scène consomme WorldGen pour générer une salle,
+// affiche un compteur de salle, et déclenche la salle suivante quand
+// le joueur entre dans la zone de sortie à droite.
 
 import { GAME_WIDTH, GAME_HEIGHT, PLAYER } from '../config.js';
+import { genererSalle } from '../systems/WorldGen.js';
+
+// Seed globale du run. Plus tard, on la randomisera à chaque "nouveau run"
+// et on l'exposera quelque part (URL, écran de démarrage…).
+const SEED_DU_RUN = 1337;
 
 export class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
+        this.indexSalle = 0;
+    }
+
+    // On accepte un index de salle en paramètre pour que la transition
+    // puisse appeler scene.restart({ indexSalle: ... }).
+    init(data) {
+        this.indexSalle = data?.indexSalle ?? 0;
     }
 
     create() {
-        // --- Sol et plateformes ---
-        // On utilise un staticGroup avec des rectangles générés via Graphics
-        // (pas d'assets pour l'instant — primitives uniquement)
+        // 1. Demande à WorldGen la description de la salle courante
+        const salle = genererSalle(SEED_DU_RUN, this.indexSalle);
+
+        // 2. Matérialise les plateformes
         this.platforms = this.physics.add.staticGroup();
+        for (const p of salle.plateformes) {
+            this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, 0x3a3a4a);
+        }
 
-        // Sol principal (large rectangle au bas de l'écran)
-        this.creerPlateforme(GAME_WIDTH / 2, GAME_HEIGHT - 20, GAME_WIDTH, 40, 0x3a3a4a);
-
-        // Quelques plateformes pour tester le saut
-        this.creerPlateforme(200, GAME_HEIGHT - 140, 180, 20, 0x4a4a5a);
-        this.creerPlateforme(GAME_WIDTH - 200, GAME_HEIGHT - 200, 180, 20, 0x4a4a5a);
-        this.creerPlateforme(GAME_WIDTH / 2, GAME_HEIGHT - 280, 160, 20, 0x4a4a5a);
-
-        // --- Joueur ---
-        // Rectangle simple : on le créera en vrai sprite/spritesheet plus tard
+        // 3. Joueur (toujours un simple rectangle pour l'instant)
         this.player = this.add.rectangle(
-            100,
-            GAME_HEIGHT - 100,
+            salle.spawnJoueur.x,
+            salle.spawnJoueur.y,
             PLAYER.WIDTH,
             PLAYER.HEIGHT,
             PLAYER.COLOR
         );
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
-
-        // Collision joueur / plateformes
         this.physics.add.collider(this.player, this.platforms);
 
-        // --- Contrôles clavier ---
-        // Flèches + ZQSD (AZERTY) + Espace pour le saut
+        // 4. Zone de sortie — visible (rectangle doré) + détection d'overlap
+        const s = salle.sortie;
+        this.sortie = this.add.rectangle(s.x, s.y, s.largeur, s.hauteur, 0xc8a85a, 0.35);
+        this.sortie.setStrokeStyle(2, 0xc8a85a, 0.9);
+        this.physics.add.existing(this.sortie, true); // true = static body
+        this.physics.add.overlap(this.player, this.sortie, () => this.salleSuivante());
+
+        // 5. Contrôles
         this.cursors = this.input.keyboard.createCursorKeys();
         this.touches = this.input.keyboard.addKeys({
             gauche: Phaser.Input.Keyboard.KeyCodes.Q,
@@ -47,20 +59,27 @@ export class GameScene extends Phaser.Scene {
             saut: Phaser.Input.Keyboard.KeyCodes.SPACE
         });
 
-        // Petit texte d'aide en haut, sera retiré plus tard
-        this.add.text(10, 10, 'Vestige — prototype\nFlèches / QD pour bouger, ↑ ou Espace pour sauter', {
+        // 6. Petit HUD textuel — sera remplacé par UIScene plus tard
+        this.add.text(10, 10, `Vestige — Salle ${salle.index + 1}`, {
             fontFamily: 'monospace',
-            fontSize: '14px',
+            fontSize: '16px',
+            color: '#e8e4d8'
+        });
+        this.add.text(10, 32, 'Flèches / QD pour bouger, ↑ ou Espace pour sauter', {
+            fontFamily: 'monospace',
+            fontSize: '12px',
             color: '#8a8a9a'
         });
+
+        // Garde-fou : empêche un overlap déclenché plusieurs fois pendant la
+        // même frame de provoquer plusieurs scene.restart() en cascade
+        this.transitionEnCours = false;
     }
 
     update() {
         const body = this.player.body;
         const auSol = body.blocked.down || body.touching.down;
 
-        // Déplacement horizontal — on remet la vélocité à zéro chaque frame
-        // pour éviter le "glissement" indésirable
         const gauche = this.cursors.left.isDown || this.touches.gauche.isDown;
         const droite = this.cursors.right.isDown || this.touches.droite.isDown;
 
@@ -72,7 +91,6 @@ export class GameScene extends Phaser.Scene {
             body.setVelocityX(0);
         }
 
-        // Saut — uniquement si on touche une surface en dessous
         const veutSauter =
             Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
             Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
@@ -83,12 +101,22 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    // Helper interne : crée une plateforme statique colorée à (x, y)
-    // x, y = centre du rectangle
+    // Transition vers la salle suivante : on restart la scène avec un index +1
+    salleSuivante() {
+        if (this.transitionEnCours) return;
+        this.transitionEnCours = true;
+
+        // Petit fade-out pour que la transition ne soit pas brutale
+        this.cameras.main.fadeOut(200, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.restart({ indexSalle: this.indexSalle + 1 });
+        });
+    }
+
+    // Helper interne : crée une plateforme statique à (x, y) (centre)
     creerPlateforme(x, y, largeur, hauteur, couleur) {
         const rect = this.add.rectangle(x, y, largeur, hauteur, couleur);
         this.platforms.add(rect);
-        // Recalcule la hitbox statique après ajout (sinon Phaser garde l'ancienne)
         rect.body.updateFromGameObject();
         return rect;
     }
