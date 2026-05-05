@@ -59,14 +59,27 @@ npx vite
 3. ✅ Génération procédurale de salles (PRNG seedé + zone de sortie + transition)
 4. ✅ Système de Résonance + HUD (UIScene parallèle, registry, jauge)
 5. ✅ Basculement Monde Normal ↔ Monde Miroir (palette + portail + baisse passive + ancrage)
-6. ⬜ Système de loot (3 familles)
+6. ✅ Système de loot — coffres, drops orphelins (consommables), inventaire 40 slots, équipement 3 slots, 3 tiers de révélation, 15 items + 6 consommables
 7. ⬜ Ennemis basiques
 
 ## État actuel
 *Cette section doit être mise à jour à la fin de chaque session de travail.*
 
-- **Dernière étape franchie :** étape 5 + option C + vortex — basculement Normal ↔ Miroir avec **continuité spatiale** (tu réapparais exactement où tu étais lors d'une bascule ou d'un retour). `MondeSystem` (état dans le registry), palettes différentes, baisse passive 2 pts/s en Miroir, **vortex de retour à position aléatoire seedée** (sur une plateforme, distance min 200 px du spawn et de la sortie, pulsation visuelle), basculement auto à Résonance 0 (fade rouge), bonus +20 au retour, état "ancré" si on retombe à 0 dans le Miroir, sortie de salle active dans les deux mondes.
-- **Prochain chantier :** étape 6 — Système de loot (3 familles : Blanc / Bleu / Noir, 3 slots, effets cachés). À discuter en plan : Fragments bruts vs items équipables, où placer les coffres, quel équilibre entre les 3 familles dans le proto.
+- **Dernière étape franchie :** étape 6 — système de loot complet. `data/items.js` (15 items équipables + 6 consommables), `LootSystem` (tirage selon monde, calcul de stats effectives), `InventaireSystem` (inventaire 40 slots + 3 slots équipés dans le registry, persiste aux scene.restart), `InputSystem` (intentions abstraites, jamais de clavier direct dans la logique), `InventaireScene` (overlay grille + détail + équiper/jeter avec tier 1/2/3 de révélation et marqueur ★), coffres et drops orphelins seedés dans WorldGen, ramassage par touche E. Stats effectives calculées dynamiquement depuis l'équipement.
+- **Prochain chantier :** étape 7 — Ennemis basiques. À discuter : 2 types par monde (cf. GDD), comportements simples (patrouille, suivi), drops à la mort (réutilisent `tirerItem`).
+- **Compromis MVP étape 6 (dette narrative documentée) :**
+  - Items du Miroir directement équipables, alors que LORE prévoit des Fragments bruts à transformer en Présent (Sanctuaires/Fondeur). Le système actuel reste compatible avec cette couche future.
+  - Pas encore : malédictions temporelles des Noir, identification des Tier III par Œil-Témoin, items "game-changers" (wall-grip, drop-down, slow-mo, fil d'Ariane) — étape 6.5
+- **Points d'attention :**
+  - Le joueur est toujours un `Phaser.GameObjects.Rectangle` — à remplacer par un sprite plus tard
+  - Aucun asset graphique, tout est en primitives colorées
+  - Seed du run hardcodée à `1337` dans `GameScene.js` — à randomiser plus tard
+  - Génération linéaire (salle suivante = index+1), pas de connectivité grille
+  - Pas encore d'Artefact de Résonance ni de fenêtre de grâce avant Absorption — l'Ancrage actuel reste statique (LORE.md §6 décrit la mécanique cible)
+  - La couche "capitalisation" du Présent (Sanctuaires, Fondeur, Marchands) est définie dans LORE/GDD mais pas implémentée
+  - Toute proposition touchant au Miroir doit être lue à travers la Doctrine ([LORE.md §11](LORE.md))
+  - Toute proposition touchant au loot doit favoriser la profondeur et le choix (préférence utilisateur en mémoire)
+  - Tout input doit passer par `InputSystem` — jamais de `Keyboard` direct dans la logique gameplay (préférence en mémoire, prépare le portage mobile)
 - **Points d'attention :**
   - Le joueur est toujours un `Phaser.GameObjects.Rectangle` — à remplacer par un sprite plus tard
   - Aucun asset graphique, tout est en primitives colorées

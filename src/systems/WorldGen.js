@@ -53,6 +53,12 @@ const LARGEUR_VORTEX = 60;
 const HAUTEUR_VORTEX = 90;
 const DIST_MIN_VORTEX = 200; // px en X — pas trop près du spawn ni de la sortie
 
+// Coffres et drops orphelins : génération seedée, indépendante du monde
+// (la géométrie est commune Présent/Miroir, seuls le visuel et le contenu
+// du loot diffèrent). Le contenu est tiré côté GameScene.
+const PROBA_COFFRE = 0.6;
+const PROBA_DROP_SOL = 0.3; // appliquée seulement si pas de coffre, donc total ≤ 60+30 % salles avec loot
+
 /**
  * Génère la description d'une salle.
  * @param {number} seed       seed globale du run
@@ -62,7 +68,9 @@ const DIST_MIN_VORTEX = 200; // px en X — pas trop près du spawn ni de la sor
  *   plateformes: Array<{x:number,y:number,largeur:number,hauteur:number}>,
  *   sortie:      {x:number,y:number,largeur:number,hauteur:number},
  *   vortex:      {x:number,y:number,largeur:number,hauteur:number},
- *   spawnJoueur: {x:number,y:number}
+ *   spawnJoueur: {x:number,y:number},
+ *   coffre:      ({x:number,y:number,largeur:number,hauteur:number}|null),
+ *   dropSol:     ({x:number,y:number,largeur:number,hauteur:number}|null)
  * }}
  */
 export function genererSalle(seed, indexSalle) {
@@ -161,5 +169,46 @@ export function genererSalle(seed, indexSalle) {
         hauteur: HAUTEUR_VORTEX
     };
 
-    return { index: indexSalle, plateformes, sortie, vortex, spawnJoueur };
+    // --- Coffre (60 % de proba) ---
+    // Posé sur une plateforme flottante différente de celle du vortex, et à
+    // distance minimale du spawn / de la sortie. Si pas de candidat valable,
+    // on fallback sur le sol (centre).
+    let coffre = null;
+    if (rng() < PROBA_COFFRE) {
+        const candidatsCoffre = plateformesFlottantes
+            .map(p => ({
+                x: p.x,
+                y: p.y - p.hauteur / 2 - 16
+            }))
+            .filter(c =>
+                Math.abs(c.x - vortex.x) > 60 &&
+                Math.abs(c.x - spawnJoueur.x) > 100 &&
+                Math.abs(c.x - sortie.x) > 100
+            );
+        if (candidatsCoffre.length > 0) {
+            const choisi = candidatsCoffre[entreEntier(rng, 0, candidatsCoffre.length - 1)];
+            coffre = { x: choisi.x, y: choisi.y, largeur: 28, hauteur: 24 };
+        } else {
+            // Fallback : sur le sol, à un x décent
+            coffre = {
+                x: GAME_WIDTH / 2,
+                y: Y_SOL - HAUTEUR_SOL / 2 - 12,
+                largeur: 28,
+                hauteur: 24
+            };
+        }
+    }
+
+    // --- Drop orphelin au sol (30 % si pas de coffre) ---
+    let dropSol = null;
+    if (!coffre && rng() < PROBA_DROP_SOL) {
+        dropSol = {
+            x: entre(rng, 200, GAME_WIDTH - 200),
+            y: Y_SOL - HAUTEUR_SOL / 2 - 10,
+            largeur: 18,
+            hauteur: 18
+        };
+    }
+
+    return { index: indexSalle, plateformes, sortie, vortex, spawnJoueur, coffre, dropSol };
 }

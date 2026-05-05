@@ -1,43 +1,48 @@
 // Scène principale.
-// Étapes MVP 2-5 : déplacement / saut / génération de salle / Résonance / Basculement.
+// Étapes MVP 2-6 : déplacement, génération de salle, Résonance, basculement,
+// loot (coffres + drops orphelins).
 //
-// Cette scène fait double office : Monde Normal ET Monde Miroir.
-// Elle lit le monde courant dans le MondeSystem et applique :
-//   - une palette de couleurs différente
-//   - une zone interactive différente (sortie de salle vs portail de retour)
-//   - une baisse passive de la Résonance dans le Miroir
-//   - un basculement automatique quand la Résonance touche 0 dans le Normal
+// La scène lit ses inputs UNIQUEMENT via InputSystem (pas de Keyboard direct
+// dans la logique gameplay) — pour porter sur mobile sans refactor.
 
-import { GAME_WIDTH, GAME_HEIGHT, PLAYER } from '../config.js';
-import { genererSalle } from '../systems/WorldGen.js';
+import { GAME_WIDTH, GAME_HEIGHT, PLAYER, WORLD } from '../config.js';
+import { genererSalle, creerRng } from '../systems/WorldGen.js';
 import { ResonanceSystem } from '../systems/ResonanceSystem.js';
 import { MondeSystem } from '../systems/MondeSystem.js';
+import { InputSystem } from '../systems/InputSystem.js';
+import { InventaireSystem } from '../systems/InventaireSystem.js';
+import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
+import { COULEURS_FAMILLE, ITEMS, CONSOMMABLES } from '../data/items.js';
 
 const SEED_DU_RUN = 1337;
 
-// Palettes — centralisées ici pour pouvoir les tuner sans chercher
 const PALETTE_NORMAL = {
     fond: '#1a1a24',
     plateforme: 0x3a3a4a,
-    sortie: 0xc8a85a // doré : avance vers la salle suivante
+    sortie: 0xc8a85a
 };
 const PALETTE_MIROIR = {
     fond: '#3a2818',
     plateforme: 0x7a3a4a,
-    sortie: 0xc8a85a, // doré : avance dans la progression (reste en Miroir)
-    vortex: 0x5ac8a8  // cyan-vert : vortex de retour vers le Présent
+    sortie: 0xc8a85a,
+    vortex: 0x5ac8a8
 };
 
-// Clé registry pour la continuité spatiale lors d'un basculement / retour vortex.
-// On stocke la position juste avant le fade-out, on la consomme au create suivant.
+const HAUTEUR_SOL = 40;
+const BAISSE_MIROIR_DELAI_MS = 500;
+const BAISSE_MIROIR_MONTANT = 1; // base — sera modifiée par les stats effectives
+const BAISSE_PRESENT_DELAI_MS = 2000; // tick lent en Présent (déclenchée par items Bleu)
+
 const CLE_POSITION_PENDANTE = 'position_pendante';
 
-// Hauteur du sol (cohérent avec WorldGen)
-const HAUTEUR_SOL = 40;
-
-// Baisse passive du Miroir : 1 point toutes les 500 ms = 2 pts/seconde
-const BAISSE_MIROIR_DELAI_MS = 500;
-const BAISSE_MIROIR_MONTANT = 1;
+// Stats de base (avant modifications par l'équipement)
+const STATS_BASE = {
+    speed: PLAYER.SPEED,
+    jumpVelocity: PLAYER.JUMP_VELOCITY,
+    passiveMiroir: BAISSE_MIROIR_MONTANT, // pts par tick
+    passivePresent: 0,                    // pts par tick (0 par défaut)
+    bonusRetour: 20
+};
 
 export class GameScene extends Phaser.Scene {
     constructor() {
@@ -51,21 +56,37 @@ export class GameScene extends Phaser.Scene {
     }
 
     create() {
-        // --- Systèmes (registry-backed, survivent aux restart) ---
+        // --- Systèmes ---
         this.resonance = new ResonanceSystem(this.registry);
         this.monde = new MondeSystem(this.registry);
+        this.inventaire = new InventaireSystem(this.registry);
+        this.inputSystem = new InputSystem(this);
+
+        // PRNG pour le contenu du loot — seedé par (run, salle, monde) pour
+        // que le contenu d'un coffre soit reproductible si on revisite.
+        const mondeCourant = this.monde.getMonde();
+        this.rngLoot = creerRng(
+            (SEED_DU_RUN ^ (this.indexSalle * 0x85EBCA6B) ^ (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
+        );
+
+        // Stats effectives (recalculées à chaque équipement)
+        this.statsEffectives = calculerStats(STATS_BASE, this.inventaire.getEquipement());
+        const handlerEquip = () => {
+            this.statsEffectives = calculerStats(STATS_BASE, this.inventaire.getEquipement());
+        };
+        this.registry.events.on('equipement:change', handlerEquip);
+        this.events.once('shutdown', () => this.registry.events.off('equipement:change', handlerEquip));
 
         // --- HUD parallèle ---
         if (!this.scene.isActive('UIScene')) {
             this.scene.launch('UIScene');
         }
 
-        // --- Palette selon le monde courant ---
-        const enMiroir = this.monde.estDansMiroir();
+        // --- Palette + salle ---
+        const enMiroir = mondeCourant === 'miroir';
         const palette = enMiroir ? PALETTE_MIROIR : PALETTE_NORMAL;
         this.cameras.main.setBackgroundColor(palette.fond);
 
-        // --- Salle (géométrie identique entre les deux mondes : même seed) ---
         const salle = genererSalle(SEED_DU_RUN, this.indexSalle);
 
         this.platforms = this.physics.add.staticGroup();
@@ -73,12 +94,7 @@ export class GameScene extends Phaser.Scene {
             this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, palette.plateforme);
         }
 
-        // --- Joueur : position de spawn ---
-        // Trois cas, dans l'ordre de priorité :
-        //   1. Position pendante dans le registry → c'est qu'on vient juste de
-        //      basculer (Présent ↔ Miroir) : on conserve la position exacte du
-        //      joueur, pour la continuité spatiale du Vestige. (cf. LORE)
-        //   2. Sinon : spawn standard à gauche, comme une entrée de salle naturelle.
+        // --- Joueur ---
         const positionPendante = this.registry.get(CLE_POSITION_PENDANTE);
         let spawn;
         if (positionPendante) {
@@ -88,43 +104,26 @@ export class GameScene extends Phaser.Scene {
             spawn = salle.spawnJoueur;
         }
 
-        this.player = this.add.rectangle(
-            spawn.x,
-            spawn.y,
-            PLAYER.WIDTH,
-            PLAYER.HEIGHT,
-            PLAYER.COLOR
-        );
+        this.player = this.add.rectangle(spawn.x, spawn.y, PLAYER.WIDTH, PLAYER.HEIGHT, PLAYER.COLOR);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.physics.add.collider(this.player, this.platforms);
 
         // --- Zones interactives ---
-        // Sortie de salle : présente dans les DEUX mondes (option C de la Doctrine).
-        // Avancer en Miroir fait aussi avancer en Présent — c'est un raccourci risqué.
         this.creerSortieSalle(salle.sortie, palette.sortie);
-
-        // Vortex de retour : uniquement en Miroir, position aléatoire seedée
-        // (sur une plateforme), pas à un endroit fixe. Lecture lore : la Trame
-        // s'ouvre où elle peut, pas où le joueur l'attend. Voir LORE.md.
         if (enMiroir) {
             this.creerVortex(salle.vortex, palette.vortex);
         }
 
-        // --- Contrôles ---
-        this.cursors = this.input.keyboard.createCursorKeys();
-        this.touches = this.input.keyboard.addKeys({
-            gauche: Phaser.Input.Keyboard.KeyCodes.Q,
-            droite: Phaser.Input.Keyboard.KeyCodes.D,
-            saut: Phaser.Input.Keyboard.KeyCodes.SPACE
-        });
-        // PROVISOIRE — touches debug pour la Résonance (cf. CLAUDE.md)
-        this.touchesDebug = this.input.keyboard.addKeys({
-            degatTest: Phaser.Input.Keyboard.KeyCodes.K,
-            healTest: Phaser.Input.Keyboard.KeyCodes.H
-        });
+        // --- Coffre + drop sol ---
+        if (salle.coffre && !this.inventaire.coffreEstOuvert(mondeCourant, this.indexSalle)) {
+            this.creerCoffre(salle.coffre);
+        }
+        if (salle.dropSol && !this.inventaire.dropEstRamasse(mondeCourant, this.indexSalle)) {
+            this.creerDropSol(salle.dropSol);
+        }
 
-        // --- HUD textuel (info de salle + monde + aide) ---
+        // --- HUD textuel ---
         const titre = enMiroir
             ? `Vestige — Salle ${salle.index + 1} (Miroir)`
             : `Vestige — Salle ${salle.index + 1}`;
@@ -133,56 +132,161 @@ export class GameScene extends Phaser.Scene {
             fontSize: '16px',
             color: enMiroir ? '#f0c890' : '#e8e4d8'
         });
-        this.add.text(10, 32, 'Flèches / QD : bouger | ↑ ou Espace : sauter | K : -10 / H : +10 (test)', {
+        this.add.text(10, 32, 'Flèches/QD : bouger | ↑/Espace : sauter | E : interagir | I : inventaire | K/H : -/+ Résonance (test)', {
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '11px',
             color: '#8a8a9a'
         });
 
         // --- Hooks selon le monde ---
         if (enMiroir) {
-            this.activerBaissePassive();
+            this.activerBaissePassive(true);
             this.surveillerAncrage();
-            // Affichage immédiat si on rentre déjà à 0
             if (this.resonance.getValeur() === 0) this.afficherAncrage();
         } else {
             this.brancherBasculement();
         }
+        // Baisse passive Présent (signature des items Bleu équipés)
+        this.activerBaissePassive(false);
 
-        // --- Fade-in après transition ---
         this.cameras.main.fadeIn(200, 0, 0, 0);
     }
 
     update() {
+        this.inputSystem.update();
+        const i = this.inputSystem.intentions;
+
+        // Mouvement
         const body = this.player.body;
         const auSol = body.blocked.down || body.touching.down;
+        const speed = this.statsEffectives.speed;
 
-        const gauche = this.cursors.left.isDown || this.touches.gauche.isDown;
-        const droite = this.cursors.right.isDown || this.touches.droite.isDown;
-
-        if (gauche && !droite) body.setVelocityX(-PLAYER.SPEED);
-        else if (droite && !gauche) body.setVelocityX(PLAYER.SPEED);
+        if (i.gauche && !i.droite) body.setVelocityX(-speed);
+        else if (i.droite && !i.gauche) body.setVelocityX(speed);
         else body.setVelocityX(0);
 
-        const veutSauter =
-            Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-            Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-            Phaser.Input.Keyboard.JustDown(this.touches.saut);
-
-        if (veutSauter && auSol) {
-            body.setVelocityY(-PLAYER.JUMP_VELOCITY);
+        if (i.sauter && auSol) {
+            body.setVelocityY(-this.statsEffectives.jumpVelocity);
         }
 
-        // PROVISOIRE — touches debug Résonance
-        if (Phaser.Input.Keyboard.JustDown(this.touchesDebug.degatTest)) {
-            this.resonance.prendreDegats(10);
+        // Interaction (E) — coffres/drops à proximité
+        if (i.interagir) {
+            this.essayerInteragir();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.touchesDebug.healTest)) {
-            this.resonance.regagner(10);
+
+        // Inventaire (I) — overlay
+        if (i.ouvrirInventaire) {
+            if (!this.scene.isActive('InventaireScene')) {
+                this.scene.pause();
+                this.scene.launch('InventaireScene');
+            }
+        }
+
+        // Debug Résonance
+        if (i.degatTest) this.resonance.prendreDegats(10);
+        if (i.healTest) this.resonance.regagner(10);
+    }
+
+    // --- Coffres ----------------------------------------------------------
+    creerCoffre(c) {
+        // Couleur neutre tant qu'il est fermé : la famille du loot reste un mystère.
+        this.coffre = this.add.rectangle(c.x, c.y, c.largeur, c.hauteur, 0x8a7a6a);
+        this.coffre.setStrokeStyle(2, 0xc8a85a);
+        this.coffreData = c;
+    }
+
+    creerDropSol(d) {
+        // Petit cube pulsant cyan-pâle au sol (consommable)
+        this.dropSol = this.add.rectangle(d.x, d.y, d.largeur, d.hauteur, 0xa8c8e8, 0.85);
+        this.dropSol.setStrokeStyle(1, 0xe8e4d8);
+        this.dropSolData = d;
+        this.tweens.add({
+            targets: this.dropSol,
+            scale: { from: 1, to: 1.15 },
+            duration: 600,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    essayerInteragir() {
+        const px = this.player.x;
+        const py = this.player.y;
+        // Distance euclidienne simple, seuil ~40 px
+        const proche = (obj) => obj && Phaser.Math.Distance.Between(px, py, obj.x, obj.y) < 40;
+
+        if (this.coffre && proche(this.coffre)) {
+            this.ouvrirCoffre();
+            return;
+        }
+        if (this.dropSol && proche(this.dropSol)) {
+            this.ramasserDropSol();
         }
     }
 
-    // --- Zone de sortie (Monde Normal uniquement) -----------------------------
+    ouvrirCoffre() {
+        const monde = this.monde.getMonde();
+        const item = tirerItem(monde, this.rngLoot);
+        if (!item) return;
+
+        if (!this.inventaire.ajouter(item.id)) {
+            this.afficherMessageFlottant("Inventaire plein", '#ff6060');
+            return;
+        }
+        this.inventaire.marquerCoffreOuvert(monde, this.indexSalle);
+
+        const couleur = COULEURS_FAMILLE[item.famille];
+        this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(couleur));
+
+        // Effet visuel : le coffre prend la couleur de la famille puis disparaît
+        this.coffre.setFillStyle(couleur);
+        this.tweens.add({
+            targets: this.coffre,
+            alpha: 0,
+            duration: 400,
+            onComplete: () => this.coffre?.destroy()
+        });
+        this.coffre = null;
+    }
+
+    ramasserDropSol() {
+        const consommable = tirerConsommable(this.rngLoot);
+        if (!consommable) return;
+
+        const monde = this.monde.getMonde();
+        // Effet immédiat selon le type
+        this.appliquerConsommable(consommable);
+        this.inventaire.marquerDropRamasse(monde, this.indexSalle);
+
+        this.afficherMessageFlottant(`${consommable.nom} — ${consommable.description}`, '#a8c8e8');
+
+        this.tweens.add({
+            targets: this.dropSol,
+            alpha: 0,
+            scale: 0,
+            duration: 300,
+            onComplete: () => this.dropSol?.destroy()
+        });
+        this.dropSol = null;
+    }
+
+    appliquerConsommable(c) {
+        const e = c.effet;
+        if (e.type === 'resonance_gain') {
+            this.resonance.regagner(e.valeur);
+        } else if (e.type === 'pause_miroir') {
+            // Suspend la baisse passive Miroir pendant N ms
+            if (this.timerMiroir) {
+                this.timerMiroir.paused = true;
+                this.time.delayedCall(e.duree, () => {
+                    if (this.timerMiroir) this.timerMiroir.paused = false;
+                });
+            }
+        }
+    }
+
+    // --- Zone de sortie ---------------------------------------------------
     creerSortieSalle(s, couleur) {
         this.sortie = this.add.rectangle(s.x, s.y, s.largeur, s.hauteur, couleur, 0.35);
         this.sortie.setStrokeStyle(2, couleur, 0.9);
@@ -190,15 +294,11 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.player, this.sortie, () => this.salleSuivante());
     }
 
-    // --- Vortex de retour (Monde Miroir uniquement) ---------------------------
-    // Position fournie par WorldGen (aléatoire seedée). Pulsation visuelle pour
-    // signaler que c'est un objet "vivant" et non décoratif.
     creerVortex(v, couleur) {
         this.vortex = this.add.rectangle(v.x, v.y, v.largeur, v.hauteur, couleur, 0.4);
         this.vortex.setStrokeStyle(2, couleur, 0.9);
         this.physics.add.existing(this.vortex, true);
         this.physics.add.overlap(this.player, this.vortex, () => this.retourAuNormal());
-
         this.tweens.add({
             targets: this.vortex,
             alpha: { from: 0.6, to: 1 },
@@ -209,11 +309,10 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    // --- Transitions ----------------------------------------------------------
+    // --- Transitions ------------------------------------------------------
     salleSuivante() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
-
         this.cameras.main.fadeOut(200, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.scene.restart({ indexSalle: this.indexSalle + 1 });
@@ -223,12 +322,7 @@ export class GameScene extends Phaser.Scene {
     basculerVersMiroir() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
-
-        // Continuité spatiale : on mémorise la position exacte du joueur pour
-        // qu'il réapparaisse au même endroit dans le Miroir.
         this.registry.set(CLE_POSITION_PENDANTE, { x: this.player.x, y: this.player.y });
-
-        // Fade rouge bref pour signaler que c'est dramatique, pas une transition normale
         this.cameras.main.fadeOut(300, 80, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.monde.basculerVersMiroir();
@@ -239,73 +333,106 @@ export class GameScene extends Phaser.Scene {
     retourAuNormal() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
-
-        // Continuité spatiale : on conserve aussi la position au retour vortex.
         this.registry.set(CLE_POSITION_PENDANTE, { x: this.player.x, y: this.player.y });
-
         this.cameras.main.fadeOut(300, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
+            // Bonus de retour modulé par les stats effectives
+            const bonus = this.statsEffectives.bonusRetour;
             this.monde.revenirAuNormal();
+            // revenirAuNormal applique un bonus fixe — on ajoute le delta éventuel
+            const delta = bonus - 20; // 20 = bonus de base dans MondeSystem
+            if (delta !== 0) this.resonance.regagner(delta);
             this.scene.restart({ indexSalle: this.indexSalle });
         });
     }
 
-    // --- Hooks Miroir / Normal -------------------------------------------------
+    // --- Hooks Miroir / Présent -------------------------------------------
     brancherBasculement() {
-        // En mode Normal, on écoute le passage à 0 de la Résonance pour basculer.
-        // On garde une réf au handler pour pouvoir le détacher au shutdown
-        // (sinon il s'accumulerait sur le registry, qui survit aux restart).
         this.handlerVide = () => this.basculerVersMiroir();
         this.registry.events.on('resonance:vide', this.handlerVide);
-
         this.events.once('shutdown', () => {
             this.registry.events.off('resonance:vide', this.handlerVide);
         });
     }
 
-    activerBaissePassive() {
-        this.timerMiroir = this.time.addEvent({
-            delay: BAISSE_MIROIR_DELAI_MS,
-            loop: true,
-            callback: () => this.resonance.prendreDegats(BAISSE_MIROIR_MONTANT)
-        });
-
-        this.events.once('shutdown', () => {
-            if (this.timerMiroir) this.timerMiroir.remove(false);
-        });
+    activerBaissePassive(enMiroir) {
+        if (enMiroir) {
+            this.timerMiroir = this.time.addEvent({
+                delay: BAISSE_MIROIR_DELAI_MS,
+                loop: true,
+                callback: () => {
+                    const baisse = Math.max(0, this.statsEffectives.passiveMiroir);
+                    if (baisse > 0) this.resonance.prendreDegats(baisse);
+                }
+            });
+            this.events.once('shutdown', () => {
+                if (this.timerMiroir) this.timerMiroir.remove(false);
+            });
+        } else {
+            // Tick lent : baisse uniquement si un item Bleu équipé l'active
+            this.timerPresent = this.time.addEvent({
+                delay: BAISSE_PRESENT_DELAI_MS,
+                loop: true,
+                callback: () => {
+                    const baisse = Math.max(0, this.statsEffectives.passivePresent);
+                    if (baisse > 0) this.resonance.prendreDegats(baisse);
+                }
+            });
+            this.events.once('shutdown', () => {
+                if (this.timerPresent) this.timerPresent.remove(false);
+            });
+        }
     }
 
     surveillerAncrage() {
-        // Affiche le texte "ANCRÉ" si la Résonance tombe à 0 pendant qu'on est ici.
         const handler = (_p, valeur) => {
             if (valeur === 0 && !this.texteAncrage) this.afficherAncrage();
         };
         this.registry.events.on('changedata-resonance', handler);
-
         this.events.once('shutdown', () => {
             this.registry.events.off('changedata-resonance', handler);
         });
     }
 
     afficherAncrage() {
-        this.texteAncrage = this.add.text(
-            GAME_WIDTH / 2,
-            70,
-            'ANCRÉ DANS LE MIROIR',
-            {
-                fontFamily: 'monospace',
-                fontSize: '18px',
-                color: '#ff6060',
-                fontStyle: 'bold'
-            }
-        ).setOrigin(0.5, 0);
+        this.texteAncrage = this.add.text(GAME_WIDTH / 2, 70, 'ANCRÉ DANS LE MIROIR', {
+            fontFamily: 'monospace',
+            fontSize: '18px',
+            color: '#ff6060',
+            fontStyle: 'bold'
+        }).setOrigin(0.5, 0);
     }
 
-    // --- Helper interne -------------------------------------------------------
+    // --- Helpers ----------------------------------------------------------
     creerPlateforme(x, y, largeur, hauteur, couleur) {
         const rect = this.add.rectangle(x, y, largeur, hauteur, couleur);
         this.platforms.add(rect);
         rect.body.updateFromGameObject();
         return rect;
+    }
+
+    /**
+     * Affiche un texte qui flotte vers le haut puis disparaît, au-dessus du joueur.
+     */
+    afficherMessageFlottant(texte, couleurCss) {
+        const t = this.add.text(this.player.x, this.player.y - 40, texte, {
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            color: couleurCss,
+            stroke: '#000',
+            strokeThickness: 3
+        }).setOrigin(0.5, 1);
+
+        this.tweens.add({
+            targets: t,
+            y: t.y - 40,
+            alpha: { from: 1, to: 0 },
+            duration: 1800,
+            onComplete: () => t.destroy()
+        });
+    }
+
+    coulHex(n) {
+        return '#' + n.toString(16).padStart(6, '0');
     }
 }
