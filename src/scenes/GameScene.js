@@ -25,6 +25,10 @@ import { peindreDecor } from '../render/DecorRegistry.js';
 import { poserCiel, poserEtoilesOuPoussiere, poserSilhouettesLointaines } from '../render/Parallaxe.js';
 import { poserHaloJoueur, poserBrumeSol, poserRayonsLumiere } from '../render/AnimationsAmbiance.js';
 import { peindreOrnementPlateforme } from '../render/PlateformeStyle.js';
+import { JoueurVisuel } from '../render/entities/Joueur.js';
+import { creerVisuelCoffre, jouerOuvertureCoffre, fermerCoffreVide } from '../render/entities/Coffre.js';
+import { creerVisuelVortex } from '../render/entities/Vortex.js';
+import { creerVisuelPorteSortie } from '../render/entities/PorteSortie.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -173,11 +177,16 @@ export class GameScene extends Phaser.Scene {
             spawn = salle.spawnJoueur;
         }
 
-        this.player = this.add.rectangle(spawn.x, spawn.y, PLAYER.WIDTH, PLAYER.HEIGHT, PLAYER.COLOR);
-        this.player.setDepth(DEPTH.ENTITES);
+        // Rectangle physique invisible (porte la collision arcade)
+        this.player = this.add.rectangle(spawn.x, spawn.y, PLAYER.WIDTH, PLAYER.HEIGHT, PLAYER.COLOR, 0);
+        this.player.setAlpha(0);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.physics.add.collider(this.player, this.platforms);
+
+        // Visuel séparé : silhouette + cœur lumineux (suit la position du Rectangle)
+        this.playerVisual = new JoueurVisuel(this);
+        this.playerVisual.setPosition(this.player.x, this.player.y);
 
         // Halo lumineux qui suit le joueur en Miroir (le Vestige porte sa propre
         // lumière dans le passé)
@@ -334,6 +343,17 @@ export class GameScene extends Phaser.Scene {
 
         // --- Update des ennemis ---
         for (const e of this.enemies) e.update(this.player);
+
+        // --- Update du visuel joueur ---
+        if (this.playerVisual) {
+            this.playerVisual.setPosition(this.player.x, this.player.y);
+            this.playerVisual.setDirection(this.lastDirection);
+            this.playerVisual.setEtat({
+                auSol,
+                vx: this.player.body.velocity.x,
+                vy: this.player.body.velocity.y
+            });
+        }
     }
 
     // ============================================================
@@ -427,19 +447,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     flashJoueur(couleur) {
-        const original = PLAYER.COLOR;
-        this.player.setFillStyle(couleur);
-        this.tweens.add({
-            targets: this.player,
-            alpha: { from: 1, to: 0.3 },
-            yoyo: true,
-            repeat: 2,
-            duration: 80,
-            onComplete: () => {
-                this.player.setAlpha(1);
-                this.player.setFillStyle(original);
-            }
-        });
+        // Le rectangle physique est invisible — on flash le visuel à la place.
+        if (!this.playerVisual) return;
+        if (couleur === 0xff6060) this.playerVisual.flashRouge();
+        else this.playerVisual.flashBlanc();
     }
 
     // ============================================================
@@ -489,9 +500,13 @@ export class GameScene extends Phaser.Scene {
     // COFFRES & DROPS SOL (cf. étape 6)
     // ============================================================
     creerCoffre(c) {
-        this.coffre = this.add.rectangle(c.x, c.y, c.largeur, c.hauteur, 0x8a7a6a);
-        this.coffre.setStrokeStyle(2, 0xc8a85a);
-        this.coffre.setDepth(DEPTH.DECOR_AVANT);
+        // Coffre stylisé bois + or, neutre tant qu'il est fermé (mystère du loot).
+        // Taille agrandie pour avoir plus de présence visuelle.
+        const w = Math.max(28, c.largeur);
+        const h = Math.max(22, c.hauteur);
+        this.coffreVisuel = creerVisuelCoffre(this, c.x, c.y, w, h);
+        // Référence "pivot" pour la détection d'interaction (essayerInteragir lit .x/.y)
+        this.coffre = this.coffreVisuel.container;
         this.coffreData = c;
     }
 
@@ -527,16 +542,21 @@ export class GameScene extends Phaser.Scene {
             return;
         }
         this.inventaire.marquerCoffreOuvert(monde, this.indexSalle);
+
+        // Animation d'ouverture stylisée : couvercle pivote, étincelles dorées,
+        // cube coloré qui sort et flotte vers le joueur, message au pickup.
+        const visuel = this.coffreVisuel;
+        const cible = { x: this.player.x, y: this.player.y };
         const couleur = COULEURS_FAMILLE[item.famille];
-        this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(couleur));
-        this.coffre.setFillStyle(couleur);
-        this.tweens.add({
-            targets: this.coffre,
-            alpha: 0,
-            duration: 400,
-            onComplete: () => this.coffre?.destroy()
+        jouerOuvertureCoffre(this, visuel, item.famille, cible, () => {
+            this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(couleur));
         });
+        // Coffre passe en mode "vide" (couleur tamisée) une fois l'ouverture terminée
+        this.time.delayedCall(900, () => fermerCoffreVide(this, visuel));
+
+        // On libère la référence pour empêcher une nouvelle interaction
         this.coffre = null;
+        this.coffreVisuel = null;
     }
 
     ramasserDropSol() {
@@ -573,28 +593,24 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
     // ZONES & TRANSITIONS (cf. étapes 3-5)
     // ============================================================
-    creerSortieSalle(s, couleur) {
-        this.sortie = this.add.rectangle(s.x, s.y, s.largeur, s.hauteur, couleur, 0.35);
-        this.sortie.setStrokeStyle(2, couleur, 0.9);
-        this.sortie.setDepth(DEPTH.PLATEFORMES);
+    creerSortieSalle(s, _couleur) {
+        // Rectangle physique invisible pour l'overlap
+        this.sortie = this.add.rectangle(s.x, s.y, s.largeur, s.hauteur, 0xffffff, 0);
+        this.sortie.setAlpha(0);
         this.physics.add.existing(this.sortie, true);
         this.physics.add.overlap(this.player, this.sortie, () => this.salleSuivante());
+        // Visuel : arche de pierre avec intérieur lumineux doré
+        creerVisuelPorteSortie(this, s.x, s.y, s.largeur, s.hauteur, this.mondeCourant);
     }
 
-    creerVortex(v, couleur) {
-        this.vortex = this.add.rectangle(v.x, v.y, v.largeur, v.hauteur, couleur, 0.4);
-        this.vortex.setStrokeStyle(2, couleur, 0.9);
-        this.vortex.setDepth(DEPTH.PLATEFORMES);
+    creerVortex(v, _couleur) {
+        // Rectangle physique invisible pour l'overlap
+        this.vortex = this.add.rectangle(v.x, v.y, v.largeur, v.hauteur, 0xffffff, 0);
+        this.vortex.setAlpha(0);
         this.physics.add.existing(this.vortex, true);
         this.physics.add.overlap(this.player, this.vortex, () => this.retourAuNormal());
-        this.tweens.add({
-            targets: this.vortex,
-            alpha: { from: 0.6, to: 1 },
-            duration: 700,
-            ease: 'Sine.InOut',
-            yoyo: true,
-            repeat: -1
-        });
+        // Visuel : portail tourbillonnant cyan-vert
+        creerVisuelVortex(this, v.x, v.y, v.largeur, v.hauteur);
     }
 
     salleSuivante() {

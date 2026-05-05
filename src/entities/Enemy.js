@@ -1,17 +1,14 @@
-// Entité Enemy — encapsule un ennemi : visuel, physique, IA simple, dégâts.
+// Entité Enemy — encapsule un ennemi : visuel stylisé, physique, IA simple, dégâts.
 //
-// L'IA est minimaliste (patrouille ou vol-suivi). On garde tout dans cette classe
-// pour MVP ; quand on aura plus de patterns, on pourra extraire des stratégies.
+// Le sprite physique (Rectangle invisible) porte la collision arcade. Un visuel
+// séparé (Container avec Graphics) rend la silhouette et les animations. Le
+// visuel suit la position du sprite chaque frame.
 
 import { ENEMIES } from '../data/enemies.js';
+import { creerVisuelGardien } from '../render/entities/GardienPierre.js';
+import { creerVisuelSpectre } from '../render/entities/SpectreCendre.js';
 
 export class Enemy {
-    /**
-     * @param {Phaser.Scene} scene
-     * @param {Object} def           — définition tirée de ENEMIES
-     * @param {number} x, y          — position de spawn
-     * @param {number} indexEnnemi   — identifie l'ennemi dans la salle (pour persistance)
-     */
     constructor(scene, def, x, y, indexEnnemi) {
         this.scene = scene;
         this.def = def;
@@ -22,16 +19,22 @@ export class Enemy {
         this.yInit = y;
         this.mort = false;
 
-        this.sprite = scene.add.rectangle(x, y, def.largeur, def.hauteur, def.couleur);
+        // Rectangle physique invisible — porte la hitbox de collision
+        this.sprite = scene.add.rectangle(x, y, def.largeur, def.hauteur, def.couleur, 0);
+        this.sprite.setAlpha(0);
         scene.physics.add.existing(this.sprite);
         const body = this.sprite.body;
         body.allowGravity = !!def.gravite;
         if (def.gravite) {
             body.setCollideWorldBounds(true);
         }
-
-        // Référence inverse pour les overlaps
         this.sprite._enemy = this;
+
+        // Visuel stylisé selon le type
+        this.visual = (def.id === 'gardien_pierre')
+            ? creerVisuelGardien(scene, def)
+            : creerVisuelSpectre(scene, def);
+        this.visual.setPosition(x, y);
     }
 
     update(player) {
@@ -43,13 +46,20 @@ export class Enemy {
         } else if (def.comportement === 'vol_suivi') {
             this.updateVolSuivi(player);
         }
+
+        // Le visuel suit la position du sprite physique
+        if (this.visual?.active) {
+            this.visual.setPosition(this.sprite.x, this.sprite.y);
+            // Flip horizontal selon la direction (patrouille uniquement)
+            if (def.comportement === 'patrouille') {
+                this.visual.scaleX = this.direction;
+            }
+        }
     }
 
     updatePatrouille() {
         const body = this.sprite.body;
         body.setVelocityX(this.def.vitesse * this.direction);
-
-        // Demi-tour si on s'éloigne trop du point initial OU si on heurte un mur
         const portee = this.def.porteePatrouille;
         if (this.sprite.x > this.xInit + portee || body.blocked.right) this.direction = -1;
         else if (this.sprite.x < this.xInit - portee || body.blocked.left) this.direction = 1;
@@ -72,11 +82,23 @@ export class Enemy {
     recevoirDegats(montant) {
         if (this.mort) return;
         this.hp -= montant;
-        // Flash blanc bref
-        this.sprite.setFillStyle(0xffffff);
-        this.scene.time.delayedCall(80, () => {
-            if (!this.mort && this.sprite.active) this.sprite.setFillStyle(this.def.couleur);
-        });
+
+        // Flash blanc bref sur le visuel (alpha tween + tint via overlay)
+        if (this.visual?.active) {
+            const overlay = this.scene.add.graphics();
+            overlay.setDepth(this.visual.depth + 1);
+            overlay.fillStyle(0xffffff, 0.85);
+            overlay.fillRect(-this.def.largeur / 2, -this.def.hauteur / 2, this.def.largeur, this.def.hauteur);
+            overlay.setPosition(this.sprite.x, this.sprite.y);
+            overlay.setBlendMode(Phaser.BlendModes.ADD);
+            this.scene.tweens.add({
+                targets: overlay,
+                alpha: 0,
+                duration: 100,
+                onComplete: () => overlay.destroy()
+            });
+        }
+
         if (this.hp <= 0) this.mourir();
     }
 
@@ -84,15 +106,26 @@ export class Enemy {
         if (this.mort) return;
         this.mort = true;
         this.sprite.body.enable = false;
+
+        // Animation de mort sur le visuel (fade + scale down)
+        if (this.visual?.active) {
+            this.scene.tweens.add({
+                targets: this.visual,
+                alpha: 0,
+                scaleX: 0.6,
+                scaleY: 0.6,
+                duration: 250,
+                onComplete: () => this.visual?.destroy()
+            });
+        }
+        // Sprite physique : on le détruit aussi (invisible mais propre)
         this.scene.tweens.add({
             targets: this.sprite,
             alpha: 0,
-            scaleX: 0.6,
-            scaleY: 0.6,
             duration: 250,
             onComplete: () => this.sprite.destroy()
         });
-        // Emit pour que la scène gère le drop / la persistance
+
         this.scene.events.emit('enemy:dead', this);
     }
 }
