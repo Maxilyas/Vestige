@@ -19,7 +19,7 @@ import { ARCHETYPES } from '../data/archetypes.js';
 import { Enemy } from '../entities/Enemy.js';
 import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
-    poserVignette, poserParticulesAmbiance
+    poserVignette, poserParticulesAmbiance, tracerCourbeQuadratique
 } from '../render/PainterlyRenderer.js';
 import { peindreDecor } from '../render/DecorRegistry.js';
 import { poserCiel, poserEtoilesOuPoussiere, poserSilhouettesLointaines } from '../render/Parallaxe.js';
@@ -29,6 +29,7 @@ import { JoueurVisuel } from '../render/entities/Joueur.js';
 import { creerVisuelCoffre, jouerOuvertureCoffre, fermerCoffreVide } from '../render/entities/Coffre.js';
 import { creerVisuelVortex } from '../render/entities/Vortex.js';
 import { creerVisuelPorteSortie } from '../render/entities/PorteSortie.js';
+import { creerVisuelConsommable, jouerRamassageConsommable } from '../render/entities/Consommable.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -369,25 +370,128 @@ export class GameScene extends Phaser.Scene {
         const hx = this.player.x + dir * (PLAYER.WIDTH / 2 + portee / 2);
         const hy = this.player.y;
 
-        // Visuel : un slash blanc semi-transparent
-        const slash = this.add.rectangle(hx, hy, portee, PLAYER.HEIGHT, 0xffffff, 0.5);
-        slash.setDepth(DEPTH.EFFETS);
+        // === SLASH COURBE 3 COUCHES (Bézier quadratique) ===
+        // Trois couches concentriques avec une courbe Bézier (traceur custom)
+        // donnent un arc fluide au lieu d'un V cassant. Couleurs additives.
+        const tracerCourbe = (g, lineWidth, couleur, alpha, decalage) => {
+            g.lineStyle(lineWidth, couleur, alpha);
+            tracerCourbeQuadratique(
+                g,
+                dir * 8, -PLAYER.HEIGHT / 2 - decalage,
+                dir * (portee + PLAYER.WIDTH / 2 + decalage), 0,
+                dir * 8, PLAYER.HEIGHT / 2 + decalage
+            );
+        };
+
+        const slashOuter = this.add.graphics();
+        slashOuter.x = this.player.x;
+        slashOuter.y = this.player.y;
+        slashOuter.setDepth(DEPTH.EFFETS);
+        slashOuter.setBlendMode(Phaser.BlendModes.ADD);
+        tracerCourbe(slashOuter, 16, 0xffd070, 0.3, 6);
+
+        const slashMid = this.add.graphics();
+        slashMid.x = this.player.x;
+        slashMid.y = this.player.y;
+        slashMid.setDepth(DEPTH.EFFETS);
+        slashMid.setBlendMode(Phaser.BlendModes.ADD);
+        tracerCourbe(slashMid, 7, 0xffffff, 0.75, 2);
+
+        const slashCore = this.add.graphics();
+        slashCore.x = this.player.x;
+        slashCore.y = this.player.y;
+        slashCore.setDepth(DEPTH.EFFETS);
+        slashCore.setBlendMode(Phaser.BlendModes.ADD);
+        tracerCourbe(slashCore, 2.5, 0xffffff, 1, 0);
+
         this.tweens.add({
-            targets: slash,
-            alpha: 0,
-            duration: 120,
-            onComplete: () => slash.destroy()
+            targets: [slashOuter, slashMid, slashCore],
+            scaleX: { from: 0.55, to: 1.2 },
+            scaleY: { from: 1.15, to: 0.85 },
+            alpha: { from: 1, to: 0 },
+            duration: 240,
+            ease: 'Cubic.Out',
+            onComplete: () => {
+                slashOuter.destroy(); slashMid.destroy(); slashCore.destroy();
+            }
         });
 
-        // Test : tous les ennemis dans la zone reçoivent des dégâts
+        // === Pluie d'étincelles colorées ===
+        if (this.textures.exists('_particule')) {
+            const burst = this.add.particles(hx, hy, '_particule', {
+                lifespan: 380,
+                speed: { min: 110, max: 280 },
+                angle: dir > 0 ? { min: -65, max: 65 } : { min: 115, max: 245 },
+                scale: { start: 0.55, end: 0 },
+                tint: [0xffffff, 0xffd070, 0xff8040, 0xffd070],
+                quantity: 14,
+                blendMode: Phaser.BlendModes.ADD,
+                alpha: { start: 1, end: 0 }
+            });
+            burst.setDepth(DEPTH.EFFETS);
+            burst.explode(14);
+            this.time.delayedCall(420, () => burst.destroy());
+        }
+
+        // Test des ennemis dans la zone — on note si on a touché pour le hit feedback
         const degats = this.statsEffectives.attaqueDegats;
         const halfH = PLAYER.HEIGHT / 2 + 4;
+        let aTouche = false;
         for (const e of this.enemies) {
             if (e.mort || !e.sprite.active) continue;
             const dx = Math.abs(e.sprite.x - hx);
             const dy = Math.abs(e.sprite.y - hy);
             if (dx < portee / 2 + e.def.largeur / 2 && dy < halfH + e.def.hauteur / 2) {
                 e.recevoirDegats(degats);
+                aTouche = true;
+            }
+        }
+
+        // === HIT FEEDBACK — c'est ici que ça devient jouissif ===
+        if (aTouche) {
+            // 1. Screen shake court et sec
+            this.cameras.main.shake(110, 0.006);
+
+            // 2. Hit-stop : on freeze le timer de la scène pendant 60 ms.
+            //    Crée une sensation d'impact (la frame "se fige" sur le contact).
+            const ts = this.time.timeScale;
+            this.time.timeScale = 0.05;
+            this.tweens.timeScale = 0.05;
+            setTimeout(() => {
+                this.time.timeScale = ts;
+                this.tweens.timeScale = 1;
+            }, 60);
+
+            // 3. Flash écran ultra bref (overlay blanc 12% pendant 80ms)
+            const flash = this.add.rectangle(
+                this.cameras.main.width / 2,
+                this.cameras.main.height / 2,
+                this.cameras.main.width,
+                this.cameras.main.height,
+                0xffffff, 0.12
+            ).setScrollFactor(0).setDepth(199);
+            this.tweens.add({
+                targets: flash,
+                alpha: 0,
+                duration: 90,
+                onComplete: () => flash.destroy()
+            });
+
+            // 4. Particules supplémentaires concentriques au centre du hit
+            if (this.textures.exists('_particule')) {
+                const impact = this.add.particles(hx, hy, '_particule', {
+                    lifespan: 280,
+                    speed: { min: 60, max: 140 },
+                    angle: { min: 0, max: 360 },
+                    scale: { start: 0.6, end: 0 },
+                    tint: [0xffffff, 0xffd070],
+                    quantity: 10,
+                    blendMode: Phaser.BlendModes.ADD,
+                    alpha: { start: 1, end: 0 }
+                });
+                impact.setDepth(DEPTH.EFFETS);
+                impact.explode(10);
+                this.time.delayedCall(320, () => impact.destroy());
             }
         }
     }
@@ -399,27 +503,91 @@ export class GameScene extends Phaser.Scene {
         this.cooldownParryFin = now + this.statsEffectives.parryCooldown;
         this.parryActifJusqu = now + fenetre;
 
-        // Halo doré qui pulse pendant la fenêtre
-        const halo = this.add.rectangle(
-            this.player.x, this.player.y,
-            PLAYER.WIDTH + 14, PLAYER.HEIGHT + 14,
-            0xc8a85a, 0.4
-        );
-        halo.setDepth(DEPTH.EFFETS);
+        // === Anneau doré qui s'élargit autour du joueur (signal du déclenchement) ===
+        const ring = this.add.graphics();
+        ring.x = this.player.x;
+        ring.y = this.player.y;
+        ring.setDepth(DEPTH.EFFETS);
+        ring.setBlendMode(Phaser.BlendModes.ADD);
+        ring.lineStyle(4, 0xffd070, 1);
+        ring.strokeCircle(0, 0, 18);
+        ring.lineStyle(8, 0xc8a85a, 0.4);
+        ring.strokeCircle(0, 0, 14);
         this.tweens.add({
-            targets: halo,
-            alpha: 0,
-            scale: 1.2,
+            targets: ring,
+            scale: { from: 0.5, to: 1.8 },
+            alpha: { from: 1, to: 0 },
             duration: fenetre,
-            onComplete: () => halo.destroy()
+            ease: 'Cubic.Out',
+            onComplete: () => ring.destroy()
         });
-        // On déplace le halo avec le joueur le temps de la fenêtre
+
+        // === Halo qui suit le joueur pendant la fenêtre (attente de parade) ===
+        const halo = this.add.graphics();
+        halo.setDepth(DEPTH.EFFETS - 1);
+        halo.setBlendMode(Phaser.BlendModes.ADD);
+        halo.fillStyle(0xc8a85a, 0.45);
+        halo.fillCircle(0, 0, 26);
+        halo.fillStyle(0xffd070, 0.55);
+        halo.fillCircle(0, 0, 14);
+        halo.setPosition(this.player.x, this.player.y);
+
         const updHalo = () => {
             if (!halo.active) return;
             halo.setPosition(this.player.x, this.player.y);
         };
         this.events.on('postupdate', updHalo);
-        this.time.delayedCall(fenetre, () => this.events.off('postupdate', updHalo));
+
+        this.tweens.add({
+            targets: halo,
+            alpha: 0,
+            duration: fenetre,
+            onComplete: () => {
+                this.events.off('postupdate', updHalo);
+                halo.destroy();
+            }
+        });
+    }
+
+    /**
+     * Effet visuel renforcé pour un parry réussi : flash expansif + burst doré.
+     */
+    _jouerEffetParryReussi() {
+        // Flash expansif additif
+        const flash = this.add.graphics();
+        flash.x = this.player.x;
+        flash.y = this.player.y;
+        flash.setDepth(DEPTH.EFFETS);
+        flash.setBlendMode(Phaser.BlendModes.ADD);
+        flash.fillStyle(0xffd070, 0.85);
+        flash.fillCircle(0, 0, 38);
+        flash.fillStyle(0xffffff, 0.7);
+        flash.fillCircle(0, 0, 22);
+        this.tweens.add({
+            targets: flash,
+            scale: { from: 0.4, to: 2.4 },
+            alpha: { from: 1, to: 0 },
+            duration: 320,
+            ease: 'Cubic.Out',
+            onComplete: () => flash.destroy()
+        });
+
+        // Burst de particules dorées explosif
+        if (this.textures.exists('_particule')) {
+            const burst = this.add.particles(this.player.x, this.player.y, '_particule', {
+                lifespan: 480,
+                speed: { min: 80, max: 220 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 0.6, end: 0 },
+                tint: [0xffd070, 0xc8a85a, 0xffffff],
+                quantity: 14,
+                blendMode: Phaser.BlendModes.ADD,
+                alpha: { start: 1, end: 0 }
+            });
+            burst.setDepth(DEPTH.EFFETS);
+            burst.explode(14);
+            this.time.delayedCall(520, () => burst.destroy());
+        }
     }
 
     estParryActif() {
@@ -431,14 +599,19 @@ export class GameScene extends Phaser.Scene {
         const now = this.time.now;
         if (now < this.invincibleJusqu) return;
 
-        // Parry actif : on annule les dégâts + bonus Résonance + flash doré
+        // Parry actif : on annule les dégâts + bonus Résonance + effet expansif doré
         if (this.estParryActif()) {
             this.parryActifJusqu = 0;
             this.resonance.regagner(this.statsEffectives.parryBonusResonance);
-            this.afficherMessageFlottant('PARRY', '#c8a85a');
-            this.flashJoueur(0xc8a85a);
+            this.afficherMessageFlottant('PARRY', '#ffd070');
+            this._jouerEffetParryReussi();
+            // L'ennemi est repoussé visuellement par le parry (squash inverse)
+            ennemi.jouerAttaqueContact(this, this.player);
             return;
         }
+
+        // Animation d'attaque ennemi (lunge / pulse + flash + particules d'impact)
+        ennemi.jouerAttaqueContact(this, this.player);
 
         // Dégâts + invincibilité
         this.resonance.prendreDegats(ennemi.def.degatsContact);
@@ -511,18 +684,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     creerDropSol(d) {
-        this.dropSol = this.add.rectangle(d.x, d.y, d.largeur, d.hauteur, 0xa8c8e8, 0.85);
-        this.dropSol.setStrokeStyle(1, 0xe8e4d8);
-        this.dropSol.setDepth(DEPTH.DECOR_AVANT);
+        // On tire le type de consommable à la création (déterministe seedé)
+        // pour que le visuel reflète le contenu avant ramassage.
+        const consommable = tirerConsommable(this.rngLoot);
+        if (!consommable) return;
+        this.dropSolConsommable = consommable;
+        this.dropSol = creerVisuelConsommable(this, d.x, d.y, consommable.id);
         this.dropSolData = d;
-        this.tweens.add({
-            targets: this.dropSol,
-            scale: { from: 1, to: 1.15 },
-            duration: 600,
-            ease: 'Sine.InOut',
-            yoyo: true,
-            repeat: -1
-        });
     }
 
     essayerInteragir() {
@@ -560,20 +728,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     ramasserDropSol() {
-        const consommable = tirerConsommable(this.rngLoot);
+        const consommable = this.dropSolConsommable;
         if (!consommable) return;
         const monde = this.monde.getMonde();
         this.appliquerConsommable(consommable);
         this.inventaire.marquerDropRamasse(monde, this.indexSalle);
         this.afficherMessageFlottant(`${consommable.nom} — ${consommable.description}`, '#a8c8e8');
-        this.tweens.add({
-            targets: this.dropSol,
-            alpha: 0,
-            scale: 0,
-            duration: 300,
-            onComplete: () => this.dropSol?.destroy()
-        });
+        jouerRamassageConsommable(this, this.dropSol, { x: this.player.x, y: this.player.y });
         this.dropSol = null;
+        this.dropSolConsommable = null;
     }
 
     appliquerConsommable(c) {

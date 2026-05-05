@@ -1,27 +1,26 @@
-// Scène overlay — affiche l'inventaire et permet d'équiper / jeter.
+// Scène overlay — Carnet du Vestige.
 //
-// Fonctionnement :
-//   - Lancée par GameScene.scene.launch('InventaireScene') sur intention "ouvrirInventaire"
-//   - GameScene est mise en pause au launch (sauf en Miroir où la baisse continue —
-//     le code de pause est côté GameScene, ici on se contente de dessiner)
-//   - I, ESC ou clic sur "Fermer" : ferme l'overlay et reprend GameScene
-//   - Tap sur un item : ouvre un mini-menu Équiper / Jeter / Annuler
-//
-// Tier de révélation :
-//   tier 1 — nom + tous les effets visibles
-//   tier 2 — nom + effets dont visible: true uniquement (le reste = "?")
-//   tier 3 — nom + ★ marqueur, aucune stat (mystère total)
+// Refonte 8b5 : style "tableau gravé" — cadre stylisé, slots vectoriels,
+// emblèmes par famille, panneau détail enrichi, animations à l'ouverture.
+// Toute la composition vit dans src/render/ui/. Ici on orchestre.
 
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import {
     InventaireSystem, SLOTS, EVT_INV_CHANGE, EVT_EQUIP_CHANGE, CAPACITE_INVENTAIRE
 } from '../systems/InventaireSystem.js';
-import { ITEMS, COULEURS_FAMILLE } from '../data/items.js';
+import { ITEMS } from '../data/items.js';
+import { poserCadreInventaire, poserBoutonFermer } from '../render/ui/CadreInventaire.js';
+import { creerSlot } from '../render/ui/SlotInventaire.js';
+import { creerPanneauDetail } from '../render/ui/PanneauDetail.js';
 
+// Layout
+const TAILLE_SLOT_INV = 36;
+const TAILLE_SLOT_EQUIP = 50;
+const ESPACE_SLOT = 6;
 const COLS = 8;
 const ROWS = 5;
-const TAILLE = 48;
-const ECART = 6;
+
+const LABELS_SLOT = { tete: 'TÊTE', corps: 'CORPS', accessoire: 'ACC.' };
 
 export class InventaireScene extends Phaser.Scene {
     constructor() {
@@ -30,48 +29,49 @@ export class InventaireScene extends Phaser.Scene {
 
     create() {
         this.inventaire = new InventaireSystem(this.registry);
+        this.slotsInv = [];     // tableau de { container, refresh }
+        this.slotsEquip = {};   // map slot → { container, refresh }
 
-        // Fond semi-transparent qui mange les clics derrière
-        this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.78)
-            .setInteractive(); // bloque les clics pour qu'ils ne passent pas à GameScene
+        // --- Cadre stylisé ---
+        const cadre = poserCadreInventaire(this, GAME_WIDTH, GAME_HEIGHT);
+        this.cadre = cadre;
 
-        // Titre
-        this.add.text(GAME_WIDTH / 2, 30, 'INVENTAIRE', {
-            fontFamily: 'monospace',
-            fontSize: '20px',
-            color: '#e8e4d8',
-            fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
+        // Bouton fermer
+        poserBoutonFermer(this, GAME_WIDTH - 50, 50, () => this.fermer());
 
-        this.add.text(GAME_WIDTH / 2, 58, 'I ou ÉCHAP pour fermer  •  Clic sur un objet pour interagir', {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#8a8a9a'
-        }).setOrigin(0.5, 0);
+        // --- Section slots équipés (centrée en haut) ---
+        this._dessinerEquipement();
 
-        // --- Slots équipés (en haut) ---
-        this.dessinerEquipement();
+        // --- Section grille inventaire (à gauche) ---
+        const xGrilleDebut = 60;
+        const yGrilleDebut = 215;
+        this._dessinerGrille(xGrilleDebut, yGrilleDebut);
 
-        // --- Grille de l'inventaire ---
-        this.dessinerGrille();
+        // --- Compteur N/40 ---
+        const compteur = this.add.text(
+            xGrilleDebut,
+            yGrilleDebut - 18,
+            `${this.inventaire.getInventaire().length} / ${CAPACITE_INVENTAIRE}`,
+            { fontFamily: 'monospace', fontSize: '11px', color: '#8a8a9a', fontStyle: 'bold' }
+        ).setScrollFactor(0).setDepth(305);
+        this.compteur = compteur;
 
-        // --- Zone détail (à droite) ---
-        this.zoneDetail = this.add.container(GAME_WIDTH - 280, 130);
+        // --- Panneau détail (à droite) ---
+        const xPan = xGrilleDebut + COLS * (TAILLE_SLOT_INV + ESPACE_SLOT) + 30;
+        const yPan = 175;
+        const wPan = GAME_WIDTH - xPan - 50;
+        const hPan = 320; // assez grand pour 4-5 effets + boutons sans chevauchement
+        this.panneau = creerPanneauDetail(this, xPan, yPan, wPan, hPan);
 
-        // --- Touches de fermeture (clavier MVP — sera doublé par bouton tactile plus tard) ---
+        // --- Animation d'ouverture en cascade ---
+        this._jouerCascadeOuverture();
+
+        // --- Touches + redessins ---
         this.input.keyboard.on('keydown-I', () => this.fermer());
         this.input.keyboard.on('keydown-ESC', () => this.fermer());
-        // Bouton de fermeture cliquable (mobile-friendly)
-        const btnFermer = this.add.text(GAME_WIDTH - 30, 30, '✕', {
-            fontFamily: 'monospace',
-            fontSize: '20px',
-            color: '#e8e4d8'
-        }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
-        btnFermer.on('pointerdown', () => this.fermer());
 
-        // Redessine la grille / l'équipement à chaque changement
-        const handlerInv = () => { this.dessinerGrille(); this.dessinerEquipement(); };
-        const handlerEquip = () => { this.dessinerGrille(); this.dessinerEquipement(); };
+        const handlerInv = () => this._refreshTout();
+        const handlerEquip = () => this._refreshTout();
         this.registry.events.on(EVT_INV_CHANGE, handlerInv);
         this.registry.events.on(EVT_EQUIP_CHANGE, handlerEquip);
         this.events.once('shutdown', () => {
@@ -81,211 +81,152 @@ export class InventaireScene extends Phaser.Scene {
     }
 
     fermer() {
-        // On reset l'état des touches I et ESC : sinon Phaser garde JustDown=true
-        // pour cette frame, et GameScene rouvrirait l'inventaire dès la reprise.
+        // Reset des touches I/ESC pour éviter une réouverture immédiate
         const codes = Phaser.Input.Keyboard.KeyCodes;
         const keys = this.input.keyboard.keys;
         [codes.I, codes.ESC].forEach(c => keys[c]?.reset());
-
         this.scene.resume('GameScene');
         this.scene.stop();
     }
 
-    // ----- Équipement -----
-    dessinerEquipement() {
-        if (this.contEquip) this.contEquip.destroy();
-        this.contEquip = this.add.container(GAME_WIDTH / 2, 100);
-
-        const labels = ['Tête', 'Corps', 'Accessoire'];
+    // ============================================================
+    // Slots équipés (3 grands centrés en haut)
+    // ============================================================
+    _dessinerEquipement() {
         const equip = this.inventaire.getEquipement();
-        const espaceCase = TAILLE + 80; // espace entre les 3 slots équipés
-        const xDebut = -espaceCase;
+        const espaceCase = TAILLE_SLOT_EQUIP + 90;
+        const xCentre = GAME_WIDTH / 2;
+        const yCentre = 110;
 
-        for (let k = 0; k < 3; k++) {
+        for (let k = 0; k < SLOTS.length; k++) {
             const slot = SLOTS[k];
-            const id = equip[slot];
-            const x = xDebut + k * espaceCase;
+            const x = xCentre + (k - 1) * espaceCase;
+            const y = yCentre;
+            const itemId = equip[slot];
 
-            this.contEquip.add(this.add.text(x, -28, labels[k], {
-                fontFamily: 'monospace',
-                fontSize: '11px',
-                color: '#8a8a9a'
-            }).setOrigin(0.5, 0));
-
-            const cadre = this.add.rectangle(x, 0, TAILLE, TAILLE, 0x1f1f28)
-                .setStrokeStyle(2, id ? 0xe8e4d8 : 0x4a4a5a)
-                .setInteractive({ useHandCursor: !!id });
-            this.contEquip.add(cadre);
-
-            if (id && ITEMS[id]) {
-                const item = ITEMS[id];
-                this.contEquip.add(this.add.rectangle(x, 0, TAILLE - 8, TAILLE - 8, COULEURS_FAMILLE[item.famille]));
-                if (item.tier === 3) {
-                    this.contEquip.add(this.add.text(x + TAILLE / 2 - 4, -TAILLE / 2 + 2, '★', {
-                        fontFamily: 'monospace',
-                        fontSize: '10px',
-                        color: '#ff6060'
-                    }).setOrigin(1, 0));
+            const s = creerSlot(this, x, y, {
+                taille: TAILLE_SLOT_EQUIP,
+                itemId,
+                equipe: true,
+                label: LABELS_SLOT[slot],
+                onClick: () => {
+                    const id = this.inventaire.getEquipement()[slot];
+                    if (!id) {
+                        this.panneau.afficherTexte('Slot vide.');
+                    } else {
+                        const it = ITEMS[id];
+                        this.panneau.afficherItem(it, { equipe: true, slot }, {
+                            onDesequiper: () => {
+                                if (this.inventaire.desequiper(slot)) {
+                                    this.panneau.afficherTexte('Déséquipé.');
+                                } else {
+                                    this.panneau.afficherTexte("Inventaire plein, impossible de déséquiper.");
+                                }
+                            }
+                        });
+                    }
                 }
-                cadre.on('pointerdown', () => this.afficherDetail(item, { equipe: true, slot }));
-            } else {
-                cadre.on('pointerdown', () => this.afficherTexteDetail('Slot vide.'));
-            }
+            });
+            this.slotsEquip[slot] = s;
         }
     }
 
-    // ----- Grille -----
-    dessinerGrille() {
-        if (this.contGrille) this.contGrille.destroy();
-        this.contGrille = this.add.container(0, 0);
-
+    // ============================================================
+    // Grille inventaire (8 × 5 = 40 slots)
+    // ============================================================
+    _dessinerGrille(xDebut, yDebut) {
         const inv = this.inventaire.getInventaire();
-        const totalLargeur = COLS * TAILLE + (COLS - 1) * ECART;
-        const xDebut = (GAME_WIDTH - totalLargeur) / 2 - 140; // décalé à gauche pour laisser place au détail à droite
-        const yDebut = 200;
-
-        // Compteur en haut à gauche de la grille
-        this.contGrille.add(this.add.text(xDebut, yDebut - 18, `${inv.length}/${CAPACITE_INVENTAIRE}`, {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#8a8a9a'
-        }));
-
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const idx = r * COLS + c;
-                const x = xDebut + c * (TAILLE + ECART) + TAILLE / 2;
-                const y = yDebut + r * (TAILLE + ECART) + TAILLE / 2;
+                const x = xDebut + c * (TAILLE_SLOT_INV + ESPACE_SLOT) + TAILLE_SLOT_INV / 2;
+                const y = yDebut + r * (TAILLE_SLOT_INV + ESPACE_SLOT) + TAILLE_SLOT_INV / 2;
+                const itemId = inv[idx] ?? null;
 
-                const id = inv[idx];
-                const cadre = this.add.rectangle(x, y, TAILLE, TAILLE, 0x1f1f28)
-                    .setStrokeStyle(1, id ? 0x6a6a7a : 0x2a2a34)
-                    .setInteractive({ useHandCursor: !!id });
-                this.contGrille.add(cadre);
-
-                if (id && ITEMS[id]) {
-                    const item = ITEMS[id];
-                    this.contGrille.add(
-                        this.add.rectangle(x, y, TAILLE - 8, TAILLE - 8, COULEURS_FAMILLE[item.famille])
-                    );
-                    if (item.tier === 3) {
-                        this.contGrille.add(this.add.text(x + TAILLE / 2 - 4, y - TAILLE / 2 + 2, '★', {
-                            fontFamily: 'monospace',
-                            fontSize: '10px',
-                            color: '#ff6060'
-                        }).setOrigin(1, 0));
+                const s = creerSlot(this, x, y, {
+                    taille: TAILLE_SLOT_INV,
+                    itemId,
+                    onClick: () => {
+                        const inv2 = this.inventaire.getInventaire();
+                        const id = inv2[idx];
+                        if (!id) {
+                            this.panneau.afficherTexte('Slot vide.');
+                        } else {
+                            const it = ITEMS[id];
+                            this.panneau.afficherItem(it, { equipe: false, indexInv: idx }, {
+                                onEquiper: () => {
+                                    this.inventaire.equiperDepuisInventaire(idx, it);
+                                    this.panneau.afficherTexte(`Équipé : ${it.nom}`);
+                                },
+                                onJeter: () => {
+                                    this.inventaire.jeter(idx);
+                                    this.panneau.afficherTexte('Jeté.');
+                                }
+                            });
+                        }
                     }
-                    cadre.on('pointerdown', () => this.afficherDetail(item, { equipe: false, indexInv: idx }));
-                }
+                });
+                this.slotsInv.push(s);
             }
         }
     }
 
-    // ----- Détail / actions -----
-    afficherTexteDetail(txt) {
-        this.zoneDetail.removeAll(true);
-        this.zoneDetail.add(this.add.text(0, 0, txt, {
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            color: '#8a8a9a',
-            wordWrap: { width: 240 }
-        }));
-    }
-
-    afficherDetail(item, ctx) {
-        this.zoneDetail.removeAll(true);
-
-        const familleHex = COULEURS_FAMILLE[item.famille];
-        const couleurCss = '#' + familleHex.toString(16).padStart(6, '0');
-
-        // Nom + tier
-        let titre = item.nom;
-        if (item.tier === 3) titre += ' ★';
-        this.zoneDetail.add(this.add.text(0, 0, titre, {
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            color: couleurCss,
-            fontStyle: 'bold',
-            wordWrap: { width: 260 }
-        }));
-
-        // Slot + famille
-        this.zoneDetail.add(this.add.text(0, 22, `${item.famille.toUpperCase()} • ${item.slot}`, {
-            fontFamily: 'monospace',
-            fontSize: '10px',
-            color: '#8a8a9a'
-        }));
-
-        // Description
-        this.zoneDetail.add(this.add.text(0, 40, item.description, {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#e8e4d8',
-            wordWrap: { width: 260 },
-            fontStyle: 'italic'
-        }));
-
-        // Effets selon tier
-        const yEff = 80;
-        const effets = item.effets ?? [];
-        let lignes = [];
-        if (item.tier === 1) {
-            lignes = effets.map(e => this.formatEffet(e));
-        } else if (item.tier === 2) {
-            for (const e of effets) {
-                lignes.push(e.visible ? this.formatEffet(e) : '? — effet inconnu');
-            }
-        } else {
-            lignes.push('Cet objet ne se laisse pas lire.');
+    // ============================================================
+    // Refresh & cascade
+    // ============================================================
+    _refreshTout() {
+        const inv = this.inventaire.getInventaire();
+        for (let i = 0; i < this.slotsInv.length; i++) {
+            this.slotsInv[i].refresh(inv[i] ?? null);
         }
-        this.zoneDetail.add(this.add.text(0, yEff, lignes.join('\n'), {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#c8c8d4',
-            lineSpacing: 4
-        }));
-
-        // Boutons d'action
-        const yBtn = yEff + lignes.length * 16 + 20;
-        if (ctx.equipe) {
-            this.bouton('Déséquiper', 0, yBtn, () => {
-                if (this.inventaire.desequiper(ctx.slot)) {
-                    this.afficherTexteDetail('Déséquipé.');
-                } else {
-                    this.afficherTexteDetail('Inventaire plein, impossible de déséquiper.');
-                }
-            });
-        } else {
-            this.bouton('Équiper', 0, yBtn, () => {
-                this.inventaire.equiperDepuisInventaire(ctx.indexInv, item);
-                this.afficherTexteDetail(`Équipé : ${item.nom}`);
-            });
-            this.bouton('Jeter', 110, yBtn, () => {
-                this.inventaire.jeter(ctx.indexInv);
-                this.afficherTexteDetail('Jeté.');
-            });
+        const equip = this.inventaire.getEquipement();
+        for (const slot of SLOTS) {
+            this.slotsEquip[slot]?.refresh(equip[slot] ?? null);
+        }
+        if (this.compteur) {
+            this.compteur.setText(`${inv.length} / ${CAPACITE_INVENTAIRE}`);
         }
     }
 
-    formatEffet(e) {
-        const signe = e.delta >= 0 ? '+' : '';
-        return `${signe}${e.delta} ${e.cible}`;
-    }
+    _jouerCascadeOuverture() {
+        // Tous les slots commencent invisibles, on les rend visibles avec délai
+        const tous = [...Object.values(this.slotsEquip), ...this.slotsInv];
+        for (const s of tous) s.container.setAlpha(0);
 
-    bouton(texte, x, y, onClick) {
-        const fond = this.add.rectangle(x, y, 100, 24, 0x2a2a3a)
-            .setOrigin(0, 0)
-            .setStrokeStyle(1, 0x6a6a7a)
-            .setInteractive({ useHandCursor: true });
-        const txt = this.add.text(x + 50, y + 12, texte, {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#e8e4d8'
-        }).setOrigin(0.5);
-        fond.on('pointerover', () => fond.setFillStyle(0x4a4a5a));
-        fond.on('pointerout', () => fond.setFillStyle(0x2a2a3a));
-        fond.on('pointerdown', onClick);
-        this.zoneDetail.add(fond);
-        this.zoneDetail.add(txt);
+        // Cadre fade-in
+        this.cadre.container.setAlpha(0);
+        this.tweens.add({
+            targets: this.cadre.container,
+            alpha: 1,
+            duration: 220,
+            ease: 'Cubic.Out'
+        });
+
+        // Cascade des slots équipés
+        let delai = 200;
+        for (const slot of SLOTS) {
+            const s = this.slotsEquip[slot];
+            this.tweens.add({
+                targets: s.container,
+                alpha: 1,
+                duration: 200,
+                delay: delai,
+                ease: 'Cubic.Out'
+            });
+            delai += 60;
+        }
+
+        // Cascade des slots inventaire
+        delai += 80;
+        for (let i = 0; i < this.slotsInv.length; i++) {
+            this.tweens.add({
+                targets: this.slotsInv[i].container,
+                alpha: 1,
+                duration: 200,
+                delay: delai,
+                ease: 'Cubic.Out'
+            });
+            delai += 18;
+        }
     }
 }

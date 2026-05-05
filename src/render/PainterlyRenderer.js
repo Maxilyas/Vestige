@@ -224,6 +224,24 @@ export function formeAvecVolume(graphics, points, couleurFond, couleurOmbre, cou
 }
 
 /**
+ * Trace une courbe Bézier quadratique sur un Graphics (Phaser ne le supporte
+ * pas nativement). Échantillonne la courbe en `segments` points et utilise
+ * lineTo pour les relier.
+ */
+export function tracerCourbeQuadratique(g, x1, y1, cpX, cpY, x2, y2, segments = 18) {
+    g.beginPath();
+    g.moveTo(x1, y1);
+    for (let i = 1; i <= segments; i++) {
+        const t = i / segments;
+        const u = 1 - t;
+        const px = u * u * x1 + 2 * u * t * cpX + t * t * x2;
+        const py = u * u * y1 + 2 * u * t * cpY + t * t * y2;
+        g.lineTo(px, py);
+    }
+    g.strokePath();
+}
+
+/**
  * Trace une ligne brisée (pour fissures) avec irrégularités.
  */
 export function fissure(graphics, x1, y1, x2, y2, couleur, alpha = 0.6, segments = 5) {
