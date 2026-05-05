@@ -24,11 +24,21 @@ export const WORLD = {
 // Config Phaser passée à new Phaser.Game()
 export const gameConfig = {
     type: Phaser.AUTO,
-    parent: 'game',
-    width: GAME_WIDTH,
-    height: GAME_HEIGHT,
     backgroundColor: WORLD.BG_COLOR,
     pixelArt: false,
+    // Scaling — on raisonne TOUJOURS en coordonnées internes 960x540.
+    // Le Scale Manager se charge d'adapter le canvas à la taille du navigateur :
+    //   FIT          = conserve le ratio, ajoute des bandes noires si besoin
+    //   CENTER_BOTH  = centre le canvas horizontalement et verticalement
+    // Conséquence : aucune autre partie du code n'a à se soucier de la taille
+    // réelle de l'écran (mobile, desktop, etc.).
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        parent: 'game',
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT
+    },
     physics: {
         default: 'arcade',
         arcade: {

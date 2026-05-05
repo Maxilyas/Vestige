@@ -4,6 +4,9 @@
 
 import { gameConfig } from './config.js';
 import { GameScene } from './scenes/GameScene.js';
+import { UIScene } from './scenes/UIScene.js';
 
+// L'ordre dans `scene` détermine l'ordre de rendu (UIScene au-dessus).
+// GameScene est lancée par défaut ; elle se charge ensuite de `launch('UIScene')`.
 // eslint-disable-next-line no-new
-new Phaser.Game({ ...gameConfig, scene: [GameScene] });
+new Phaser.Game({ ...gameConfig, scene: [GameScene, UIScene] });

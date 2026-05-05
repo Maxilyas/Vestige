@@ -46,6 +46,13 @@ const Y_SOL = GAME_HEIGHT - HAUTEUR_SOL / 2;
 const LARGEUR_SORTIE = 60;
 const HAUTEUR_SORTIE = 90;
 
+// Vortex : portail de retour vers le Présent (uniquement consommé en Miroir).
+// On en génère TOUJOURS un par salle, même si l'objet n'est instancié visuellement
+// qu'en Miroir — comme la géométrie, sa position est seedée et stable.
+const LARGEUR_VORTEX = 60;
+const HAUTEUR_VORTEX = 90;
+const DIST_MIN_VORTEX = 200; // px en X — pas trop près du spawn ni de la sortie
+
 /**
  * Génère la description d'une salle.
  * @param {number} seed       seed globale du run
@@ -54,6 +61,7 @@ const HAUTEUR_SORTIE = 90;
  *   index: number,
  *   plateformes: Array<{x:number,y:number,largeur:number,hauteur:number}>,
  *   sortie:      {x:number,y:number,largeur:number,hauteur:number},
+ *   vortex:      {x:number,y:number,largeur:number,hauteur:number},
  *   spawnJoueur: {x:number,y:number}
  * }}
  */
@@ -114,5 +122,44 @@ export function genererSalle(seed, indexSalle) {
         y: GAME_HEIGHT - HAUTEUR_SOL - PLAYER.HEIGHT
     };
 
-    return { index: indexSalle, plateformes, sortie, spawnJoueur };
+    // --- Vortex (Miroir) ---
+    // Posé sur une plateforme flottante choisie aléatoirement, en respectant
+    // une distance minimale au spawn et à la sortie pour ne pas être trivial à
+    // déclencher. Si aucune plateforme ne convient, on tombe sur la plus
+    // centrale possible. Ultime fallback : centre du sol.
+    const plateformesFlottantes = plateformes.slice(1); // [0] = sol
+    const candidats = plateformesFlottantes.map(p => ({
+        x: p.x,
+        y: p.y - p.hauteur / 2 - HAUTEUR_VORTEX / 2
+    }));
+    const valides = candidats.filter(c =>
+        Math.abs(c.x - spawnJoueur.x) >= DIST_MIN_VORTEX &&
+        Math.abs(c.x - sortie.x) >= DIST_MIN_VORTEX
+    );
+
+    let posVortex;
+    if (valides.length > 0) {
+        posVortex = valides[entreEntier(rng, 0, valides.length - 1)];
+    } else if (candidats.length > 0) {
+        // Plateforme dont x est la plus proche du centre de la salle
+        posVortex = candidats.reduce((meilleur, c) =>
+            Math.abs(c.x - GAME_WIDTH / 2) < Math.abs(meilleur.x - GAME_WIDTH / 2)
+                ? c
+                : meilleur
+        );
+    } else {
+        posVortex = {
+            x: GAME_WIDTH / 2,
+            y: Y_SOL - HAUTEUR_SOL / 2 - HAUTEUR_VORTEX / 2
+        };
+    }
+
+    const vortex = {
+        x: posVortex.x,
+        y: posVortex.y,
+        largeur: LARGEUR_VORTEX,
+        hauteur: HAUTEUR_VORTEX
+    };
+
+    return { index: indexSalle, plateformes, sortie, vortex, spawnJoueur };
 }
