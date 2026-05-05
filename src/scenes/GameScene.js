@@ -22,6 +22,9 @@ import {
     poserVignette, poserParticulesAmbiance
 } from '../render/PainterlyRenderer.js';
 import { peindreDecor } from '../render/DecorRegistry.js';
+import { poserCiel, poserEtoilesOuPoussiere, poserSilhouettesLointaines } from '../render/Parallaxe.js';
+import { poserHaloJoueur, poserBrumeSol, poserRayonsLumiere } from '../render/AnimationsAmbiance.js';
+import { peindreOrnementPlateforme } from '../render/PlateformeStyle.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -108,6 +111,10 @@ export class GameScene extends Phaser.Scene {
         const enMiroir = mondeCourant === 'miroir';
         const niveau = niveauDanger(this.indexSalle);
         const palette = paletteDuMonde(mondeCourant);
+        this.palette = palette;
+        this.mondeCourant = mondeCourant;
+        // Le ciel a son propre dégradé qui couvre le fond — on garde quand même
+        // une couleur de secours sur la caméra au cas où une zone reste découverte.
         this.cameras.main.setBackgroundColor(palette.fond);
 
         const salle = genererSalle(seedRun, this.indexSalle);
@@ -116,24 +123,45 @@ export class GameScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
         this.cameras.main.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
 
-        // --- DÉCOR (rendu en premier pour rester en arrière-plan) ---
-        // Le décor utilise un sous-rng seedé pour rester reproductible mais distinct
-        // du contenu de loot. Couches z-order via DEPTH.* dans chaque module render/.
+        // --- COUCHES PARALLAX (du plus loin au plus proche) ---
+        // Couche 1 (x0)    : ciel/abîme avec dégradé vertical, fixe à l'écran
+        poserCiel(this, mondeCourant);
+        // Étoiles ou poussière d'or sur le ciel (parallax x0.15)
+        poserEtoilesOuPoussiere(this, salle.dims, mondeCourant);
+
+        // Le rng du décor est seedé pour rester reproductible
         const rngDecor = creerRng((seedRun ^ 0x517CC1B7 ^ this.indexSalle) >>> 0);
+
+        // Couche 2 (x0.3) : silhouettes très lointaines (rangée de bâtiments à l'horizon)
+        poserSilhouettesLointaines(this, salle.dims, mondeCourant, rngDecor);
+
+        // Couche 3 (x0.7) : silhouettes proches + structures principales (DecorRegistry)
         peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes);
 
         // Particules d'ambiance par monde (poussière Présent, étincelles Miroir)
         poserParticulesAmbiance(this, salle.dims, mondeCourant);
 
-        // --- Plateformes ---
+        // Rayons de lumière obliques (Miroir uniquement)
+        poserRayonsLumiere(this, salle.dims, mondeCourant);
+
+        // --- Plateformes (avec ornement par-dessus) ---
+        // On identifie le sol principal (plus large plateforme) pour lui donner
+        // un traitement visuel plus riche (frise dorée Miroir, herbes Présent).
+        let largeurMax = 0;
+        for (const p of salle.plateformes) if (p.largeur > largeurMax) largeurMax = p.largeur;
+
         this.platforms = this.physics.add.staticGroup();
         this.oneWayPlatforms = this.physics.add.staticGroup();
         for (const p of salle.plateformes) {
             const couleur = p.oneWay
                 ? this.eclaircir(palette.plateforme, 0.15)
                 : palette.plateforme;
-            this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, couleur, p.oneWay);
+            const estSol = p.largeur === largeurMax;
+            this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, couleur, p.oneWay, estSol);
         }
+
+        // Brume au sol (Présent uniquement, après les plateformes pour être devant)
+        poserBrumeSol(this, salle.dims, mondeCourant);
 
         // --- Joueur ---
         const positionPendante = this.registry.get(CLE_POSITION_PENDANTE);
@@ -150,6 +178,10 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.physics.add.collider(this.player, this.platforms);
+
+        // Halo lumineux qui suit le joueur en Miroir (le Vestige porte sa propre
+        // lumière dans le passé)
+        poserHaloJoueur(this, this.player, mondeCourant);
 
         // Collider one-way : le joueur peut sauter À TRAVERS par le bas (les
         // checkCollision sur les plateformes one-way bloquent les autres axes,
@@ -662,19 +694,22 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
     // HELPERS
     // ============================================================
-    creerPlateforme(x, y, largeur, hauteur, couleur, oneWay = false) {
+    creerPlateforme(x, y, largeur, hauteur, couleur, oneWay = false, estSol = false) {
         const rect = this.add.rectangle(x, y, largeur, hauteur, couleur);
         rect.setDepth(DEPTH.PLATEFORMES);
         const groupe = oneWay ? this.oneWayPlatforms : this.platforms;
         groupe.add(rect);
         rect.body.updateFromGameObject();
         if (oneWay) {
-            // Collision uniquement par le haut (le joueur peut sauter à travers
-            // par le bas). Drop-through géré séparément via processCallback.
             rect.body.checkCollision.down = false;
             rect.body.checkCollision.left = false;
             rect.body.checkCollision.right = false;
         }
+
+        // Ornement par-dessus la plateforme physique : pierre cassée Présent /
+        // pavés ornés Miroir avec chasse-pieds doré
+        peindreOrnementPlateforme(this, x, y, largeur, hauteur, this.mondeCourant, this.palette, oneWay, estSol);
+
         return rect;
     }
 

@@ -303,10 +303,26 @@ const PEINTRES = {
     colonne: (s, e, m, p) => peindreColonne(s, e.x, e.yBase, e.hauteur, m, p),
     statue: (s, e, m, p) => peindreStatue(s, e.x, e.yBase, e.hauteur ?? 100, m, p),
     racine: (s, e, m, p) => peindreRacine(s, e.x, e.yBase, e.dx, e.dy, e.longueur, m, p),
-    batiment: (s, e, m, p) => peindreBatiment(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, { silhouette: e.silhouette }),
-    tour: (s, e, m, p) => peindreTour(s, e.x, e.yBase, e.hauteur, m, p, { silhouette: e.silhouette }),
-    dome: (s, e, m, p) => peindreDome(s, e.x, e.yBase, e.rayon, m, p, { silhouette: e.silhouette }),
-    atelier: (s, e, m, p) => peindreAtelier(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, { silhouette: e.silhouette }),
+    batiment: (s, e, m, p) => {
+        const o = peindreBatiment(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, { silhouette: e.silhouette });
+        if (e.silhouette) o.setScrollFactor(0.7);
+        return o;
+    },
+    tour: (s, e, m, p) => {
+        const o = peindreTour(s, e.x, e.yBase, e.hauteur, m, p, { silhouette: e.silhouette });
+        if (e.silhouette) o.setScrollFactor(0.7);
+        return o;
+    },
+    dome: (s, e, m, p) => {
+        const o = peindreDome(s, e.x, e.yBase, e.rayon, m, p, { silhouette: e.silhouette });
+        if (e.silhouette) o.setScrollFactor(0.7);
+        return o;
+    },
+    atelier: (s, e, m, p) => {
+        const o = peindreAtelier(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, { silhouette: e.silhouette });
+        if (e.silhouette) o.setScrollFactor(0.7);
+        return o;
+    },
     lanterne: (s, e, m, p) => peindreLanterne(s, e.x, e.yBase, m, p, e.mode ?? 'suspendue'),
     banderole: (s, e, m, p) => peindreBanderole(s, e.x1, e.y1, e.x2, e.y2, m, p),
     tonneau: (s, e, m, p) => peindreTonneau(s, e.x, e.yBase, m, p),
