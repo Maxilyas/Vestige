@@ -17,6 +17,11 @@ import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
 import { ENEMIES, tirerTypeEnnemi } from '../data/enemies.js';
 import { ARCHETYPES } from '../data/archetypes.js';
 import { Enemy } from '../entities/Enemy.js';
+import {
+    PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
+    poserVignette, poserParticulesAmbiance
+} from '../render/PainterlyRenderer.js';
+import { peindreDecor } from '../render/DecorRegistry.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -28,16 +33,9 @@ const ARCHETYPES_LABELS = Object.fromEntries(
 // Au prochain rechargement de la page, on tire une nouvelle seed → nouveau run.
 const CLE_SEED_RUN = 'seed_run';
 
-// Palettes Présent — légèrement teintées selon le niveau de danger
-const PALETTES_PRESENT = {
-    0: { fond: '#1a1a24', plateforme: 0x3a3a4a, sortie: 0xc8a85a }, // refuge
-    1: { fond: '#1a1a26', plateforme: 0x3a3a4a, sortie: 0xc8a85a }, // calme
-    2: { fond: '#221a24', plateforme: 0x4a3a4a, sortie: 0xc8a85a }, // tension
-    3: { fond: '#2c1a22', plateforme: 0x5a3a44, sortie: 0xc8a85a }  // climax
-};
-const PALETTE_MIROIR = {
-    fond: '#3a2818', plateforme: 0x7a3a4a, sortie: 0xc8a85a, vortex: 0x5ac8a8
-};
+// Couleurs spécifiques aux zones interactives (sortie/vortex), partagées
+const COULEUR_SORTIE = 0xc8a85a; // doré
+const COULEUR_VORTEX = 0x5ac8a8; // cyan-vert
 
 const HAUTEUR_SOL = 40;
 const BAISSE_MIROIR_DELAI_MS = 500;
@@ -109,23 +107,31 @@ export class GameScene extends Phaser.Scene {
         // --- Palette + salle ---
         const enMiroir = mondeCourant === 'miroir';
         const niveau = niveauDanger(this.indexSalle);
-        const palette = enMiroir ? PALETTE_MIROIR : PALETTES_PRESENT[niveau];
+        const palette = paletteDuMonde(mondeCourant);
         this.cameras.main.setBackgroundColor(palette.fond);
 
         const salle = genererSalle(seedRun, this.indexSalle);
 
         // --- Bounds caméra & monde physique selon les dimensions de l'archétype ---
-        // Chaque archétype a ses propres dimensions (sanctuaire 1280×540, pont 2200×540,
-        // puits 960×900, etc.) — la caméra et la physique s'adaptent.
         this.physics.world.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
         this.cameras.main.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
 
-        // Deux groupes physiques : plateformes solides (collision sur les 4 côtés)
-        // et plateformes "one-way" (collision uniquement par le haut, drop-through possible)
+        // --- DÉCOR (rendu en premier pour rester en arrière-plan) ---
+        // Le décor utilise un sous-rng seedé pour rester reproductible mais distinct
+        // du contenu de loot. Couches z-order via DEPTH.* dans chaque module render/.
+        const rngDecor = creerRng((seedRun ^ 0x517CC1B7 ^ this.indexSalle) >>> 0);
+        peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes);
+
+        // Particules d'ambiance par monde (poussière Présent, étincelles Miroir)
+        poserParticulesAmbiance(this, salle.dims, mondeCourant);
+
+        // --- Plateformes ---
         this.platforms = this.physics.add.staticGroup();
         this.oneWayPlatforms = this.physics.add.staticGroup();
         for (const p of salle.plateformes) {
-            const couleur = p.oneWay ? this.eclaircir(palette.plateforme, 0.15) : palette.plateforme;
+            const couleur = p.oneWay
+                ? this.eclaircir(palette.plateforme, 0.15)
+                : palette.plateforme;
             this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, couleur, p.oneWay);
         }
 
@@ -140,6 +146,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.player = this.add.rectangle(spawn.x, spawn.y, PLAYER.WIDTH, PLAYER.HEIGHT, PLAYER.COLOR);
+        this.player.setDepth(DEPTH.ENTITES);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.physics.add.collider(this.player, this.platforms);
@@ -166,9 +173,9 @@ export class GameScene extends Phaser.Scene {
         this.invincibleJusqu = 0;
 
         // --- Zones interactives ---
-        this.creerSortieSalle(salle.sortie, palette.sortie);
+        this.creerSortieSalle(salle.sortie, COULEUR_SORTIE);
         if (enMiroir) {
-            this.creerVortex(salle.vortex, palette.vortex);
+            this.creerVortex(salle.vortex, COULEUR_VORTEX);
         }
 
         // --- Coffre + drop sol ---
@@ -187,6 +194,7 @@ export class GameScene extends Phaser.Scene {
                 const def = tirerTypeEnnemi('normal', this.rngLoot);
                 if (!def) continue;
                 const ennemi = new Enemy(this, def, e.x, e.y, e.idx);
+                ennemi.sprite.setDepth(DEPTH.ENTITES);
                 if (def.gravite) {
                     this.physics.add.collider(ennemi.sprite, this.platforms);
                 }
@@ -206,12 +214,12 @@ export class GameScene extends Phaser.Scene {
         this.add.text(10, 10,
             `Vestige — Salle ${salle.index + 1}${labelMonde}  ·  ${archetypeLabel}`,
             { fontFamily: 'monospace', fontSize: '14px', color: enMiroir ? '#f0c890' : '#e8e4d8' }
-        ).setScrollFactor(0);
+        ).setScrollFactor(0).setDepth(200);
 
         this.add.text(10, 30,
             'QD/← →: bouger  ↑/Espace: sauter  S/↓: descendre (corniches)  X: attaque  C: parry  E: interagir  I: inventaire',
             { fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a' }
-        ).setScrollFactor(0);
+        ).setScrollFactor(0).setDepth(200);
 
         if (labelDanger && niveau >= 2) {
             this.add.text(10, 48, labelDanger, {
@@ -219,8 +227,11 @@ export class GameScene extends Phaser.Scene {
                 fontSize: '11px',
                 color: niveau === 3 ? '#ff8060' : '#c8a060',
                 fontStyle: 'bold'
-            }).setScrollFactor(0);
+            }).setScrollFactor(0).setDepth(200);
         }
+
+        // --- Vignette (overlay cinéma sombre aux bords, fixe à l'écran) ---
+        poserVignette(this, 1);
 
         // --- Hooks selon le monde ---
         if (enMiroir) {
@@ -308,6 +319,7 @@ export class GameScene extends Phaser.Scene {
 
         // Visuel : un slash blanc semi-transparent
         const slash = this.add.rectangle(hx, hy, portee, PLAYER.HEIGHT, 0xffffff, 0.5);
+        slash.setDepth(DEPTH.EFFETS);
         this.tweens.add({
             targets: slash,
             alpha: 0,
@@ -341,6 +353,7 @@ export class GameScene extends Phaser.Scene {
             PLAYER.WIDTH + 14, PLAYER.HEIGHT + 14,
             0xc8a85a, 0.4
         );
+        halo.setDepth(DEPTH.EFFETS);
         this.tweens.add({
             targets: halo,
             alpha: 0,
@@ -446,12 +459,14 @@ export class GameScene extends Phaser.Scene {
     creerCoffre(c) {
         this.coffre = this.add.rectangle(c.x, c.y, c.largeur, c.hauteur, 0x8a7a6a);
         this.coffre.setStrokeStyle(2, 0xc8a85a);
+        this.coffre.setDepth(DEPTH.DECOR_AVANT);
         this.coffreData = c;
     }
 
     creerDropSol(d) {
         this.dropSol = this.add.rectangle(d.x, d.y, d.largeur, d.hauteur, 0xa8c8e8, 0.85);
         this.dropSol.setStrokeStyle(1, 0xe8e4d8);
+        this.dropSol.setDepth(DEPTH.DECOR_AVANT);
         this.dropSolData = d;
         this.tweens.add({
             targets: this.dropSol,
@@ -529,6 +544,7 @@ export class GameScene extends Phaser.Scene {
     creerSortieSalle(s, couleur) {
         this.sortie = this.add.rectangle(s.x, s.y, s.largeur, s.hauteur, couleur, 0.35);
         this.sortie.setStrokeStyle(2, couleur, 0.9);
+        this.sortie.setDepth(DEPTH.PLATEFORMES);
         this.physics.add.existing(this.sortie, true);
         this.physics.add.overlap(this.player, this.sortie, () => this.salleSuivante());
     }
@@ -536,6 +552,7 @@ export class GameScene extends Phaser.Scene {
     creerVortex(v, couleur) {
         this.vortex = this.add.rectangle(v.x, v.y, v.largeur, v.hauteur, couleur, 0.4);
         this.vortex.setStrokeStyle(2, couleur, 0.9);
+        this.vortex.setDepth(DEPTH.PLATEFORMES);
         this.physics.add.existing(this.vortex, true);
         this.physics.add.overlap(this.player, this.vortex, () => this.retourAuNormal());
         this.tweens.add({
@@ -647,6 +664,7 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
     creerPlateforme(x, y, largeur, hauteur, couleur, oneWay = false) {
         const rect = this.add.rectangle(x, y, largeur, hauteur, couleur);
+        rect.setDepth(DEPTH.PLATEFORMES);
         const groupe = oneWay ? this.oneWayPlatforms : this.platforms;
         groupe.add(rect);
         rect.body.updateFromGameObject();
@@ -676,7 +694,7 @@ export class GameScene extends Phaser.Scene {
             color: couleurCss,
             stroke: '#000',
             strokeThickness: 3
-        }).setOrigin(0.5, 1);
+        }).setOrigin(0.5, 1).setDepth(DEPTH.EFFETS);
         this.tweens.add({
             targets: t,
             y: t.y - 40,
