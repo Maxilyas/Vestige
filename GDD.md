@@ -1,13 +1,15 @@
 # VESTIGE — Game Design Document
-> Version 0.1 — Prototype
+> Version 0.2 — Prototype
+> **Lore détaillé : voir [LORE.md](LORE.md).**
+> Ce document décrit les *mécaniques*. Pour le pourquoi narratif, lire LORE.md.
 
 ---
 
 ## 🎯 Vision
 
-> *Tu explores les ruines d'une civilisation disparue. Mourir te projette dans son passé vivant. Ta Résonance te maintient entre les deux mondes. Le loot est un langage que tu apprends seul.*
+> *Tu explores les ruines d'une civilisation disparue. Quand ta cohérence s'effondre, tu glisses dans son passé vivant. Le loot est un langage que tu apprends seul. La mort n'existe pas — l'absorption, oui.*
 
-Un plateformer 2D fantasy médiéval où la mort n'est pas une punition mais un voyage. Le joueur découvre progressivement les règles du monde — aucun tutoriel, aucune explication explicite.
+Un plateformer 2D fantasy médiéval où le joueur est un **Vestige** : un fragment de conscience coupé en deux par le Reflux, capable de glisser entre le Présent (ruines) et le Miroir (passé fixé, vivant). Aucun tutoriel — il découvre les règles en jouant.
 
 **Références :** Terraria (exploration persistante) + Dark Souls (loot énigmatique) + Ogame (progression longue et méritée)
 
@@ -39,11 +41,38 @@ Les deux mondes sont générés **ensemble, procéduralement**. Chaque salle du 
 - Les coffres contiennent du loot Blanc principalement
 
 ### Monde Miroir — Règles
-- Les mêmes salles, mais vivantes et lumineuses
+- Les mêmes salles, mais vivantes et lumineuses (palette chaude)
 - Ennemis : habitants de la civilisation passée (gardes, mages, marchands corrompus)
 - Plus dangereux : la Résonance baisse passivement dans le miroir
 - Les coffres contiennent du loot Bleu et Noir principalement
 - Certaines zones font baisser la Résonance très rapidement — à éviter ou traverser vite
+
+### 🪞 Doctrine du Monde Miroir
+*Boussole pour toutes les décisions de design touchant au Miroir. Voir [LORE.md §11](LORE.md#11-doctrine-du-monde-miroir) pour le détail.*
+
+> **Le Miroir est l'unique source de compréhension et de puissance — mais il te rejette progressivement, et il ne donne rien de directement utilisable.**
+
+Trois piliers à ne jamais casser :
+
+1. **Le Miroir attire** — loot brut puissant, lore exclusif, raccourcis géographiques (option : avancer en Miroir = avancer dans Normal), PNJ vivants
+2. **Le Miroir repousse** — baisse passive de Résonance, perception croissante des habitants, risque d'Absorption
+3. **Le Miroir dépend du Présent** — les **Fragments** ramenés du Miroir doivent être identifiés / forgés / échangés en Présent (Sanctuaires, Fondeur, Marchands). Aucun loot Miroir n'est équipable directement.
+
+**Conséquence ludique** : le cycle naturel devient `Présent (préparer) → Miroir (extraire) → Présent (capitaliser) → Miroir (extraire mieux)…`. Le joueur ne peut ni rester en Présent (rien à y trouver de neuf), ni rester en Miroir (rien d'utilisable, et il y meurt).
+
+### Ce qu'on trouve uniquement en Présent
+- **Sanctuaires de Résonance** — recharge totale, point de sauvegarde
+- **Fondeur** — transforme un Fragment en item équipable
+- **Identifieur** (PNJ ou autel) — révèle les effets cachés d'un objet
+- **Marchands errants** — échange de Fragments / items contre du Sel de Résonance (monnaie)
+- **Repos** — seul lieu où équiper / déséquiper sans pénalité
+
+### Ce qu'on trouve uniquement en Miroir
+- **Fragments bruts** (matière première du loot Bleu/Noir, inutilisables avant Présent)
+- **Inscriptions / fresques** révélant le lore et la taxonomie du loot
+- **PNJ vivants** des Sources — dialogues cryptiques, indices
+- **Coffres scellés en Présent** ouvrables uniquement depuis leur version Miroir
+- **Artefacts de Résonance** (drop ultra-rare, seule issue à l'Ancrage)
 
 ---
 
@@ -69,22 +98,36 @@ La Résonance est la jauge centrale du jeu. Elle remplace la "barre de vie" clas
 - Revenir dans le Monde Normal depuis le Miroir
 - Certains objets Blanc
 
-### Le Basculement
-Quand la Résonance atteint 0 dans le **Monde Normal** :
-→ Le joueur bascule dans le **Monde Miroir** (même salle, version passée)
-→ La Résonance se stabilise à 30% dans le miroir
-→ Le joueur doit trouver un **Portail de Retour** pour revenir dans le monde normal
+### Le Basculement (Présent → Miroir)
+Quand la Résonance atteint 0 dans le **Présent** :
+→ Le joueur bascule dans le **Miroir** (même salle, version passée vivante)
+→ La Résonance se stabilise à 30 % dans le Miroir
+→ Le joueur doit trouver un **Portail de Retour** pour revenir au Présent
+→ Lecture lore : le Miroir te *prête* de la cohérence pour te garder en vie chez lui
 
-Quand la Résonance atteint 0 dans le **Monde Miroir** :
-→ Le joueur est **ancré dans le miroir** — il ne peut plus revenir naturellement
-→ Pas de game over, mais état critique : la Résonance continue de baisser lentement
-→ Seul un **Artefact de Résonance** (drop très rare dans le miroir) permet de revenir
-→ Tension maximale : le joueur doit explorer un monde dangereux avec quasi rien
+### L'Absorption (Résonance = 0 en Miroir)
+Quand la Résonance atteint 0 dans le **Miroir** :
+→ Le joueur entre en état **Ancré** — fenêtre de grâce de 30 à 60 secondes
+→ Pendant cette fenêtre : déformation visuelle, habitants te perçoivent, compte à rebours invisible
+→ **Une seule issue** : trouver un **Artefact de Résonance** (drop ultra-rare en Miroir) → retour au Présent avec Résonance pleine
+→ Si la fenêtre expire sans Artefact : **Absorption** → fin du run en cours
 
-### Portails de Retour
-- Présents dans chaque salle du Miroir, mais cachés
-- Certains sont visibles, d'autres nécessitent d'interagir avec l'environnement
-- Dans le prototype : 1 portail visible par salle du miroir
+**Ce que l'Absorption coûte / préserve :**
+- ❌ Tout le loot non capitalisé du run en cours est perdu
+- ❌ Les progrès de salle / position sont perdus
+- ✅ La méta-progression survit : codex, carte mémoire, items débloqués au pool de drop
+- ✅ Au prochain run : ton ancien personnage apparaît en Présent comme **Vestige** (cadavre/fantôme) à un endroit aléatoire — il porte un objet de ton ancien équipement et délivre une phrase cryptique. Pillable une seule fois.
+
+Cette mécanique remplace la "mort" classique : tu n'es jamais tué, tu es *intégré* au passé. Le titre prend son sens — tu *deviens* un Vestige à chaque échec.
+
+### Le Vortex (retour Miroir → Présent)
+- Une instabilité de la Trame qui s'ouvre dans chaque salle Miroir
+- **Position aléatoire** (seedée par PRNG) — généralement posé sur une plateforme flottante
+- Distance minimale du spawn et de la sortie pour qu'il ne soit pas trivial à atteindre
+- Visible (halo cyan-vert pulsant), mais le joueur doit traverser la salle pour l'atteindre
+- Quand on le touche : retour au Présent **à la même position** (continuité spatiale)
+- Le basculement Présent → Miroir respecte aussi cette continuité : tu te réveilles exactement où tu étais
+- Lecture lore : la Trame ne facilite pas la fuite — voir [LORE.md](LORE.md)
 
 ---
 
@@ -136,27 +179,41 @@ Boss          : 10% Blanc | 30% Bleu | 40% Noir | 20% drop spécial
 ## 🎮 Boucle de Jeu
 
 ```
-SPAWN dans le Monde Normal
+SPAWN en Présent (hub ou salle initiale)
         ↓
-   Explorer les ruines
-   Trouver du loot (Blanc majoritaire)
-   Découvrir les effets en jouant
+   Préparer : équipement Blanc, Sel de Résonance, plan
         ↓
-   Résonance baisse (dégâts, objets)
+   ┌──── Avancer en Présent (sûr, peu de loot) ───┐
+   │                                              │
+   │   OU                                         │
+   │                                              │
+   └─→ Basculer dans le Miroir (volontaire ou  ──→ Extraction
+       forcé par Résonance = 0 en Présent)        │
+                                                  │
+       Ramasser des Fragments                     │
+       Lire des inscriptions / parler aux PNJ     │
+       Avancer en Miroir = avance aussi en Présent│
+                                                  │
+       Résonance baisse passivement               │
+       Habitants te perçoivent peu à peu          │
+                                                  │
+       ┌──── Sortir par le Portail de Retour ─────┘
+       │     (+20 Résonance bonus)
+       │
+       └──── OU rester trop longtemps :
+             Résonance → 0 → ANCRÉ
+             Fenêtre de grâce 30-60s
+             ↓
+             Trouver un Artefact ?
+              ├─ OUI → retour Présent, Résonance pleine
+              └─ NON → ABSORPTION → fin du run
+                                    (méta-progression survit)
         ↓
-   BASCULEMENT → Monde Miroir
-   Même salle, vivante et dangereuse
-   Loot plus puissant (Bleu, Noir)
-   Résonance baisse passivement
+   Retour Présent
+   Capitaliser : forger, identifier, vendre, équiper
+   Repartir, plus fort, vers une salle plus profonde
         ↓
-   Trouver un Portail de Retour
-        ↓
-   Revenir dans le Monde Normal
-   (boucle recommence, salle suivante)
-        ↓
-   Si ancré dans le Miroir :
-   Trouver un Artefact de Résonance
-   (tension maximale)
+   (cycle recommence)
 ```
 
 ---
@@ -186,13 +243,18 @@ SPAWN dans le Monde Normal
 - HUD minimal : jauge de Résonance + slots équipement
 
 ### ❌ Hors scope prototype
-- Monde Miroir complet avec lore
+- Sanctuaires / Fondeur / Identifieur / Marchands en Présent (la "couche capitalisation")
+- Fenêtre de grâce + Absorption + Vestige du run précédent
+- Habitants du Miroir (3 phases de perception : transparence → curiosité → hostilité)
+- Inscriptions / fresques de lore en Miroir
 - Familles Violet, Orange, ❓
 - Boss
-- Progression méta entre les runs
+- Progression méta entre les runs (codex, carte mémoire)
 - Sons et musique
 - Animations complexes
 - Multijoueur
+
+> Note : ces éléments sont *définis* dans LORE.md et la Doctrine. Ils ne seront pas tous implémentés dans le proto, mais les choix techniques actuels ne doivent pas les rendre impossibles à ajouter plus tard.
 
 ---
 
