@@ -9,11 +9,12 @@ Prototype jouable dans le navigateur.
 - [LORE.md](LORE.md) — cosmologie, civilisation, Résonance, Vestiges, Reflux, Doctrine du Miroir
 
 ## Concept core (lire GDD.md + LORE.md pour le détail)
-- **Deux mondes** : Présent (ruines, post-Reflux) ↔ Miroir (passé vivant, fixé)
+- **Deux mondes** : Présent (ruines, post-Reflux, **terrain de chasse**) ↔ Miroir (passé vivant, **atelier paisible sous timer**)
 - **La Résonance** = mesure de cohérence d'existence du Vestige (le joueur). Baisse = on devient flou. À 0 → Basculement (Présent → Miroir) ou Absorption (Miroir → fin de run)
 - **Pas de mort, mais Absorption** : Résonance 0 en Miroir → fenêtre de grâce → si pas d'Artefact, le perso devient un habitant du passé. Le run termine, méta-progression survit, son corps réapparaît en Présent comme Vestige pillable au prochain run.
-- **Doctrine du Miroir** : il attire (loot, lore, raccourcis), il repousse (baisse passive, perception des habitants, Absorption), il dépend du Présent (Fragments inutilisables avant identification/forge/échange)
-- **Loot énigmatique** : 3 familles (Blanc/Bleu/Noir = Présent/Miroir/Reflux), pas de stats explicites
+- **Doctrine des Deux Mondes** : *Présent = chasser, Miroir = transformer, aucun ne suffit seul*. Le Présent contient ennemis, combats, drops bruts (Fragments). Le Miroir contient marchands, forge, identification, lore — mais tu y es repoussé par la baisse passive. Cycle naturel : `chasser → transformer → chasser plus fort`.
+- **Loot énigmatique** : 3 familles (Blanc/Bleu/Noir = Présent/Miroir/Reflux), pas de stats explicites, 3 tiers de révélation (visible / partiel / caché ★)
+- **Combat RPG** : attaque (X), parry (C), sort (Z, hook). Toute la complexité passe par les items Corps (portée, dégâts, cooldown).
 - **Aucun tutoriel** — le joueur découvre les règles en jouant
 
 ## Stack technique
@@ -60,16 +61,24 @@ npx vite
 4. ✅ Système de Résonance + HUD (UIScene parallèle, registry, jauge)
 5. ✅ Basculement Monde Normal ↔ Monde Miroir (palette + portail + baisse passive + ancrage)
 6. ✅ Système de loot — coffres, drops orphelins (consommables), inventaire 40 slots, équipement 3 slots, 3 tiers de révélation, 15 items + 6 consommables
-7. ⬜ Ennemis basiques
+7. ✅ Ennemis basiques + combat RPG (attaque/parry, patterns de difficulté, drops, doctrine inversée Présent=combat / Miroir=atelier paisible)
 
 ## État actuel
 *Cette section doit être mise à jour à la fin de chaque session de travail.*
 
-- **Dernière étape franchie :** étape 6 — système de loot complet. `data/items.js` (15 items équipables + 6 consommables), `LootSystem` (tirage selon monde, calcul de stats effectives), `InventaireSystem` (inventaire 40 slots + 3 slots équipés dans le registry, persiste aux scene.restart), `InputSystem` (intentions abstraites, jamais de clavier direct dans la logique), `InventaireScene` (overlay grille + détail + équiper/jeter avec tier 1/2/3 de révélation et marqueur ★), coffres et drops orphelins seedés dans WorldGen, ramassage par touche E. Stats effectives calculées dynamiquement depuis l'équipement.
-- **Prochain chantier :** étape 7 — Ennemis basiques. À discuter : 2 types par monde (cf. GDD), comportements simples (patrouille, suivi), drops à la mort (réutilisent `tirerItem`).
-- **Compromis MVP étape 6 (dette narrative documentée) :**
-  - Items du Miroir directement équipables, alors que LORE prévoit des Fragments bruts à transformer en Présent (Sanctuaires/Fondeur). Le système actuel reste compatible avec cette couche future.
-  - Pas encore : malédictions temporelles des Noir, identification des Tier III par Œil-Témoin, items "game-changers" (wall-grip, drop-down, slow-mo, fil d'Ariane) — étape 6.5
+- **Dernière étape franchie :** étape 7 — combat RPG + ennemis du Présent. `data/enemies.js` (2 types : Gardien de Pierre, Spectre de Cendre), `entities/Enemy.js` (IA patrouille / vol-suivi), `EnemySystem` (persistance des morts), `WorldGen.niveauDanger()` (cycles 6 salles : 0/0/1/1/2/3 = refuge → climax), spawn d'ennemis seedé en Présent uniquement, palettes Présent légèrement teintées selon le danger. Combat : `X` attaque (hitbox temporaire devant le joueur), `C` parry (fenêtre 300 ms + bonus +5 Résonance + flash doré), `Z` réservé pour les sorts. Items Corps modulent l'attaque (`attaqueDegats`, `attaquePortee`, `attaqueCooldown`) et le parry (`parryFenetre`, `parryCooldown`, `parryBonusResonance`). Drops à la mort : 30 % type Présent, drop garanti Bleu/Noir au climax (niveau 3).
+- **Inversion doctrinale majeure cette session** : LORE / GDD / Doctrine inversés. **Présent = chasse** (ennemis, combat, drops bruts). **Miroir = atelier paisible sous timer** (marchands, forge, identification — la couche "capitalisation" reste hors scope MVP). Cycle naturel : `chasser → transformer → chasser plus fort`. Voir [LORE.md §11](LORE.md#11-doctrine-des-deux-mondes).
+- **Prochain chantier :** **MVP bouclé**. Pistes possibles ensuite :
+  - **Étape 7.5** — items "game-changers" (wall-grip, fil d'Ariane, fumée, slow-mo, sorts via touche Z)
+  - **Étape 8** — couche capitalisation Miroir (marchands, fondeur, identifieur) pour boucler la doctrine
+  - **Étape 9** — Absorption complète (fenêtre de grâce, Artefact, Vestige du run précédent)
+  - **Étape 10** — sprites + assets graphiques (cf. discussion Rayman-like)
+- **Compromis MVP (dette narrative documentée) :**
+  - Items du Miroir directement équipables, alors que LORE prévoit des Fragments bruts à transformer en **Miroir** (Fondeur/Identifieur). Le système actuel reste compatible avec cette couche future.
+  - Pas de marchands/forge/identifieur en Miroir pour l'instant — il est juste un terrain paisible avec coffres rares + vortex
+  - Pas encore : sorts (touche Z réservée), malédictions temporelles des Noir, identification des Tier III par Œil-Témoin, items "game-changers" (wall-grip, drop-down, slow-mo, fil d'Ariane)
+  - Pas d'Absorption mécanique (fenêtre de grâce + Artefact) — l'Ancrage reste statique
+  - Phases de perception des habitants Miroir non implémentées — ils sont 100 % paisibles
 - **Points d'attention :**
   - Le joueur est toujours un `Phaser.GameObjects.Rectangle` — à remplacer par un sprite plus tard
   - Aucun asset graphique, tout est en primitives colorées

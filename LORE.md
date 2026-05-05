@@ -51,13 +51,16 @@ Aucune des trois n'a été confirmée. Une partie du jeu consiste à recomposer 
 
 ## 4. Le Miroir
 
-Le Miroir n'est pas une copie du Présent. C'est **le passé qui n'a pas voulu mourir**.
+Le Miroir n'est pas une copie du Présent. C'est **le passé qui n'a pas voulu mourir** — et qui, à tes yeux de Vestige, est devenu **le seul lieu où la civilisation est encore opérante**.
 
-Trois propriétés le caractérisent :
+Quatre propriétés le caractérisent :
 
-1. **Il est vivant.** Les habitants y poursuivent leur dernière journée. Ils marchent, parlent, travaillent, aiment, jusqu'à ce que la boucle se réinitialise (ou jusqu'à ce qu'un événement extérieur la perturbe — toi, par exemple).
-2. **Il est dense.** La Résonance y est partout. C'est pour cela qu'on s'y épuise (la jauge baisse passivement) — ton corps de Présent n'est pas fait pour cette densité. Tu fonds, lentement.
-3. **Il rejette les corps étrangers.** Le Miroir n'est pas censé contenir un Vestige du Présent. Plus tu y restes, plus la Trame du passé tente de t'expulser ou de t'absorber.
+1. **Il est vivant.** Les habitants y poursuivent leur dernière journée — paisiblement. Ils marchent, parlent, travaillent, vendent, forgent, aiment, jusqu'à ce que la boucle se réinitialise. Ils ne sont pas hostiles : tu es transparent pour eux. (Ce statut peut évoluer dans des étapes futures du jeu — voir §8 — mais ce n'est pas leur état par défaut.)
+2. **Il est productif.** Tout ce qui *transforme* la matière vit ici : marchands, fondeurs, autels, identifieurs. Les Sources savaient travailler la Résonance, ce savoir est resté chez eux. Pour transformer un Fragment brut en arme, c'est en Miroir qu'on va.
+3. **Il est dense.** La Résonance y est partout. C'est pour cela qu'on s'y épuise (la jauge baisse passivement) — ton corps de Présent n'est pas fait pour cette densité. Tu fonds, lentement.
+4. **Il rejette les corps étrangers.** Le Miroir n'est pas censé contenir un Vestige du Présent. Plus tu y restes, plus la Trame du passé tente de t'expulser ou de t'absorber.
+
+**Le rôle ludique du Miroir** est donc : **atelier vivant sous contrainte de temps**. Tu y arrives avec des matériaux glanés en Présent, tu fais ce que tu peux faire vite, tu repars avant que la Trame ne te broie. Ce n'est pas un terrain de chasse — c'est une ville étrangère où tu es toléré tant que tu ne traînes pas.
 
 ---
 
@@ -125,30 +128,36 @@ Ce sont des objets *coupés en deux par le Reflux*. Une partie de leur Résonanc
 
 Lecture lore : ce sont des objets témoins. Ils ont vu le Reflux. Une partie d'eux veut s'en souvenir, une autre veut l'oublier. Les porter, c'est porter cette tension.
 
-### Les Fragments bruts — la matière première du Miroir
-Le loot que tu *trouves* directement en Miroir n'est jamais équipable tel quel. Ce sont des **Fragments** : des éclats de Résonance figée, des morceaux d'objets du passé dont tu ne sais pas encore l'usage.
+### Les Fragments bruts — la matière première du combat
+Les ennemis et les coffres du **Présent** lâchent des **Fragments** : des éclats de Résonance figée, des morceaux d'objets dont tu ne sais pas encore l'usage. Tels quels, ils ne sont pas équipables.
 
-Pour devenir des items équipables, les Fragments doivent être :
+Pour devenir des items utilisables, les Fragments doivent être emportés **dans le Miroir** :
 
-- **Identifiés** dans un Sanctuaire (Présent uniquement) — révèle leur nature et leurs effets
-- **Forgés** chez le Fondeur (Présent uniquement) — devient un objet portable
-- **Échangés** chez les Marchands errants (Présent uniquement) — contre du Sel de Résonance ou un autre Fragment
+- **Identifiés** par un Identifieur — révèle nature et effets
+- **Forgés** chez le Fondeur — devient un objet portable
+- **Échangés** chez les Marchands — contre du Sel de Résonance ou un autre Fragment
 
-Conséquence : **tu ne peux jamais "rester" en Miroir**, parce que tout ce que tu y prends est inerte tant que tu n'es pas revenu chez toi.
+Conséquence : **tu ne peux jamais te passer du Miroir**, parce que tout ce que tu trouves en chassant est inerte tant que tu ne l'as pas porté à la civilisation. Et tu ne peux pas *vivre* en Miroir non plus, parce que la Trame te repousse — et que sans matériaux frais, les artisans n'ont rien à te vendre.
 
 ---
 
 ## 8. Les habitants du Miroir
 
-Les habitants sont des âmes fixées dans la dernière journée des Sources. Ils ne meurent pas (à la fin de leur boucle, ils recommencent), ils ne te voient pas immédiatement.
+Les habitants sont des âmes fixées dans la dernière journée des Sources. Ils ne meurent pas (à la fin de leur boucle, ils recommencent), et **ils ne te voient pas**. Pour eux, tu es transparent — un courant d'air, un reflet inattentif.
 
-Trois phases de perception :
+C'est ce qui rend le Miroir si étrange : tu peux marcher au milieu d'une foule, écouter une conversation, regarder un mage tracer un sigle, sans qu'aucun n'interrompe son geste. Tu **n'existes pas** pour le passé.
 
-1. **Transparence** (au début, ou si tu restes peu) — tu n'existes pas pour eux. Tu peux les frôler, les écouter, lire ce qu'ils écrivent. Ils continuent leur vie.
-2. **Curiosité** (après ~20 secondes en Miroir, ou après plusieurs visites) — certains commencent à *te regarder*. Pas hostiles, mais conscients. Quelques-uns peuvent te parler, en textes cryptiques.
-3. **Hostilité / Absorption** (Résonance basse + temps long) — leur conscience t'identifie comme *anomalie*. Certains te chassent pour t'expulser. D'autres cherchent à t'absorber dans leur propre boucle (devenir l'un d'eux).
+**Conséquence ludique** : le Miroir n'est pas un terrain de combat. Aucun habitant n'est hostile par défaut. Le danger du Miroir vient *intégralement* du timer (baisse passive de Résonance, Absorption au bout). Tu ne te bats pas — tu te dépêches.
 
-Cette progression crée une tension *narrative* qui complète la baisse de Résonance. Ce n'est pas seulement ta jauge qui s'effondre — c'est le monde lui-même qui *réagit* à ta présence.
+### Phases de perception (mécanique future, pas dans le MVP)
+
+À mesure que le jeu s'enrichira, une mécanique de **perception croissante** pourra être introduite : si le joueur abuse, si sa Résonance descend trop bas, ou s'il accomplit des actes inhabituels (sauvetage de PNJ, altération du passé), certains habitants commencent à le percevoir. Trois phases possibles :
+
+1. **Transparence** (état par défaut, MVP)
+2. **Curiosité** — certains te regardent, te parlent en textes cryptiques
+3. **Hostilité** — quelques-uns cherchent à t'expulser ou à t'absorber
+
+Ces phases ne sont **pas implémentées dans le MVP**. La tension narrative repose pour l'instant uniquement sur la baisse passive et l'Absorption.
 
 ---
 
@@ -188,15 +197,16 @@ Plusieurs **fins de jeu** sont envisageables (hors scope MVP) :
 
 ---
 
-## 11. Doctrine du Monde Miroir
-*Boussole pour toutes les décisions futures de design touchant au Miroir.*
+## 11. Doctrine des Deux Mondes
+*Boussole pour toutes les décisions futures de design touchant à l'un ou à l'autre.*
 
-> **Le Miroir est l'unique source de compréhension et de puissance — mais il te rejette progressivement, et il ne donne rien de directement utilisable.**
+> **Le Présent est où tu chasses. Le Miroir est où tu transformes. Aucun des deux ne suffit seul.**
 
-Trois conséquences à ne jamais perdre de vue :
+Quatre conséquences à ne jamais perdre de vue :
 
-1. **Le Miroir attire** : loot brut puissant, lore exclusif, raccourcis géographiques, PNJ vivants.
-2. **Le Miroir repousse** : baisse passive de Résonance, perception croissante des habitants, risque d'Absorption, vortex de retour positionné aléatoirement (la Trame ne te facilite pas la fuite).
-3. **Le Miroir dépend du Présent** : les Fragments doivent être identifiés / forgés / échangés en Présent. On ne capitalise *jamais* sans repasser par chez soi.
+1. **Le Présent attire le combat** : ennemis, drops bruts (Fragments), patterns de difficulté en cycles (refuge → climax). C'est ton terrain de chasse, là où tu prouves ta maîtrise.
+2. **Le Miroir attire la transformation** : marchands, forge, identification, lore, PNJ vivants paisibles. C'est l'atelier où tes matériaux deviennent du pouvoir réel.
+3. **Le Miroir te repousse** : baisse passive de Résonance, vortex de retour positionné aléatoirement, risque d'Absorption. Tu ne peux jamais y vivre — tu y passes, vite.
+4. **Les deux mondes sont indissociables** : sans matériaux du Présent, le Miroir n'a rien à te vendre. Sans transformations du Miroir, ta chasse en Présent n'a pas de finalité. La boucle naturelle est `Présent (chasser) → Miroir (transformer) → Présent (chasser plus fort)`.
 
-Toute proposition de feature touchant au Miroir doit être lue à travers cette doctrine. Si une feature casse l'un des trois piliers (par exemple : "permettre de forger en Miroir", ou "désactiver la baisse passive"), elle est probablement en dette avec la cohérence du jeu.
+Toute proposition de feature touchant à l'un des deux mondes doit être lue à travers cette doctrine. Si une feature **dilue la frontière** (combat en Miroir, forge en Présent, ou un monde qui se suffit à lui-même), elle est probablement en dette avec la cohérence du jeu.

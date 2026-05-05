@@ -6,12 +6,18 @@
 //   tier 3 = Caché   : nom seul + ★ marqueur, aucune stat, le joueur découvre en équipant
 //
 // FORMAT D'UN EFFET : { cible, delta }
-//   cibles supportées (étape 6) :
-//     'speed'           — vitesse horizontale (+/- px/s)
-//     'jumpVelocity'    — hauteur de saut (+/- px/s)
-//     'passiveMiroir'   — modifie la baisse passive en Miroir (+/- pts/tick)
-//     'passivePresent'  — AJOUTE une baisse passive en Présent (signature Bleu)
-//     'bonusRetour'     — modifie le bonus à la sortie du vortex
+//   cibles supportées :
+//     'speed'                — vitesse horizontale (+/- px/s)
+//     'jumpVelocity'         — hauteur de saut (+/- px/s)
+//     'passiveMiroir'        — modifie la baisse passive en Miroir (+/- pts/tick)
+//     'passivePresent'       — AJOUTE une baisse passive en Présent (signature Bleu)
+//     'bonusRetour'          — modifie le bonus à la sortie du vortex
+//     'attaqueDegats'        — dégâts d'attaque (+/-)
+//     'attaquePortee'        — portée de la hitbox d'attaque (+/-)
+//     'attaqueCooldown'      — cooldown entre attaques en ms (delta négatif = plus rapide)
+//     'parryFenetre'         — fenêtre du parry en ms
+//     'parryCooldown'        — cooldown du parry en ms
+//     'parryBonusResonance'  — Résonance regagnée à un parry réussi
 //
 // Les effets "game-changers" (wall-grip, drop-down, slow-mo, fil d'Ariane, etc.)
 // sont prévus pour l'étape 6.5 — leur cible n'est pas dans cette liste.
@@ -28,7 +34,10 @@ export const ITEMS = {
         slot: 'corps',
         tier: 1,
         description: 'Une arme du Présent. Légère, fiable.',
-        effets: [{ cible: 'speed', delta: 30 }]
+        effets: [
+            { cible: 'speed', delta: 30 },
+            { cible: 'attaqueDegats', delta: 1 }
+        ]
     },
     souffle_glace: {
         id: 'souffle_glace',
@@ -86,6 +95,8 @@ export const ITEMS = {
         description: "Une chaleur qui n'est pas la tienne. Elle te porte, elle te use.",
         effets: [
             { cible: 'speed', delta: 60, visible: true },
+            { cible: 'attaqueDegats', delta: 2, visible: true },
+            { cible: 'attaqueCooldown', delta: -100, visible: false },
             { cible: 'passivePresent', delta: 1, visible: false }
         ]
     },
@@ -183,8 +194,13 @@ export const ITEMS = {
         slot: 'corps',
         tier: 3,
         description: "Tu ne sais rien de cet objet. ★",
-        // Game-changer (casse plateformes inter-monde) hors scope étape 6
-        effets: [{ cible: 'speed', delta: 40, visible: false }]
+        // Game-changer (casse plateformes inter-monde) hors scope étape 6,
+        // mais déjà puissant en combat
+        effets: [
+            { cible: 'speed', delta: 40, visible: false },
+            { cible: 'attaqueDegats', delta: 3, visible: false },
+            { cible: 'attaquePortee', delta: 20, visible: false }
+        ]
     }
 };
 

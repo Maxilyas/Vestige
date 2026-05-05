@@ -23,6 +23,10 @@ export class InputSystem {
             saut: Phaser.Input.Keyboard.KeyCodes.SPACE,
             interagir: Phaser.Input.Keyboard.KeyCodes.E,
             inventaire: Phaser.Input.Keyboard.KeyCodes.I,
+            // Combat (étape 7)
+            attaquer: Phaser.Input.Keyboard.KeyCodes.X,
+            parry: Phaser.Input.Keyboard.KeyCodes.C,
+            sort: Phaser.Input.Keyboard.KeyCodes.Z,
             // Provisoires (debug — ne seront pas portés sur mobile)
             degatTest: Phaser.Input.Keyboard.KeyCodes.K,
             healTest: Phaser.Input.Keyboard.KeyCodes.H
@@ -37,6 +41,9 @@ export class InputSystem {
             sauter: false,
             interagir: false,
             ouvrirInventaire: false,
+            attaquer: false,
+            parry: false,
+            sort: false,
             // Provisoires (debug)
             degatTest: false,
             healTest: false
@@ -57,6 +64,10 @@ export class InputSystem {
 
         i.interagir = Phaser.Input.Keyboard.JustDown(this.touches.interagir);
         i.ouvrirInventaire = Phaser.Input.Keyboard.JustDown(this.touches.inventaire);
+
+        i.attaquer = Phaser.Input.Keyboard.JustDown(this.touches.attaquer);
+        i.parry = Phaser.Input.Keyboard.JustDown(this.touches.parry);
+        i.sort = Phaser.Input.Keyboard.JustDown(this.touches.sort);
 
         i.degatTest = Phaser.Input.Keyboard.JustDown(this.touches.degatTest);
         i.healTest = Phaser.Input.Keyboard.JustDown(this.touches.healTest);

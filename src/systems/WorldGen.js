@@ -59,6 +59,24 @@ const DIST_MIN_VORTEX = 200; // px en X — pas trop près du spawn ni de la sor
 const PROBA_COFFRE = 0.6;
 const PROBA_DROP_SOL = 0.3; // appliquée seulement si pas de coffre, donc total ≤ 60+30 % salles avec loot
 
+// Patterns de difficulté (Présent uniquement) — cycles de 6 salles pour créer
+// un rythme naturel : refuge → tension → climax → refuge.
+// Doctrine : le Miroir n'a pas d'ennemis (atelier paisible), donc niveauDanger
+// n'est consommé qu'en Présent.
+const COURBE_DANGER = [0, 0, 1, 1, 2, 3];
+
+export function niveauDanger(indexSalle) {
+    return COURBE_DANGER[indexSalle % COURBE_DANGER.length];
+}
+
+// Nombre d'ennemis par niveau (peut être 0 — refuge total)
+const ENNEMIS_PAR_NIVEAU = {
+    0: { min: 0, max: 0 },
+    1: { min: 0, max: 1 },
+    2: { min: 1, max: 2 },
+    3: { min: 2, max: 3 }
+};
+
 /**
  * Génère la description d'une salle.
  * @param {number} seed       seed globale du run
@@ -70,7 +88,9 @@ const PROBA_DROP_SOL = 0.3; // appliquée seulement si pas de coffre, donc total
  *   vortex:      {x:number,y:number,largeur:number,hauteur:number},
  *   spawnJoueur: {x:number,y:number},
  *   coffre:      ({x:number,y:number,largeur:number,hauteur:number}|null),
- *   dropSol:     ({x:number,y:number,largeur:number,hauteur:number}|null)
+ *   dropSol:     ({x:number,y:number,largeur:number,hauteur:number}|null),
+ *   ennemis:     Array<{x:number,y:number,idx:number}>,
+ *   niveauDanger: number (0..3)
  * }}
  */
 export function genererSalle(seed, indexSalle) {
@@ -210,5 +230,44 @@ export function genererSalle(seed, indexSalle) {
         };
     }
 
-    return { index: indexSalle, plateformes, sortie, vortex, spawnJoueur, coffre, dropSol };
+    // --- Ennemis (uniquement consommés en Présent côté GameScene) ---
+    // On génère TOUJOURS la liste : la scène décide d'instancier ou pas selon le monde.
+    // Position : sur le sol ou sur une plateforme flottante, distance min du spawn,
+    // de la sortie, du vortex et du coffre.
+    const niveau = niveauDanger(indexSalle);
+    const fourchette = ENNEMIS_PAR_NIVEAU[niveau];
+    const nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
+    const ennemis = [];
+    const positionsRefus = [
+        { x: spawnJoueur.x, marge: 150 },
+        { x: sortie.x, marge: 100 },
+        { x: vortex.x, marge: 100 }
+    ];
+    if (coffre) positionsRefus.push({ x: coffre.x, marge: 80 });
+
+    for (let i = 0; i < nbEnnemis; i++) {
+        // Choix : sol (50 %) ou plateforme flottante (50 % si dispo)
+        const surSol = plateformesFlottantes.length === 0 || rng() < 0.5;
+        let x, y;
+        if (surSol) {
+            x = entre(rng, 150, GAME_WIDTH - 150);
+            y = Y_SOL - HAUTEUR_SOL / 2 - 20; // posé sur le sol
+        } else {
+            const p = plateformesFlottantes[entreEntier(rng, 0, plateformesFlottantes.length - 1)];
+            x = p.x;
+            y = p.y - p.hauteur / 2 - 20;
+        }
+        // Vérifier qu'on ne tombe pas sur une zone refusée
+        const conflit = positionsRefus.some(z => Math.abs(z.x - x) < z.marge);
+        if (conflit) {
+            // On accepte quand même : c'est mieux que rien, le joueur peut esquiver.
+            // (Le proto ne réessaie pas, on évite des boucles infinies de placement.)
+        }
+        ennemis.push({ x, y, idx: i });
+    }
+
+    return {
+        index: indexSalle, plateformes, sortie, vortex, spawnJoueur,
+        coffre, dropSol, ennemis, niveauDanger: niveau
+    };
 }

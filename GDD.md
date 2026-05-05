@@ -42,37 +42,42 @@ Les deux mondes sont générés **ensemble, procéduralement**. Chaque salle du 
 
 ### Monde Miroir — Règles
 - Les mêmes salles, mais vivantes et lumineuses (palette chaude)
-- Ennemis : habitants de la civilisation passée (gardes, mages, marchands corrompus)
-- Plus dangereux : la Résonance baisse passivement dans le miroir
-- Les coffres contiennent du loot Bleu et Noir principalement
+- **Aucun ennemi par défaut** — les habitants des Sources sont paisibles et tu es transparent à leurs yeux
+- Plus dangereux : la Résonance baisse passivement dans le Miroir
+- Tu y vas pour **transformer** ton loot, pas pour te battre
 - Certaines zones font baisser la Résonance très rapidement — à éviter ou traverser vite
 
-### 🪞 Doctrine du Monde Miroir
-*Boussole pour toutes les décisions de design touchant au Miroir. Voir [LORE.md §11](LORE.md#11-doctrine-du-monde-miroir) pour le détail.*
+### 🪞 Doctrine des Deux Mondes
+*Boussole pour toutes les décisions de design. Voir [LORE.md §11](LORE.md#11-doctrine-des-deux-mondes) pour le détail.*
 
-> **Le Miroir est l'unique source de compréhension et de puissance — mais il te rejette progressivement, et il ne donne rien de directement utilisable.**
+> **Le Présent est où tu chasses. Le Miroir est où tu transformes. Aucun des deux ne suffit seul.**
 
-Trois piliers à ne jamais casser :
+Quatre piliers à ne jamais casser :
 
-1. **Le Miroir attire** — loot brut puissant, lore exclusif, raccourcis géographiques (option : avancer en Miroir = avancer dans Normal), PNJ vivants
-2. **Le Miroir repousse** — baisse passive de Résonance, perception croissante des habitants, risque d'Absorption
-3. **Le Miroir dépend du Présent** — les **Fragments** ramenés du Miroir doivent être identifiés / forgés / échangés en Présent (Sanctuaires, Fondeur, Marchands). Aucun loot Miroir n'est équipable directement.
+1. **Le Présent attire le combat** — ennemis, drops bruts (Fragments), patterns de difficulté en cycles (refuge → climax)
+2. **Le Miroir attire la transformation** — marchands, forge, identification, lore, PNJ paisibles
+3. **Le Miroir te repousse** — baisse passive, vortex aléatoire, risque d'Absorption
+4. **Les deux sont indissociables** — sans matériaux du Présent, rien à transformer ; sans transformations du Miroir, la chasse n'a pas de finalité
 
-**Conséquence ludique** : le cycle naturel devient `Présent (préparer) → Miroir (extraire) → Présent (capitaliser) → Miroir (extraire mieux)…`. Le joueur ne peut ni rester en Présent (rien à y trouver de neuf), ni rester en Miroir (rien d'utilisable, et il y meurt).
+**Conséquence ludique** : `Présent (chasser) → Miroir (transformer) → Présent (chasser plus fort) → …`. Le joueur ne peut ni rester en Présent (équipement stagne), ni rester en Miroir (la Trame le tue).
 
 ### Ce qu'on trouve uniquement en Présent
-- **Sanctuaires de Résonance** — recharge totale, point de sauvegarde
-- **Fondeur** — transforme un Fragment en item équipable
-- **Identifieur** (PNJ ou autel) — révèle les effets cachés d'un objet
-- **Marchands errants** — échange de Fragments / items contre du Sel de Résonance (monnaie)
-- **Repos** — seul lieu où équiper / déséquiper sans pénalité
+- **Ennemis** — Gardiens de Pierre, Spectres de Cendre (et plus tard d'autres types)
+- **Drops bruts** (Fragments) lâchés à la mort des ennemis
+- **Coffres** (loot Blanc majoritaire, parfois Bleu / Noir)
+- **Patterns de difficulté** — cycles refuge / tension / climax
 
 ### Ce qu'on trouve uniquement en Miroir
-- **Fragments bruts** (matière première du loot Bleu/Noir, inutilisables avant Présent)
+- **Marchands** — échangent Fragments contre Sel de Résonance ou autres items
+- **Fondeur** — transforme un Fragment en item équipable
+- **Identifieur** (PNJ ou autel) — révèle les effets cachés des items Tier III
+- **Sanctuaires de Résonance** — recharge totale, point de sauvegarde futur
 - **Inscriptions / fresques** révélant le lore et la taxonomie du loot
 - **PNJ vivants** des Sources — dialogues cryptiques, indices
-- **Coffres scellés en Présent** ouvrables uniquement depuis leur version Miroir
 - **Artefacts de Résonance** (drop ultra-rare, seule issue à l'Ancrage)
+- **Coffres rares Tier III** — bonus exceptionnels, contiennent souvent des items uniques
+
+> Note MVP étape 7 : seuls les ennemis du Présent + le système de combat sont implémentés. La couche d'atelier du Miroir (marchands, forge, etc.) viendra dans des étapes ultérieures.
 
 ---
 
@@ -179,39 +184,39 @@ Boss          : 10% Blanc | 30% Bleu | 40% Noir | 20% drop spécial
 ## 🎮 Boucle de Jeu
 
 ```
-SPAWN en Présent (hub ou salle initiale)
+SPAWN en Présent (salle initiale, refuge)
         ↓
-   Préparer : équipement Blanc, Sel de Résonance, plan
+   CHASSER en Présent
+   Combat : attaque (X) / parry (C)
+   Items Corps modifient ton style
+   Drops bruts (Fragments) à la mort des ennemis
+   Patterns par cycles : refuge → tension → climax
         ↓
-   ┌──── Avancer en Présent (sûr, peu de loot) ───┐
-   │                                              │
-   │   OU                                         │
-   │                                              │
-   └─→ Basculer dans le Miroir (volontaire ou  ──→ Extraction
-       forcé par Résonance = 0 en Présent)        │
-                                                  │
-       Ramasser des Fragments                     │
-       Lire des inscriptions / parler aux PNJ     │
-       Avancer en Miroir = avance aussi en Présent│
-                                                  │
-       Résonance baisse passivement               │
-       Habitants te perçoivent peu à peu          │
-                                                  │
-       ┌──── Sortir par le Portail de Retour ─────┘
-       │     (+20 Résonance bonus)
-       │
-       └──── OU rester trop longtemps :
-             Résonance → 0 → ANCRÉ
-             Fenêtre de grâce 30-60s
-             ↓
-             Trouver un Artefact ?
-              ├─ OUI → retour Présent, Résonance pleine
-              └─ NON → ABSORPTION → fin du run
-                                    (méta-progression survit)
+   Inventaire chargé de Fragments inertes
         ↓
-   Retour Présent
-   Capitaliser : forger, identifier, vendre, équiper
-   Repartir, plus fort, vers une salle plus profonde
+   Basculer dans le Miroir
+   (volontaire — Résonance pleine — ou forcé à 0)
+        ↓
+   ATELIER en Miroir (sous timer)
+   Aucun ennemi — habitants paisibles, tu es transparent
+   Marchands, Fondeur, Identifieur
+   Transformer Fragments → items équipables
+   Lire des inscriptions, comprendre le lore
+        ↓
+   Résonance baisse passivement (Trame te repousse)
+        ↓
+   ┌── Sortir par le Vortex (+20 Résonance bonus)
+   │
+   └── OU rester trop : Résonance → 0 → ANCRÉ
+       Fenêtre de grâce 30-60s
+       ↓
+       Trouver un Artefact ?
+       ├─ OUI → retour Présent, Résonance pleine
+       └─ NON → ABSORPTION → fin du run
+                             (méta-progression survit)
+        ↓
+   RETOUR Présent — équipement amélioré
+   Repartir, plus fort, vers les climax suivants
         ↓
    (cycle recommence)
 ```
