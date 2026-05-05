@@ -20,6 +20,7 @@ export class InputSystem {
         this.touches = scene.input.keyboard.addKeys({
             gauche: Phaser.Input.Keyboard.KeyCodes.Q,
             droite: Phaser.Input.Keyboard.KeyCodes.D,
+            descendre: Phaser.Input.Keyboard.KeyCodes.S,
             saut: Phaser.Input.Keyboard.KeyCodes.SPACE,
             interagir: Phaser.Input.Keyboard.KeyCodes.E,
             inventaire: Phaser.Input.Keyboard.KeyCodes.I,
@@ -37,6 +38,7 @@ export class InputSystem {
             // Continues (true tant que la touche est pressée)
             gauche: false,
             droite: false,
+            descendre: false,
             // Edge (true uniquement la frame du déclenchement)
             sauter: false,
             interagir: false,
@@ -44,6 +46,7 @@ export class InputSystem {
             attaquer: false,
             parry: false,
             sort: false,
+            descendreEdge: false,
             // Provisoires (debug)
             degatTest: false,
             healTest: false
@@ -56,6 +59,7 @@ export class InputSystem {
         const i = this.intentions;
         i.gauche = this.cursors.left.isDown || this.touches.gauche.isDown;
         i.droite = this.cursors.right.isDown || this.touches.droite.isDown;
+        i.descendre = this.cursors.down.isDown || this.touches.descendre.isDown;
 
         i.sauter =
             Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
@@ -68,6 +72,11 @@ export class InputSystem {
         i.attaquer = Phaser.Input.Keyboard.JustDown(this.touches.attaquer);
         i.parry = Phaser.Input.Keyboard.JustDown(this.touches.parry);
         i.sort = Phaser.Input.Keyboard.JustDown(this.touches.sort);
+
+        // Edge sur descendre — utilisé pour déclencher le drop-through
+        i.descendreEdge =
+            Phaser.Input.Keyboard.JustDown(this.cursors.down) ||
+            Phaser.Input.Keyboard.JustDown(this.touches.descendre);
 
         i.degatTest = Phaser.Input.Keyboard.JustDown(this.touches.degatTest);
         i.healTest = Phaser.Input.Keyboard.JustDown(this.touches.healTest);

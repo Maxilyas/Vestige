@@ -62,16 +62,19 @@ npx vite
 5. ✅ Basculement Monde Normal ↔ Monde Miroir (palette + portail + baisse passive + ancrage)
 6. ✅ Système de loot — coffres, drops orphelins (consommables), inventaire 40 slots, équipement 3 slots, 3 tiers de révélation, 15 items + 6 consommables
 7. ✅ Ennemis basiques + combat RPG (attaque/parry, patterns de difficulté, drops, doctrine inversée Présent=combat / Miroir=atelier paisible)
+8a. ✅ Direction artistique — 6 archétypes architecturaux (Sanctuaire, Hall des Échos, Crypte des Murmures, Pont Suspendu, Puits Inversé, Arène du Reflux), salles dimensionnées par archétype, caméra qui suit avec deadzone, seed du run randomisée
+8b. ⬜ Décor & contraste Présent/Miroir (colonnes, statues, racines en Phaser Graphics — brisées vs intactes)
+8c. ⬜ Innovations mécaniques signature (aura Sanctuaire, échos Hall, drop-down Crypte, plateformes résonantes Pont, gravité inversée Puits, espace rétrécissant Arène)
+8d. ⬜ Parallax 4 couches + particules d'ambiance par monde + lumière
+8e. ⬜ Polish (vignette, grain, animations idle/marche du joueur)
 
 ## État actuel
 *Cette section doit être mise à jour à la fin de chaque session de travail.*
 
-- **Dernière étape franchie :** étape 7 — combat RPG + ennemis du Présent. `data/enemies.js` (2 types : Gardien de Pierre, Spectre de Cendre), `entities/Enemy.js` (IA patrouille / vol-suivi), `EnemySystem` (persistance des morts), `WorldGen.niveauDanger()` (cycles 6 salles : 0/0/1/1/2/3 = refuge → climax), spawn d'ennemis seedé en Présent uniquement, palettes Présent légèrement teintées selon le danger. Combat : `X` attaque (hitbox temporaire devant le joueur), `C` parry (fenêtre 300 ms + bonus +5 Résonance + flash doré), `Z` réservé pour les sorts. Items Corps modulent l'attaque (`attaqueDegats`, `attaquePortee`, `attaqueCooldown`) et le parry (`parryFenetre`, `parryCooldown`, `parryBonusResonance`). Drops à la mort : 30 % type Présent, drop garanti Bleu/Noir au climax (niveau 3).
-- **Inversion doctrinale majeure cette session** : LORE / GDD / Doctrine inversés. **Présent = chasse** (ennemis, combat, drops bruts). **Miroir = atelier paisible sous timer** (marchands, forge, identification — la couche "capitalisation" reste hors scope MVP). Cycle naturel : `chasser → transformer → chasser plus fort`. Voir [LORE.md §11](LORE.md#11-doctrine-des-deux-mondes).
-- **Prochain chantier :** **MVP bouclé**. Pistes possibles ensuite :
-  - **Étape 7.5** — items "game-changers" (wall-grip, fil d'Ariane, fumée, slow-mo, sorts via touche Z)
-  - **Étape 8** — couche capitalisation Miroir (marchands, fondeur, identifieur) pour boucler la doctrine
-  - **Étape 9** — Absorption complète (fenêtre de grâce, Artefact, Vestige du run précédent)
+- **Dernière étape franchie :** étape 8a — direction artistique & structure architecturale. `data/archetypes.js` définit 6 archétypes (Sanctuaire 1280×540, Hall des Échos 1920×540, Crypte des Murmures 1280×540, Pont Suspendu 2200×540, Puits Inversé 960×900 *vertical*, Arène du Reflux 1280×720). Chaque archétype a son script de génération de plateformes propre (architecture forte au lieu de plateformes random). `WorldGen` choisit un archétype selon le niveau de danger (`niveauxAssocies`) avec variation aléatoire seedée. Caméra Phaser : `startFollow(player)` + `setDeadzone(200, 150)`, bounds physiques dynamiques par salle. Seed du run **randomisée à l'init** et persistée dans le registry pendant tout le run (`Math.random()` au démarrage). HUD textuel passé en `setScrollFactor(0)` pour rester fixe à l'écran malgré le scrolling.
+- **Étape 7 (récap)** : combat RPG (X attaque / C parry / Z hook sort), 2 types ennemis Présent, patterns de difficulté en cycles 6 salles. Inversion doctrinale : Présent = chasse, Miroir = atelier paisible. Voir [LORE.md §11](LORE.md#11-doctrine-des-deux-mondes).
+- **Prochain chantier :** **étape 8b — Décor & contraste**. Couches `Phaser.Graphics` pour colonnes, statues, racines, lanternes — brisées en Présent / intactes en Miroir. Palettes affinées par archétype.
+- **Pistes ultérieures** : 8c (innovations mécaniques par archétype), 8d (parallax + particules + lumière), 8e (polish). Hors scope visuel : Étape 9 — couche capitalisation Miroir (marchands/fondeur), Étape 10 — Absorption complète.
   - **Étape 10** — sprites + assets graphiques (cf. discussion Rayman-like)
 - **Compromis MVP (dette narrative documentée) :**
   - Items du Miroir directement équipables, alors que LORE prévoit des Fragments bruts à transformer en **Miroir** (Fondeur/Identifieur). Le système actuel reste compatible avec cette couche future.

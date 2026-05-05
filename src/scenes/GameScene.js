@@ -15,9 +15,18 @@ import { EnemySystem } from '../systems/EnemySystem.js';
 import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
 import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
 import { ENEMIES, tirerTypeEnnemi } from '../data/enemies.js';
+import { ARCHETYPES } from '../data/archetypes.js';
 import { Enemy } from '../entities/Enemy.js';
 
-const SEED_DU_RUN = 1337;
+// Label affiché dans le HUD pour chaque archétype
+const ARCHETYPES_LABELS = Object.fromEntries(
+    Object.values(ARCHETYPES).map(a => [a.id, a.nom])
+);
+
+// Seed du run : initialisée au premier démarrage et persistée dans le registry
+// pour toute la durée du run (toutes les salles, transitions, basculements).
+// Au prochain rechargement de la page, on tire une nouvelle seed → nouveau run.
+const CLE_SEED_RUN = 'seed_run';
 
 // Palettes Présent — légèrement teintées selon le niveau de danger
 const PALETTES_PRESENT = {
@@ -74,9 +83,15 @@ export class GameScene extends Phaser.Scene {
         this.enemySystem = new EnemySystem(this.registry);
         this.inputSystem = new InputSystem(this);
 
+        // --- Seed du run (random à la première salle, persistée ensuite) ---
+        if (this.registry.get(CLE_SEED_RUN) === undefined) {
+            this.registry.set(CLE_SEED_RUN, Math.floor(Math.random() * 0xFFFFFFFF));
+        }
+        const seedRun = this.registry.get(CLE_SEED_RUN);
+
         const mondeCourant = this.monde.getMonde();
         this.rngLoot = creerRng(
-            (SEED_DU_RUN ^ (this.indexSalle * 0x85EBCA6B) ^ (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
+            (seedRun ^ (this.indexSalle * 0x85EBCA6B) ^ (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
         );
 
         this.statsEffectives = calculerStats(STATS_BASE, this.inventaire.getEquipement());
@@ -97,11 +112,21 @@ export class GameScene extends Phaser.Scene {
         const palette = enMiroir ? PALETTE_MIROIR : PALETTES_PRESENT[niveau];
         this.cameras.main.setBackgroundColor(palette.fond);
 
-        const salle = genererSalle(SEED_DU_RUN, this.indexSalle);
+        const salle = genererSalle(seedRun, this.indexSalle);
 
+        // --- Bounds caméra & monde physique selon les dimensions de l'archétype ---
+        // Chaque archétype a ses propres dimensions (sanctuaire 1280×540, pont 2200×540,
+        // puits 960×900, etc.) — la caméra et la physique s'adaptent.
+        this.physics.world.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
+        this.cameras.main.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
+
+        // Deux groupes physiques : plateformes solides (collision sur les 4 côtés)
+        // et plateformes "one-way" (collision uniquement par le haut, drop-through possible)
         this.platforms = this.physics.add.staticGroup();
+        this.oneWayPlatforms = this.physics.add.staticGroup();
         for (const p of salle.plateformes) {
-            this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, palette.plateforme);
+            const couleur = p.oneWay ? this.eclaircir(palette.plateforme, 0.15) : palette.plateforme;
+            this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, couleur, p.oneWay);
         }
 
         // --- Joueur ---
@@ -118,6 +143,19 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.physics.add.collider(this.player, this.platforms);
+
+        // Collider one-way : le joueur peut sauter À TRAVERS par le bas (les
+        // checkCollision sur les plateformes one-way bloquent les autres axes,
+        // cf. creerPlateforme). Le processCallback permet le drop-through quand
+        // le timer est actif.
+        this.dropThroughJusqu = 0;
+        this.physics.add.collider(this.player, this.oneWayPlatforms, null, () => {
+            return this.time.now >= this.dropThroughJusqu;
+        });
+
+        // --- Caméra : suit le joueur avec lerp doux + deadzone ---
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+        this.cameras.main.setDeadzone(200, 150);
 
         // Direction de l'attaque
         this.lastDirection = 1;
@@ -160,26 +198,28 @@ export class GameScene extends Phaser.Scene {
         // Drop garanti au climax (niveau 3) — Bleu ou Noir uniquement
         this.climaxDropDu = !enMiroir && niveau === 3;
 
-        // --- HUD textuel ---
+        // --- HUD textuel (fixe à l'écran avec setScrollFactor(0)) ---
         const labelMonde = enMiroir ? ' (Miroir)' : '';
         const labelDanger = !enMiroir ? ['Refuge', 'Calme', 'Tension', 'CLIMAX'][niveau] : '';
-        this.add.text(10, 10, `Vestige — Salle ${salle.index + 1}${labelMonde}`, {
-            fontFamily: 'monospace',
-            fontSize: '16px',
-            color: enMiroir ? '#f0c890' : '#e8e4d8'
-        });
-        this.add.text(10, 32, 'QD/← → : bouger | ↑/Espace : sauter | X : attaque | C : parry | E : interagir | I : inventaire | K/H : test Résonance', {
-            fontFamily: 'monospace',
-            fontSize: '10px',
-            color: '#8a8a9a'
-        });
+        const archetypeLabel = ARCHETYPES_LABELS[salle.archetype] ?? salle.archetype;
+
+        this.add.text(10, 10,
+            `Vestige — Salle ${salle.index + 1}${labelMonde}  ·  ${archetypeLabel}`,
+            { fontFamily: 'monospace', fontSize: '14px', color: enMiroir ? '#f0c890' : '#e8e4d8' }
+        ).setScrollFactor(0);
+
+        this.add.text(10, 30,
+            'QD/← →: bouger  ↑/Espace: sauter  S/↓: descendre (corniches)  X: attaque  C: parry  E: interagir  I: inventaire',
+            { fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a' }
+        ).setScrollFactor(0);
+
         if (labelDanger && niveau >= 2) {
-            this.add.text(10, 50, labelDanger, {
+            this.add.text(10, 48, labelDanger, {
                 fontFamily: 'monospace',
                 fontSize: '11px',
                 color: niveau === 3 ? '#ff8060' : '#c8a060',
                 fontStyle: 'bold'
-            });
+            }).setScrollFactor(0);
         }
 
         // --- Hooks selon le monde ---
@@ -224,6 +264,13 @@ export class GameScene extends Phaser.Scene {
 
         if (i.sauter && auSol) {
             body.setVelocityY(-this.statsEffectives.jumpVelocity);
+        }
+
+        // --- Drop-through (descendre via plateforme one-way) ---
+        // À l'appui de S/↓, on désactive la collision avec les one-way pendant 200 ms,
+        // ce qui fait tomber le joueur à travers la corniche sur laquelle il est.
+        if (i.descendreEdge && auSol) {
+            this.dropThroughJusqu = this.time.now + 200;
         }
 
         // --- Combat ---
@@ -585,22 +632,41 @@ export class GameScene extends Phaser.Scene {
     }
 
     afficherAncrage() {
+        // Fixe à l'écran (setScrollFactor 0) — message de gameplay critique,
+        // doit rester visible peu importe où la caméra est
         this.texteAncrage = this.add.text(GAME_WIDTH / 2, 70, 'ANCRÉ DANS LE MIROIR', {
             fontFamily: 'monospace',
             fontSize: '18px',
             color: '#ff6060',
             fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
+        }).setOrigin(0.5, 0).setScrollFactor(0);
     }
 
     // ============================================================
     // HELPERS
     // ============================================================
-    creerPlateforme(x, y, largeur, hauteur, couleur) {
+    creerPlateforme(x, y, largeur, hauteur, couleur, oneWay = false) {
         const rect = this.add.rectangle(x, y, largeur, hauteur, couleur);
-        this.platforms.add(rect);
+        const groupe = oneWay ? this.oneWayPlatforms : this.platforms;
+        groupe.add(rect);
         rect.body.updateFromGameObject();
+        if (oneWay) {
+            // Collision uniquement par le haut (le joueur peut sauter à travers
+            // par le bas). Drop-through géré séparément via processCallback.
+            rect.body.checkCollision.down = false;
+            rect.body.checkCollision.left = false;
+            rect.body.checkCollision.right = false;
+        }
         return rect;
+    }
+
+    // Éclaircit une couleur hex (0xRRGGBB) d'un facteur (0..1)
+    eclaircir(couleur, facteur) {
+        const r = ((couleur >> 16) & 0xff);
+        const g = ((couleur >> 8) & 0xff);
+        const b = (couleur & 0xff);
+        const f = (c) => Math.min(255, Math.round(c + (255 - c) * facteur));
+        return (f(r) << 16) | (f(g) << 8) | f(b);
     }
 
     afficherMessageFlottant(texte, couleurCss) {

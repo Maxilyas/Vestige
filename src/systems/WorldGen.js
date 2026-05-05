@@ -1,16 +1,22 @@
-// Génération procédurale de salles.
-// Fonction pure : prend une seed + un index de salle, retourne la "description"
-// d'une salle (plateformes, sortie, spawn). La scène se charge ensuite de
-// matérialiser tout ça en objets Phaser.
+// Génération procédurale de salles — pilote les archétypes architecturaux.
 //
-// Pourquoi seedé : les deux mondes (Normal / Miroir) partageront la même seed
-// pour générer une géométrie identique avec des règles visuelles différentes.
+// La structure de chaque salle (plateformes, dimensions) est déléguée à un
+// archétype (cf. data/archetypes.js). WorldGen ajoute par-dessus :
+//   - position seedée du vortex (sur une plateforme accessible)
+//   - position seedée du coffre (60 % de proba)
+//   - position seedée du drop sol (30 % si pas de coffre)
+//   - liste seedée des ennemis (selon le niveau de danger, Présent uniquement)
+//
+// Tout est seedé : même seed + même indexSalle = même salle exacte. Présent et
+// Miroir partagent la géométrie (la même seed est utilisée pour la structure).
 
-import { GAME_WIDTH, GAME_HEIGHT, PLAYER, WORLD } from '../config.js';
+import { PLAYER, WORLD } from '../config.js';
+import {
+    ARCHETYPES, choisirArchetype, calculerSortie,
+    VORTEX_DIMS, HAUTEUR_SOL_EXPORT as HAUTEUR_SOL
+} from '../data/archetypes.js';
 
 // --- PRNG déterministe (Mulberry32) ---
-// Petit générateur reproductible : même seed → même séquence.
-// On évite Math.random() qui n'est pas seedable.
 export function creerRng(seed) {
     let etat = seed >>> 0;
     return function () {
@@ -22,54 +28,14 @@ export function creerRng(seed) {
     };
 }
 
-// Helpers locaux
-function entre(rng, min, max) {
-    return min + rng() * (max - min);
-}
-function entreEntier(rng, min, max) {
-    return Math.floor(entre(rng, min, max + 1));
-}
+function entre(rng, min, max) { return min + rng() * (max - min); }
+function entreEntier(rng, min, max) { return Math.floor(entre(rng, min, max + 1)); }
 
-// Capacités physiques du joueur (déduites de config.js).
-// On s'en sert pour s'assurer que les plateformes restent atteignables.
-const TEMPS_SAUT = (2 * PLAYER.JUMP_VELOCITY) / WORLD.GRAVITY_Y; // ~0.8s
-const PORTEE_HORIZ_MAX = PLAYER.SPEED * TEMPS_SAUT;              // ~176 px
-const HAUTEUR_SAUT_MAX = (PLAYER.JUMP_VELOCITY ** 2) / (2 * WORLD.GRAVITY_Y); // ~96 px
-
-// On garde une marge de sécurité pour que tout soit confortablement faisable
-const ECART_HORIZ = PORTEE_HORIZ_MAX * 0.75;
-const ECART_VERT = HAUTEUR_SAUT_MAX * 0.75;
-
-// Zones réservées
-const HAUTEUR_SOL = 40;
-const Y_SOL = GAME_HEIGHT - HAUTEUR_SOL / 2;
-const LARGEUR_SORTIE = 60;
-const HAUTEUR_SORTIE = 90;
-
-// Vortex : portail de retour vers le Présent (uniquement consommé en Miroir).
-// On en génère TOUJOURS un par salle, même si l'objet n'est instancié visuellement
-// qu'en Miroir — comme la géométrie, sa position est seedée et stable.
-const LARGEUR_VORTEX = 60;
-const HAUTEUR_VORTEX = 90;
-const DIST_MIN_VORTEX = 200; // px en X — pas trop près du spawn ni de la sortie
-
-// Coffres et drops orphelins : génération seedée, indépendante du monde
-// (la géométrie est commune Présent/Miroir, seuls le visuel et le contenu
-// du loot diffèrent). Le contenu est tiré côté GameScene.
-const PROBA_COFFRE = 0.6;
-const PROBA_DROP_SOL = 0.3; // appliquée seulement si pas de coffre, donc total ≤ 60+30 % salles avec loot
-
-// Patterns de difficulté (Présent uniquement) — cycles de 6 salles pour créer
-// un rythme naturel : refuge → tension → climax → refuge.
-// Doctrine : le Miroir n'a pas d'ennemis (atelier paisible), donc niveauDanger
-// n'est consommé qu'en Présent.
+// --- Patterns de difficulté (Présent uniquement) ---
 const COURBE_DANGER = [0, 0, 1, 1, 2, 3];
-
 export function niveauDanger(indexSalle) {
     return COURBE_DANGER[indexSalle % COURBE_DANGER.length];
 }
-
-// Nombre d'ennemis par niveau (peut être 0 — refuge total)
 const ENNEMIS_PAR_NIVEAU = {
     0: { min: 0, max: 0 },
     1: { min: 0, max: 1 },
@@ -77,129 +43,80 @@ const ENNEMIS_PAR_NIVEAU = {
     3: { min: 2, max: 3 }
 };
 
+// --- Probabilités loot ---
+const PROBA_COFFRE = 0.6;
+const PROBA_DROP_SOL = 0.3;
+
 /**
  * Génère la description d'une salle.
- * @param {number} seed       seed globale du run
- * @param {number} indexSalle 0, 1, 2, … (incrémente à chaque transition)
  * @returns {{
  *   index: number,
- *   plateformes: Array<{x:number,y:number,largeur:number,hauteur:number}>,
- *   sortie:      {x:number,y:number,largeur:number,hauteur:number},
- *   vortex:      {x:number,y:number,largeur:number,hauteur:number},
- *   spawnJoueur: {x:number,y:number},
- *   coffre:      ({x:number,y:number,largeur:number,hauteur:number}|null),
- *   dropSol:     ({x:number,y:number,largeur:number,hauteur:number}|null),
- *   ennemis:     Array<{x:number,y:number,idx:number}>,
- *   niveauDanger: number (0..3)
+ *   archetype: string,
+ *   dims: {largeur:number, hauteur:number},
+ *   plateformes: Array,
+ *   sortie: object,
+ *   vortex: object,
+ *   spawnJoueur: object,
+ *   coffre: object|null,
+ *   dropSol: object|null,
+ *   ennemis: Array,
+ *   niveauDanger: number
  * }}
  */
 export function genererSalle(seed, indexSalle) {
-    // Combine seed + index pour que chaque salle ait son propre flux,
-    // tout en restant reproductible.
-    const rng = creerRng(seed ^ (indexSalle * 0x9E3779B9));
+    const rng = creerRng((seed ^ (indexSalle * 0x9E3779B9)) >>> 0);
+    const niveau = niveauDanger(indexSalle);
+    const archetype = choisirArchetype(niveau, rng);
+    const dims = archetype.dimensions;
 
-    // --- Sol (toujours présent, occupe toute la largeur) ---
-    const plateformes = [{
-        x: GAME_WIDTH / 2,
-        y: Y_SOL,
-        largeur: GAME_WIDTH,
-        hauteur: HAUTEUR_SOL
-    }];
+    // 1. Plateformes (script propre à l'archétype)
+    const plateformes = archetype.genererPlateformes(rng, dims);
 
-    // --- Plateformes flottantes ---
-    // On en place 3 à 5, étagées de gauche à droite, en respectant les écarts max.
-    const nb = entreEntier(rng, 3, 5);
-    let xCourant = entre(rng, 120, 220);
-    let yCourant = entre(rng, GAME_HEIGHT - 160, GAME_HEIGHT - 110);
+    // 2. Spawn joueur
+    const spawnJoueur = archetype.spawnJoueur(dims);
 
-    for (let i = 0; i < nb; i++) {
-        const largeur = entre(rng, 100, 180);
-        plateformes.push({
-            x: xCourant,
-            y: yCourant,
-            largeur,
-            hauteur: 20
-        });
+    // 3. Sortie
+    const sortie = calculerSortie(archetype, dims);
 
-        // Plateforme suivante : décalage horizontal contrôlé + variation verticale
-        const dx = entre(rng, ECART_HORIZ * 0.5, ECART_HORIZ);
-        const dy = entre(rng, -ECART_VERT, ECART_VERT);
-        xCourant += dx;
-        yCourant = Phaser.Math.Clamp(
-            yCourant + dy,
-            120,                  // pas trop haut (on garde la zone de texte libre)
-            GAME_HEIGHT - 90      // pas trop près du sol
-        );
-
-        // Si on déborde à droite, on s'arrête — la sortie a besoin de place
-        if (xCourant > GAME_WIDTH - 160) break;
-    }
-
-    // --- Zone de sortie (côté droit) ---
-    const sortie = {
-        x: GAME_WIDTH - LARGEUR_SORTIE / 2 - 8,
-        y: GAME_HEIGHT - HAUTEUR_SOL - HAUTEUR_SORTIE / 2,
-        largeur: LARGEUR_SORTIE,
-        hauteur: HAUTEUR_SORTIE
-    };
-
-    // --- Spawn joueur ---
-    // Toujours à gauche, sur le sol. Évite de spawner dans une plateforme.
-    const spawnJoueur = {
-        x: 60,
-        y: GAME_HEIGHT - HAUTEUR_SOL - PLAYER.HEIGHT
-    };
-
-    // --- Vortex (Miroir) ---
-    // Posé sur une plateforme flottante choisie aléatoirement, en respectant
-    // une distance minimale au spawn et à la sortie pour ne pas être trivial à
-    // déclencher. Si aucune plateforme ne convient, on tombe sur la plus
-    // centrale possible. Ultime fallback : centre du sol.
-    const plateformesFlottantes = plateformes.slice(1); // [0] = sol
-    const candidats = plateformesFlottantes.map(p => ({
-        x: p.x,
-        y: p.y - p.hauteur / 2 - HAUTEUR_VORTEX / 2
-    }));
-    const valides = candidats.filter(c =>
-        Math.abs(c.x - spawnJoueur.x) >= DIST_MIN_VORTEX &&
-        Math.abs(c.x - sortie.x) >= DIST_MIN_VORTEX
+    // 4. Vortex — sur une plateforme flottante différente du spawn et de la sortie,
+    //    avec distance min. Fallback : centre.
+    // Filtre des plateformes "posables" : pas le sol principal (la plus large),
+    // pas un pilier vertical (hauteur > largeur).
+    const platfMaxLargeur = plateformes.reduce((m, p) => Math.max(m, p.largeur), 0);
+    const plateformesFlottantes = plateformes.filter(p =>
+        p.largeur < platfMaxLargeur * 0.95 &&  // exclut le sol principal
+        p.largeur > p.hauteur                  // exclut piliers verticaux
     );
-
+    const candidatsVortex = plateformesFlottantes.map(p => ({
+        x: p.x,
+        y: p.y - p.hauteur / 2 - VORTEX_DIMS.hauteur / 2
+    }));
+    const DIST_MIN = 200;
+    const valides = candidatsVortex.filter(c =>
+        Math.abs(c.x - spawnJoueur.x) >= DIST_MIN &&
+        Math.abs(c.x - sortie.x) >= DIST_MIN
+    );
     let posVortex;
     if (valides.length > 0) {
         posVortex = valides[entreEntier(rng, 0, valides.length - 1)];
-    } else if (candidats.length > 0) {
-        // Plateforme dont x est la plus proche du centre de la salle
-        posVortex = candidats.reduce((meilleur, c) =>
-            Math.abs(c.x - GAME_WIDTH / 2) < Math.abs(meilleur.x - GAME_WIDTH / 2)
-                ? c
-                : meilleur
+    } else if (candidatsVortex.length > 0) {
+        // Plateforme la plus proche du centre
+        posVortex = candidatsVortex.reduce((meilleur, c) =>
+            Math.abs(c.x - dims.largeur / 2) < Math.abs(meilleur.x - dims.largeur / 2) ? c : meilleur
         );
     } else {
-        posVortex = {
-            x: GAME_WIDTH / 2,
-            y: Y_SOL - HAUTEUR_SOL / 2 - HAUTEUR_VORTEX / 2
-        };
+        posVortex = { x: dims.largeur / 2, y: dims.hauteur - HAUTEUR_SOL - VORTEX_DIMS.hauteur / 2 };
     }
-
     const vortex = {
-        x: posVortex.x,
-        y: posVortex.y,
-        largeur: LARGEUR_VORTEX,
-        hauteur: HAUTEUR_VORTEX
+        x: posVortex.x, y: posVortex.y,
+        largeur: VORTEX_DIMS.largeur, hauteur: VORTEX_DIMS.hauteur
     };
 
-    // --- Coffre (60 % de proba) ---
-    // Posé sur une plateforme flottante différente de celle du vortex, et à
-    // distance minimale du spawn / de la sortie. Si pas de candidat valable,
-    // on fallback sur le sol (centre).
+    // 5. Coffre (60 %)
     let coffre = null;
     if (rng() < PROBA_COFFRE) {
         const candidatsCoffre = plateformesFlottantes
-            .map(p => ({
-                x: p.x,
-                y: p.y - p.hauteur / 2 - 16
-            }))
+            .map(p => ({ x: p.x, y: p.y - p.hauteur / 2 - 16 }))
             .filter(c =>
                 Math.abs(c.x - vortex.x) > 60 &&
                 Math.abs(c.x - spawnJoueur.x) > 100 &&
@@ -209,32 +126,25 @@ export function genererSalle(seed, indexSalle) {
             const choisi = candidatsCoffre[entreEntier(rng, 0, candidatsCoffre.length - 1)];
             coffre = { x: choisi.x, y: choisi.y, largeur: 28, hauteur: 24 };
         } else {
-            // Fallback : sur le sol, à un x décent
             coffre = {
-                x: GAME_WIDTH / 2,
-                y: Y_SOL - HAUTEUR_SOL / 2 - 12,
-                largeur: 28,
-                hauteur: 24
+                x: dims.largeur / 2,
+                y: dims.hauteur - HAUTEUR_SOL - 12,
+                largeur: 28, hauteur: 24
             };
         }
     }
 
-    // --- Drop orphelin au sol (30 % si pas de coffre) ---
+    // 6. Drop orphelin (30 % si pas de coffre)
     let dropSol = null;
     if (!coffre && rng() < PROBA_DROP_SOL) {
         dropSol = {
-            x: entre(rng, 200, GAME_WIDTH - 200),
-            y: Y_SOL - HAUTEUR_SOL / 2 - 10,
-            largeur: 18,
-            hauteur: 18
+            x: entre(rng, 200, dims.largeur - 200),
+            y: dims.hauteur - HAUTEUR_SOL - 10,
+            largeur: 18, hauteur: 18
         };
     }
 
-    // --- Ennemis (uniquement consommés en Présent côté GameScene) ---
-    // On génère TOUJOURS la liste : la scène décide d'instancier ou pas selon le monde.
-    // Position : sur le sol ou sur une plateforme flottante, distance min du spawn,
-    // de la sortie, du vortex et du coffre.
-    const niveau = niveauDanger(indexSalle);
+    // 7. Ennemis (selon niveau, Présent uniquement à l'instanciation côté GameScene)
     const fourchette = ENNEMIS_PAR_NIVEAU[niveau];
     const nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
     const ennemis = [];
@@ -246,28 +156,31 @@ export function genererSalle(seed, indexSalle) {
     if (coffre) positionsRefus.push({ x: coffre.x, marge: 80 });
 
     for (let i = 0; i < nbEnnemis; i++) {
-        // Choix : sol (50 %) ou plateforme flottante (50 % si dispo)
         const surSol = plateformesFlottantes.length === 0 || rng() < 0.5;
         let x, y;
         if (surSol) {
-            x = entre(rng, 150, GAME_WIDTH - 150);
-            y = Y_SOL - HAUTEUR_SOL / 2 - 20; // posé sur le sol
+            x = entre(rng, 150, dims.largeur - 150);
+            y = dims.hauteur - HAUTEUR_SOL - 20;
         } else {
             const p = plateformesFlottantes[entreEntier(rng, 0, plateformesFlottantes.length - 1)];
             x = p.x;
             y = p.y - p.hauteur / 2 - 20;
         }
-        // Vérifier qu'on ne tombe pas sur une zone refusée
-        const conflit = positionsRefus.some(z => Math.abs(z.x - x) < z.marge);
-        if (conflit) {
-            // On accepte quand même : c'est mieux que rien, le joueur peut esquiver.
-            // (Le proto ne réessaie pas, on évite des boucles infinies de placement.)
-        }
+        // Tentative de respect des zones de refus (best effort, on ne ré-essaye pas)
         ennemis.push({ x, y, idx: i });
     }
 
     return {
-        index: indexSalle, plateformes, sortie, vortex, spawnJoueur,
-        coffre, dropSol, ennemis, niveauDanger: niveau
+        index: indexSalle,
+        archetype: archetype.id,
+        dims,
+        plateformes,
+        sortie,
+        vortex,
+        spawnJoueur,
+        coffre,
+        dropSol,
+        ennemis,
+        niveauDanger: niveau
     };
 }
