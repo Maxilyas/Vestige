@@ -34,6 +34,7 @@ import { creerVisuelPorteSortie } from '../render/entities/PorteSortie.js';
 import { creerVisuelConsommable, jouerRamassageConsommable } from '../render/entities/Consommable.js';
 import { creerVisuelFondeur } from '../render/entities/Fondeur.js';
 import { creerVisuelIdentifieur } from '../render/entities/Identifieur.js';
+import { creerVisuelMarchand } from '../render/entities/Marchand.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -175,20 +176,24 @@ export class GameScene extends Phaser.Scene {
 
         // --- PNJs (Miroir uniquement, tirage exclusif) ---
         // Probabilités cumulatives :
-        //   < 0.33  → Fondeur
-        //   < 0.58  → Identifieur (25 %)
-        //   sinon   → personne (42 %)
+        //   < 0.28  → Fondeur (28 %)
+        //   < 0.50  → Identifieur (22 %)
+        //   < 0.72  → Marchand / Glaneuse (22 %)
+        //   sinon   → personne (28 %)
         const rngPNJ = creerRng((seedRun ^ 0xA5A5F00D ^ this.indexSalle) >>> 0);
         this.fondeurEntite = null;
         this.identifieurEntite = null;
+        this.marchandEntite = null;
         if (enMiroir) {
             const r = rngPNJ();
             const xPNJ = salle.dims.largeur * (0.3 + rngPNJ() * 0.4);
             const yPNJ = salle.dims.hauteur - HAUTEUR_SOL;
-            if (r < 0.33) {
+            if (r < 0.28) {
                 this.fondeurEntite = creerVisuelFondeur(this, xPNJ, yPNJ);
-            } else if (r < 0.58) {
+            } else if (r < 0.50) {
                 this.identifieurEntite = creerVisuelIdentifieur(this, xPNJ, yPNJ);
+            } else if (r < 0.72) {
+                this.marchandEntite = creerVisuelMarchand(this, xPNJ, yPNJ);
             }
         }
 
@@ -749,6 +754,7 @@ export class GameScene extends Phaser.Scene {
         if (this.dropSol && proche(this.dropSol)) { this.ramasserDropSol(); return; }
         if (this.fondeurEntite && prochePNJ(this.fondeurEntite)) { this.ouvrirFondeur(); return; }
         if (this.identifieurEntite && prochePNJ(this.identifieurEntite)) { this.ouvrirIdentifieur(); return; }
+        if (this.marchandEntite && prochePNJ(this.marchandEntite)) { this.ouvrirMarchand(); return; }
     }
 
     ouvrirFondeur() {
@@ -765,6 +771,19 @@ export class GameScene extends Phaser.Scene {
         const rngPhrase = creerRng((seed ^ 0xBADC0DE ^ this.indexSalle ^ this.time.now) >>> 0);
         this.scene.pause();
         this.scene.launch('IdentifieurScene', { rng: rngPhrase });
+    }
+
+    ouvrirMarchand() {
+        if (this.scene.isActive('MarchandScene')) return;
+        const seed = this.registry.get('seed_run') ?? 0;
+        // Vitrine seedée sur (run + salle) — stable tant qu'on est dans cette salle.
+        // L'identifiant de la vitrine sert à la persister entre deux ouvertures.
+        const cleVitrine = (seed ^ 0x9E3779B1 ^ this.indexSalle) >>> 0;
+        this.registry.set('marchand_room_id', cleVitrine);
+        const rngVitrine = creerRng(cleVitrine);
+        const rngPhrase = creerRng((seed ^ 0x517CC1B7 ^ this.indexSalle ^ this.time.now) >>> 0);
+        this.scene.pause();
+        this.scene.launch('MarchandScene', { rngVitrine, rngPhrase });
     }
 
     ouvrirCoffre() {
