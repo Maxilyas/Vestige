@@ -17,9 +17,12 @@ import { InventaireSystem } from '../systems/InventaireSystem.js';
 import { EnemySystem } from '../systems/EnemySystem.js';
 import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
 import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
-import { ENEMIES, tirerTypeEnnemi } from '../data/enemies.js';
+import { ENEMIES } from '../data/enemies.js';
+import { definitionBoss } from '../data/boss.js';
 import { ARCHETYPES, spawnDepuisPorte, directionOpposee } from '../data/archetypes.js';
 import { Enemy } from '../entities/Enemy.js';
+import { Boss } from '../entities/Boss.js';
+import { Projectile } from '../entities/Projectile.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { FRAGMENTS } from '../data/fragments.js';
 import {
@@ -196,7 +199,9 @@ export class GameScene extends Phaser.Scene {
         poserSilhouettesLointaines(this, salle.dims, mondeCourant, rngDecor);
 
         // Couche 3 (x0.7) : silhouettes proches + structures principales (DecorRegistry)
-        peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes);
+        // La salle d'entrée en Miroir est une CITÉ MARCHANDE — on enrichit le décor.
+        const estCiteMarchande = enMiroir && salle.estEntree;
+        peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes, { estCiteMarchande });
 
         // Particules d'ambiance par monde (poussière Présent, étincelles Miroir)
         poserParticulesAmbiance(this, salle.dims, mondeCourant);
@@ -223,28 +228,23 @@ export class GameScene extends Phaser.Scene {
         // Brume au sol (Présent uniquement, après les plateformes pour être devant)
         poserBrumeSol(this, salle.dims, mondeCourant);
 
-        // --- PNJs (Miroir uniquement, tirage exclusif) ---
-        // Probabilités cumulatives :
-        //   < 0.28  → Fondeur (28 %)
-        //   < 0.50  → Identifieur (22 %)
-        //   < 0.72  → Marchand / Glaneuse (22 %)
-        //   sinon   → personne (28 %)
-        // Pas de PNJ dans la salle d'entrée ou de boss (laisser respirer).
-        const rngPNJ = creerRng((seedRun ^ 0xA5A5F00D ^ this._hashStr(salleId)) >>> 0);
+        // --- PNJs : tous les artisans dans la cité marchande (salle A en Miroir) ---
+        // Doctrine : Présent = chasse, Miroir = atelier. Concentrer les 3 artisans
+        // dans une salle stable donne au joueur un repère ("je sais où aller pour
+        // transformer mes Fragments"). Pas de PNJ dans les autres salles.
         this.fondeurEntite = null;
         this.identifieurEntite = null;
         this.marchandEntite = null;
-        if (enMiroir && !salle.estEntree && !salle.estBoss) {
-            const r = rngPNJ();
-            const xPNJ = salle.dims.largeur * (0.3 + rngPNJ() * 0.4);
-            const yPNJ = salle.dims.hauteur - HAUTEUR_SOL;
-            if (r < 0.28) {
-                this.fondeurEntite = creerVisuelFondeur(this, xPNJ, yPNJ);
-            } else if (r < 0.50) {
-                this.identifieurEntite = creerVisuelIdentifieur(this, xPNJ, yPNJ);
-            } else if (r < 0.72) {
-                this.marchandEntite = creerVisuelMarchand(this, xPNJ, yPNJ);
-            }
+        if (estCiteMarchande) {
+            const ySol = salle.dims.hauteur - HAUTEUR_SOL;
+            // Positions fixes le long du sol : Fondeur à gauche (forge),
+            // Identifieur au centre (autel de méditation), Marchand à droite.
+            const xF = salle.dims.largeur * 0.30;
+            const xI = salle.dims.largeur * 0.50;
+            const xM = salle.dims.largeur * 0.72;
+            this.fondeurEntite = creerVisuelFondeur(this, xF, ySol);
+            this.identifieurEntite = creerVisuelIdentifieur(this, xI, ySol);
+            this.marchandEntite = creerVisuelMarchand(this, xM, ySol);
         }
 
         // --- Joueur ---
@@ -320,20 +320,50 @@ export class GameScene extends Phaser.Scene {
 
         // --- Ennemis (Présent uniquement) ---
         this.enemies = [];
+        this.projectiles = [];
         if (!enMiroir && salle.ennemis?.length) {
             for (const e of salle.ennemis) {
                 if (this.enemySystem.estMort('normal', this.cleSalleEtage, e.idx)) continue;
-                const def = tirerTypeEnnemi('normal', this.rngLoot);
+                const def = ENEMIES[e.enemyId];
                 if (!def) continue;
-                const ennemi = new Enemy(this, def, e.x, e.y, e.idx);
-                ennemi.sprite.setDepth(DEPTH.ENTITES);
-                if (def.gravite) {
-                    this.physics.add.collider(ennemi.sprite, this.platforms);
-                }
-                this.physics.add.overlap(this.player, ennemi.sprite, () => this.contactEnnemi(ennemi));
-                this.enemies.push(ennemi);
+                this._instancierEnnemi(def, e.x, e.y, e.idx);
             }
         }
+
+        // --- Boss (salle BOSS, Présent uniquement, si pas déjà tué) ---
+        this.boss = null;
+        this.bossVivant = false;
+        if (!enMiroir && salle.estBoss &&
+            !this.enemySystem.estMort('normal', this.cleSalleEtage, 'boss')) {
+            const defBoss = definitionBoss(etageNumero, ENEMIES);
+            if (defBoss) {
+                const xBoss = salle.dims.largeur * 0.6;
+                const yBoss = salle.dims.hauteur - HAUTEUR_SOL - defBoss.hauteur / 2;
+                this.boss = new Boss(this, defBoss, xBoss, yBoss);
+                this.boss.sprite.setDepth(DEPTH.ENTITES);
+                if (defBoss.gravite) {
+                    this.physics.add.collider(this.boss.sprite, this.platforms);
+                }
+                this.physics.add.overlap(this.player, this.boss.sprite, () => this.contactEnnemi(this.boss));
+                this.enemies.push(this.boss);
+                this.bossVivant = true;
+
+                // Bandeau d'annonce
+                const bandeau = this.add.text(GAME_WIDTH / 2, 90, defBoss.nom, {
+                    fontFamily: 'serif', fontSize: '26px',
+                    color: '#ff8060', stroke: '#000', strokeThickness: 4,
+                    fontStyle: 'italic'
+                }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(220);
+                this.tweens.add({
+                    targets: bandeau, alpha: { from: 1, to: 0 },
+                    delay: 1800, duration: 800,
+                    onComplete: () => bandeau.destroy()
+                });
+            }
+        }
+
+        // --- Hooks projectiles & boss events ---
+        this._brancherEvenementsCombat();
 
         // Drop garanti au climax (niveau 3) — Bleu ou Noir uniquement
         this.climaxDropDu = !enMiroir && niveau === 3;
@@ -441,6 +471,10 @@ export class GameScene extends Phaser.Scene {
 
         // --- Update des ennemis ---
         for (const e of this.enemies) e.update(this.player);
+
+        // --- Update des projectiles + nettoyage ---
+        for (const p of this.projectiles) p.update(this.player);
+        this.projectiles = this.projectiles.filter(p => !p.detruit);
 
         // --- Update du visuel joueur ---
         if (this.playerVisual) {
@@ -728,27 +762,238 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
     /**
      * À la mort d'un ennemi : Sel garanti + Fragment selon proba.
-     * Famille du Fragment liée au type d'ennemi (Gardien = Blanc, Spectre = Bleu).
+     * La famille est lue depuis `def.familleFragment` (cf. data/enemies.js).
+     * Boss : pluie de Sel + Fragment garanti de la bonne famille.
      */
     _dropEconomique(ennemi) {
-        // Sel garanti (2-5)
-        const sel = 2 + Math.floor(this.rngLoot() * 4);
+        const estBoss = !!ennemi.estBoss;
+        // Sel garanti — boss multiplié par 5
+        const base = 2 + Math.floor(this.rngLoot() * 4);
+        const sel = estBoss ? base * 5 : base;
         this.economy.ajouterSel(sel);
 
-        // Fragment 35 % de proba
-        if (this.rngLoot() < 0.35) {
-            const famille = ennemi.def.id === 'gardien_pierre' ? 'blanc' : 'bleu';
-            this.economy.ajouterFragment(famille, 1);
-            // Petit feedback flottant
+        // Fragment : 35 % en normal, 100 % pour un boss
+        const proba = estBoss ? 1 : 0.35;
+        if (this.rngLoot() < proba) {
+            const famille = ennemi.def.familleFragment ?? 'blanc';
+            const nb = estBoss ? 3 : 1;
+            this.economy.ajouterFragment(famille, nb);
             const couleur = FRAGMENTS[`fragment_${famille}`].couleur;
             const couleurCss = '#' + couleur.toString(16).padStart(6, '0');
-            this.afficherMessageFlottant(`+1 Fragment ${famille}`, couleurCss);
+            this.afficherMessageFlottant(`+${nb} Fragment ${famille}`, couleurCss);
         } else {
             this.afficherMessageFlottant(`+${sel} Sel`, '#e8e4d8');
         }
     }
 
+    /**
+     * Instancie un ennemi normal — factorisation pour réutilisation
+     * (en cas de besoin futur, et pour clarifier la création).
+     */
+    _instancierEnnemi(def, x, y, idx) {
+        const ennemi = new Enemy(this, def, x, y, idx);
+        ennemi.sprite.setDepth(DEPTH.ENTITES);
+        if (def.gravite) {
+            this.physics.add.collider(ennemi.sprite, this.platforms);
+        }
+        this.physics.add.overlap(this.player, ennemi.sprite, () => this.contactEnnemi(ennemi));
+        this.enemies.push(ennemi);
+        return ennemi;
+    }
+
+    // ============================================================
+    // PROJECTILES & ÉVÉNEMENTS DE COMBAT
+    // ============================================================
+    /**
+     * Branche tous les events liés aux ennemis & boss (tir, smash, phase).
+     */
+    _brancherEvenementsCombat() {
+        // Tireur normal & Boss Tisseur tirent un projectile
+        const onTir = (_emetteur, params) => this._creerProjectile(params);
+        this.events.on('enemy:tir', onTir);
+        this.events.on('boss:tir', onTir);
+
+        // Boss Colosse : telegraph + impact AOE
+        const onTelegraph = (boss) => this._jouerTelegraphSmash(boss);
+        const onImpact = (boss) => this._appliquerSmash(boss);
+        this.events.on('boss:smash:telegraph', onTelegraph);
+        this.events.on('boss:smash:impact', onImpact);
+
+        // Phase change
+        const onPhase = (boss, phase) => {
+            this.afficherMessageFlottant(`PHASE ${phase}`, '#ff6060');
+            this.cameras.main.shake(180, 0.008);
+        };
+        this.events.on('boss:phase', onPhase);
+
+        // Boss mort : drop Tier 3 garanti + débloquage porte
+        const onBossDead = (boss) => {
+            this.enemySystem.marquerMort('normal', this.cleSalleEtage, 'boss');
+            this._dropBossTier3(boss);
+            this.bossVivant = false;
+            this.afficherMessageFlottant('La voie s\'ouvre', '#ffd070');
+        };
+        this.events.on('boss:dead', onBossDead);
+
+        this.events.once('shutdown', () => {
+            this.events.off('enemy:tir', onTir);
+            this.events.off('boss:tir', onTir);
+            this.events.off('boss:smash:telegraph', onTelegraph);
+            this.events.off('boss:smash:impact', onImpact);
+            this.events.off('boss:phase', onPhase);
+            this.events.off('boss:dead', onBossDead);
+        });
+    }
+
+    _creerProjectile(params) {
+        const proj = new Projectile(this, params);
+        // Collision avec plateformes (destruction)
+        this.physics.add.collider(proj.sprite, this.platforms, () => proj.detruire(true));
+        // Overlap avec joueur (dégâts + destruction)
+        this.physics.add.overlap(this.player, proj.sprite, () => {
+            if (proj.detruit) return;
+            if (this.estParryActif()) {
+                this.parryActifJusqu = 0;
+                this.resonance.regagner(this.statsEffectives.parryBonusResonance);
+                this.afficherMessageFlottant('PARRY', '#ffd070');
+                this._jouerEffetParryReussi();
+                proj.detruire(true);
+                return;
+            }
+            const now = this.time.now;
+            if (now < this.invincibleJusqu) { proj.detruire(true); return; }
+            this.resonance.prendreDegats(proj.degats);
+            this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
+            this.flashJoueur(0xff6060);
+            proj.detruire(true);
+        });
+        this.projectiles.push(proj);
+        return proj;
+    }
+
+    _jouerTelegraphSmash(boss) {
+        if (!boss?.sprite?.active) return;
+        const halo = this.add.graphics();
+        halo.setDepth(DEPTH.EFFETS - 1);
+        halo.setBlendMode(Phaser.BlendModes.ADD);
+        halo.fillStyle(0xff4040, 0.5);
+        halo.fillCircle(0, 0, 40);
+        halo.fillStyle(0xff8080, 0.7);
+        halo.fillCircle(0, 0, 22);
+        halo.setPosition(boss.sprite.x, boss.sprite.y);
+        const upd = () => {
+            if (!halo.active || !boss.sprite?.active) return;
+            halo.setPosition(boss.sprite.x, boss.sprite.y);
+        };
+        this.events.on('postupdate', upd);
+        this.tweens.add({
+            targets: halo,
+            alpha: { from: 0.4, to: 1 }, scale: { from: 0.6, to: 1.6 },
+            duration: 800, ease: 'Cubic.In',
+            onComplete: () => {
+                this.events.off('postupdate', upd);
+                halo.destroy();
+            }
+        });
+    }
+
+    _appliquerSmash(boss) {
+        if (!boss?.sprite?.active) return;
+        const cx = boss.sprite.x;
+        const cy = boss.sprite.y + boss.def.hauteur / 4;
+        const rayon = 160;
+
+        // Onde de choc visible
+        const onde = this.add.graphics();
+        onde.setDepth(DEPTH.EFFETS);
+        onde.setBlendMode(Phaser.BlendModes.ADD);
+        onde.lineStyle(8, 0xff4040, 1);
+        onde.strokeCircle(0, 0, rayon * 0.5);
+        onde.lineStyle(3, 0xffd070, 1);
+        onde.strokeCircle(0, 0, rayon * 0.4);
+        onde.setPosition(cx, cy);
+        this.tweens.add({
+            targets: onde,
+            scale: { from: 0.3, to: 1.4 }, alpha: { from: 1, to: 0 },
+            duration: 460, ease: 'Cubic.Out',
+            onComplete: () => onde.destroy()
+        });
+
+        // Particules de gravats (multiples)
+        if (this.textures.exists('_particule')) {
+            const burst = this.add.particles(cx, cy, '_particule', {
+                lifespan: 600,
+                speed: { min: 120, max: 280 },
+                angle: { min: -160, max: -20 },
+                gravityY: 600,
+                scale: { start: 0.8, end: 0 },
+                tint: [0x6a4a3a, 0x8a6a4a, 0xa08060, 0xff8040],
+                quantity: 22,
+                alpha: { start: 1, end: 0 }
+            });
+            burst.setDepth(DEPTH.EFFETS);
+            burst.explode(22);
+            this.time.delayedCall(700, () => burst.destroy());
+        }
+
+        // Screen shake
+        this.cameras.main.shake(220, 0.012);
+
+        // Dégâts AOE si joueur dans le rayon
+        const dx = this.player.x - cx;
+        const dy = this.player.y - cy;
+        if (Math.hypot(dx, dy) <= rayon) {
+            const now = this.time.now;
+            if (now >= this.invincibleJusqu) {
+                if (this.estParryActif()) {
+                    this.parryActifJusqu = 0;
+                    this.resonance.regagner(this.statsEffectives.parryBonusResonance);
+                    this.afficherMessageFlottant('PARRY', '#ffd070');
+                    this._jouerEffetParryReussi();
+                } else {
+                    this.resonance.prendreDegats(boss.def.degatsContact);
+                    this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
+                    this.flashJoueur(0xff6060);
+                }
+            }
+        }
+    }
+
+    /**
+     * Drop garanti à la mort d'un boss : 1 item Tier 3 (étoile rouge)
+     * de la famille du boss, qui flotte vers le joueur.
+     */
+    _dropBossTier3(boss) {
+        const famille = boss.def.familleFragment ?? 'noir';
+        const pool = Object.values(ITEMS).filter(it => it.famille === famille && it.tier === 3);
+        const fallback = Object.values(ITEMS).filter(it => it.tier === 3);
+        const finalPool = pool.length > 0 ? pool : fallback;
+        if (finalPool.length === 0) return;
+        const item = finalPool[Math.floor(this.rngLoot() * finalPool.length)];
+        const cube = this.add.rectangle(
+            boss.sprite.x, boss.sprite.y,
+            18, 18,
+            COULEURS_FAMILLE[item.famille]
+        );
+        cube.setDepth(DEPTH.EFFETS);
+        this.tweens.add({
+            targets: cube,
+            x: this.player.x, y: this.player.y, alpha: 0,
+            duration: 600,
+            onComplete: () => {
+                cube.destroy();
+                if (this.inventaire.ajouter(item.id)) {
+                    this.afficherMessageFlottant(`★ ${item.nom}`, this.coulHex(COULEURS_FAMILLE[item.famille]));
+                } else {
+                    this.afficherMessageFlottant("Inventaire plein", '#ff6060');
+                }
+            }
+        });
+    }
+
     peutEtreDrop(ennemi) {
+        // Les boss gèrent leur drop (T3 garanti) via `_dropBossTier3`
+        if (ennemi.estBoss) return;
         const proba = this.climaxDropDu ? 1 : ennemi.def.probaDrop;
         if (this.rngLoot() >= proba) return;
 
@@ -956,7 +1201,7 @@ export class GameScene extends Phaser.Scene {
 
     /**
      * Traverse une porte → soit on charge la salle voisine, soit on monte
-     * d'étage (porte E de la salle BOSS).
+     * d'étage (porte E de la salle BOSS, après le boss).
      */
     _traverserPorte(salle, direction) {
         if (this.transitionEnCours) return;
@@ -964,6 +1209,11 @@ export class GameScene extends Phaser.Scene {
 
         // Cas spécial : porte E de la salle BOSS sans voisin = transition d'étage
         if (salle.estBoss && direction === 'E' && !voisinId) {
+            // Bloque tant que le boss est vivant (Présent uniquement)
+            if (this.bossVivant) {
+                this.afficherMessageFlottant('La voie est scellée', '#ff8060');
+                return;
+            }
             this.monterEtage();
             return;
         }
@@ -1010,11 +1260,17 @@ export class GameScene extends Phaser.Scene {
     basculerVersMiroir() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
-        this.registry.set(CLE_POSITION_PENDANTE, { x: this.player.x, y: this.player.y });
+        // Doctrine : la chute en Présent = retour forcé à la cité marchande
+        // (salle d'entrée de l'étage en Miroir). Le joueur "perd" sa progression
+        // dans l'étage Présent mais retrouve un terrain paisible pour transformer.
+        // Différent du vortex (déplacement contrôlé) qui conserve la position.
+        this.registry.remove(CLE_POSITION_PENDANTE);
+        this.registry.set(CLE_SALLE_COURANTE, this.etage.salleEntreeId);
+        this.registry.remove(CLE_PORTE_ARRIVEE);
         this.cameras.main.fadeOut(300, 80, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.monde.basculerVersMiroir();
-            this.scene.restart({});
+            this.scene.restart({ salleId: this.etage.salleEntreeId });
         });
     }
 

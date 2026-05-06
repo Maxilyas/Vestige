@@ -11,6 +11,7 @@ import {
     calculerPorte, VORTEX_DIMS,
     HAUTEUR_SOL_EXPORT as HAUTEUR_SOL
 } from '../data/archetypes.js';
+import { biomePourEtage } from '../data/biomes.js';
 
 // --- PRNG déterministe (Mulberry32) ---
 export function creerRng(seed) {
@@ -42,11 +43,12 @@ export function niveauDanger(_indexSalle) {
     return 0;
 }
 
+// Densité de fallback si le biome ne fournit pas la sienne (legacy)
 const ENNEMIS_PAR_NIVEAU = {
-    0: { min: 0, max: 0 },
-    1: { min: 0, max: 1 },
-    2: { min: 1, max: 2 },
-    3: { min: 2, max: 3 }
+    0: { min: 2, max: 4 },
+    1: { min: 3, max: 5 },
+    2: { min: 4, max: 7 },
+    3: { min: 6, max: 10 }
 };
 
 // --- Probabilités loot ---
@@ -171,14 +173,21 @@ export function genererSalle({
         };
     }
 
-    // 7. Ennemis (selon niveau de danger d'étage, Présent uniquement à l'instanciation)
+    // 7. Ennemis — densité dictée par le biome de l'étage (cf. data/biomes.js).
     //    Pas d'ennemis dans la salle d'entrée (pour laisser le joueur s'orienter).
-    //    Boss : géré séparément (Phase C — pour Phase A on laisse vide aussi).
-    const fourchette = ENNEMIS_PAR_NIVEAU[niveau];
+    //    Boss : géré séparément par GameScene (instanciation depuis data/boss.js).
+    const biome = biomePourEtage(etageNumero);
+    const fourchette = biome?.densite ?? ENNEMIS_PAR_NIVEAU[niveau];
     let nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
     if (estEntree || estBoss) nbEnnemis = 0;
     const ennemis = [];
+    const pool = biome?.ennemisPool ?? [];
     for (let i = 0; i < nbEnnemis; i++) {
+        // Type d'ennemi seedé : tiré dans le pool du biome pour garantir
+        // que la même salle (même seed) refait spawner les mêmes types.
+        const enemyId = pool.length > 0
+            ? pool[Math.floor(rng() * pool.length)]
+            : null;
         const surSol = plateformesFlottantes.length === 0 || rng() < 0.5;
         let x, y;
         if (surSol) {
@@ -189,7 +198,7 @@ export function genererSalle({
             x = p.x;
             y = p.y - p.hauteur / 2 - 20;
         }
-        ennemis.push({ x, y, idx: i });
+        ennemis.push({ x, y, idx: i, enemyId });
     }
 
     return {

@@ -153,6 +153,11 @@ export function genererEtage(numero, seedRun) {
             // La salle de boss : Arène du Reflux (sol dégagé pour combat futur).
             // Phase C ajoutera un vrai boss.
             archetype = ARCHETYPES.arene;
+        } else if (n.role === 'entree') {
+            // L'entrée de l'étage est TOUJOURS un Sanctuaire — c'est la cité
+            // marchande quand on est en Miroir. Layout consistant pour que le
+            // joueur reconnaisse l'endroit comme un repère stable.
+            archetype = ARCHETYPES.sanctuaire;
         } else if (n.role === 'deadend') {
             // Dead-ends verticaux : on privilégie le Puits Inversé (porte N native)
             archetype = ARCHETYPES.puits;

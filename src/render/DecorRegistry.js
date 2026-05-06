@@ -47,6 +47,74 @@ function trouverSolPrincipal(plateformes, dims) {
 // Plans par archétype (chacun retourne une liste typée d'éléments)
 // ============================================================
 
+// ============================================================
+// 🏛 CITÉ MARCHANDE — variante du Sanctuaire en Miroir : la salle d'entrée
+// devient un marché majestueux où sont rassemblés les 3 artisans.
+// Décoration dense : multiples banderoles, lanternes, étals, pots de fleurs,
+// statue dorée, voûte céleste lumineuse.
+// ============================================================
+function planCiteMarchande(dims, rng) {
+    const cx = dims.largeur / 2;
+    const ySol = dims.hauteur - HAUTEUR_SOL;
+    const elements = [];
+
+    // === Skyline lointain : ville étendue, plusieurs bâtiments + tours + dômes ===
+    elements.push({ type: 'tour',     x: 60,                  yBase: ySol, hauteur: 360, silhouette: true });
+    elements.push({ type: 'batiment', x: 160,                 yBase: ySol, hauteur: 240, largeur: 90, silhouette: true });
+    elements.push({ type: 'dome',     x: 250,                 yBase: ySol, rayon: 55, silhouette: true });
+    elements.push({ type: 'batiment', x: 340,                 yBase: ySol, hauteur: 200, largeur: 80, silhouette: true });
+    elements.push({ type: 'tour',     x: dims.largeur - 60,   yBase: ySol, hauteur: 360, silhouette: true });
+    elements.push({ type: 'batiment', x: dims.largeur - 160,  yBase: ySol, hauteur: 240, largeur: 90, silhouette: true });
+    elements.push({ type: 'dome',     x: dims.largeur - 250,  yBase: ySol, rayon: 55, silhouette: true });
+    elements.push({ type: 'batiment', x: dims.largeur - 340,  yBase: ySol, hauteur: 200, largeur: 80, silhouette: true });
+
+    // === Structure centrale : grand dôme + statue dorée derrière l'autel ===
+    elements.push({ type: 'dome',   x: cx, yBase: ySol, rayon: 95 });
+    elements.push({ type: 'statue', x: cx, yBase: ySol - 290, hauteur: 110 });
+
+    // === 4 colonnes monumentales encadrant le marché ===
+    const xs = [cx - 480, cx - 200, cx + 200, cx + 480];
+    for (const x of xs) {
+        elements.push({ type: 'colonne', x, yBase: ySol, hauteur: 240 });
+    }
+
+    // === Banderoles tendues entre toutes les paires de colonnes (festif) ===
+    elements.push({ type: 'banderole', x1: xs[0], y1: ySol - 230, x2: xs[1], y2: ySol - 230 });
+    elements.push({ type: 'banderole', x1: xs[1], y1: ySol - 230, x2: xs[2], y2: ySol - 230 });
+    elements.push({ type: 'banderole', x1: xs[2], y1: ySol - 230, x2: xs[3], y2: ySol - 230 });
+    // Banderole haute additionnelle reliant les colonnes extrêmes
+    elements.push({ type: 'banderole', x1: xs[0], y1: ySol - 290, x2: xs[3], y2: ySol - 290 });
+
+    // === Lanternes : suspendues sous les banderoles + au sol entre colonnes ===
+    for (const x of xs) {
+        elements.push({ type: 'lanterne', x: x, yBase: ySol - 180 });
+    }
+    // Petites lanternes au sol entre les emplacements PNJ
+    elements.push({ type: 'lanterne', x: cx - 350, yBase: ySol - 50 });
+    elements.push({ type: 'lanterne', x: cx + 350, yBase: ySol - 50 });
+
+    // === Étals de marchand : 2 paires symétriques (animation visuelle du marché) ===
+    elements.push({ type: 'etal_marchand', x: cx - 400, yBase: ySol });
+    elements.push({ type: 'etal_marchand', x: cx + 400, yBase: ySol });
+    // Étals secondaires un peu plus près du centre
+    if (rng() < 0.85) elements.push({ type: 'etal_marchand', x: cx - 110, yBase: ySol });
+    if (rng() < 0.85) elements.push({ type: 'etal_marchand', x: cx + 110, yBase: ySol });
+
+    // === Pots de fleurs aux pieds des colonnes (vie, couleur) ===
+    for (const x of xs) {
+        elements.push({ type: 'pot_fleurs', x: x - 30, yBase: ySol });
+        elements.push({ type: 'pot_fleurs', x: x + 30, yBase: ySol });
+    }
+
+    // === Tonneaux et caisses (mobilier de commerce) ===
+    elements.push({ type: 'tonneau', x: cx - 560, yBase: ySol });
+    elements.push({ type: 'caisse',  x: cx - 540, yBase: ySol });
+    elements.push({ type: 'tonneau', x: cx + 560, yBase: ySol });
+    elements.push({ type: 'caisse',  x: cx + 540, yBase: ySol });
+
+    return elements;
+}
+
 function planSanctuaire(dims, rng) {
     const cx = dims.largeur / 2;
     const ySol = dims.hauteur - HAUTEUR_SOL;
@@ -337,9 +405,13 @@ const PEINTRES = {
  *   - structures principales (depth -20)
  *   - sol décoré (depth -10) sur le sol principal
  *   - mobilier de vie (depth +10)
+ *
+ * Options :
+ *   - estCiteMarchande : si true, remplace le plan d'archétype par
+ *     `planCiteMarchande` (salle d'entrée Miroir = marché majestueux).
  */
-export function peindreDecor(scene, archetype, dims, monde, rng, plateformes) {
-    const plan = PLANS[archetype];
+export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, options = {}) {
+    const plan = options.estCiteMarchande ? planCiteMarchande : PLANS[archetype];
     if (!plan) return [];
 
     const palette = paletteDuMonde(monde);
