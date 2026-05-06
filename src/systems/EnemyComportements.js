@@ -146,14 +146,14 @@ export function updateTireur(enemy, player) {
     // Maj direction pour orienter le visuel
     if (Math.abs(dx) > 4) enemy.direction = dx > 0 ? 1 : -1;
 
-    // Kite lent (s'éloigne légèrement si joueur trop près)
-    if (def.vitesse > 0 && dist < def.rayonDetection * 0.5 && dist > 0) {
-        const v = def.vitesse;
-        body.setVelocity(-(dx / dist) * v, def.gravite ? body.velocity.y : -(dy / dist) * v);
+    // Kite lent HORIZONTAL uniquement (le kite sur Y faisait fuir les Tireurs
+    // volants hors de portée du joueur).
+    if (def.vitesse > 0 && dist < def.rayonDetection * 0.5 && Math.abs(dx) > 4) {
+        body.setVelocityX(-Math.sign(dx) * def.vitesse);
     } else {
         body.setVelocityX(0);
-        if (!def.gravite) body.setVelocityY(0);
     }
+    if (!def.gravite) body.setVelocityY(0);
 
     // Tir
     if (dist < def.rayonDetection && now >= enemy.prochainTir) {

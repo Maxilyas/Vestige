@@ -30,7 +30,9 @@ export class Enemy {
         scene.physics.add.existing(this.sprite);
         const body = this.sprite.body;
         body.allowGravity = !!def.gravite;
-        if (def.gravite) body.setCollideWorldBounds(true);
+        // Toujours clamp dans les bounds du monde, même pour les ennemis volants —
+        // sinon un Tisseur/Tireur peut s'échapper de la salle pendant le kite.
+        body.setCollideWorldBounds(true);
         this.sprite._enemy = this;
 
         // Visuel paramétrique

@@ -60,14 +60,13 @@ export function updateTisseur(boss, player) {
     const def = boss.def;
     const body = boss.sprite.body;
 
-    // Le Tisseur lévite et fait du léger kite
+    // Le Tisseur lévite à hauteur fixe et kite HORIZONTALEMENT seulement
+    // (le kiter sur Y ferait fuir le boss en l'air hors de portée).
     body.setVelocity(0, 0);
     if (player && def.vitesse > 0) {
         const dx = player.x - boss.sprite.x;
-        const dy = player.y - boss.sprite.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        if (dist < 220) {
-            body.setVelocity(-(dx / dist) * def.vitesse, -(dy / dist) * def.vitesse);
+        if (Math.abs(dx) < 220 && Math.abs(dx) > 4) {
+            body.setVelocityX(-Math.sign(dx) * def.vitesse);
         }
         boss.direction = dx > 0 ? 1 : -1;
     }
