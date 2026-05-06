@@ -8,10 +8,12 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import {
     InventaireSystem, SLOTS, EVT_INV_CHANGE, EVT_EQUIP_CHANGE, CAPACITE_INVENTAIRE
 } from '../systems/InventaireSystem.js';
+import { EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
 import { ITEMS } from '../data/items.js';
 import { poserCadreInventaire, poserBoutonFermer } from '../render/ui/CadreInventaire.js';
 import { creerSlot } from '../render/ui/SlotInventaire.js';
 import { creerPanneauDetail } from '../render/ui/PanneauDetail.js';
+import { peindreEmblemeFamille } from '../render/ui/EmblemeFamille.js';
 
 // Layout
 const TAILLE_SLOT_INV = 36;
@@ -39,6 +41,9 @@ export class InventaireScene extends Phaser.Scene {
         // Bouton fermer
         poserBoutonFermer(this, GAME_WIDTH - 50, 50, () => this.fermer());
 
+        // --- Bande RESSOURCES (Sel + Fragments) sous le titre ---
+        this._dessinerBandeRessources(GAME_WIDTH);
+
         // --- Section slots équipés (centrée en haut) ---
         this._dessinerEquipement();
 
@@ -47,7 +52,7 @@ export class InventaireScene extends Phaser.Scene {
         const yGrilleDebut = 215;
         this._dessinerGrille(xGrilleDebut, yGrilleDebut);
 
-        // --- Compteur N/40 ---
+        // --- Compteur N/40 (juste au-dessus de la grille) ---
         const compteur = this.add.text(
             xGrilleDebut,
             yGrilleDebut - 18,
@@ -72,12 +77,106 @@ export class InventaireScene extends Phaser.Scene {
 
         const handlerInv = () => this._refreshTout();
         const handlerEquip = () => this._refreshTout();
+        const handlerEco = () => this._refreshRessources();
         this.registry.events.on(EVT_INV_CHANGE, handlerInv);
         this.registry.events.on(EVT_EQUIP_CHANGE, handlerEquip);
+        this.registry.events.on(EVT_SEL_CHANGE, handlerEco);
+        this.registry.events.on(EVT_FRAGMENTS_CHANGE, handlerEco);
         this.events.once('shutdown', () => {
             this.registry.events.off(EVT_INV_CHANGE, handlerInv);
             this.registry.events.off(EVT_EQUIP_CHANGE, handlerEquip);
+            this.registry.events.off(EVT_SEL_CHANGE, handlerEco);
+            this.registry.events.off(EVT_FRAGMENTS_CHANGE, handlerEco);
         });
+    }
+
+    /**
+     * Bande horizontale sous le titre : Sel doré + 3 compteurs Fragments avec emblèmes.
+     * Centrée horizontalement.
+     */
+    _dessinerBandeRessources(largeur) {
+        // Positionnée au-dessus du compteur N/40, dans la zone de la grille uniquement
+        // (ne déborde pas sur le panneau détail à droite).
+        const y = 162;
+        const xGauche = 60;
+        // Largeur grille : 8 cols × 36 + 7 gaps × 6 = 288 + 42 = 330 px
+        const largeurZone = 330;
+
+        const bande = this.add.container(0, 0);
+        bande.setScrollFactor(0);
+        bande.setDepth(310);
+
+        // 4 blocs (Sel + 3 Fragments) répartis dans la zone de la grille
+        const blocs = [
+            { type: 'sel', label: 'SEL', couleur: '#ffd070' },
+            { type: 'frag', famille: 'blanc', label: 'BLANC' },
+            { type: 'frag', famille: 'bleu',  label: 'BLEU' },
+            { type: 'frag', famille: 'noir',  label: 'NOIR' }
+        ];
+
+        this.compteursFragmentsInv = {};
+        const espace = largeurZone / blocs.length;
+
+        for (let i = 0; i < blocs.length; i++) {
+            const b = blocs[i];
+            const xCentre = xGauche + espace * i + espace / 2;
+
+            // Symbole (cristal pour Sel, emblème pour Fragments) à gauche
+            if (b.type === 'sel') {
+                const cristal = this.add.graphics({ x: xCentre - 28, y: y + 8 });
+                cristal.fillStyle(0xffd070, 1);
+                cristal.beginPath();
+                cristal.moveTo(0, -6);
+                cristal.lineTo(5, 0);
+                cristal.lineTo(0, 6);
+                cristal.lineTo(-5, 0);
+                cristal.closePath();
+                cristal.fillPath();
+                cristal.fillStyle(0xffffff, 0.7);
+                cristal.fillCircle(-2, -2, 1.5);
+                bande.add(cristal);
+            } else {
+                const emb = peindreEmblemeFamille(this, xCentre - 28, y + 8, b.famille, 12);
+                bande.add(emb);
+            }
+
+            // Label compact à droite du symbole
+            bande.add(this.add.text(xCentre - 18, y - 1, b.label, {
+                fontFamily: 'monospace', fontSize: '9px', color: '#8a8a9a',
+                fontStyle: 'bold'
+            }));
+
+            // Valeur en gras sous le label
+            const couleurValeur = b.type === 'sel' ? '#ffd070' : '#e8e4d8';
+            const txt = this.add.text(xCentre - 18, y + 9, '0', {
+                fontFamily: 'monospace', fontSize: '13px', color: couleurValeur,
+                fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+            });
+            bande.add(txt);
+
+            if (b.type === 'sel') this.texteSelInv = txt;
+            else this.compteursFragmentsInv[b.famille] = txt;
+        }
+
+        // Liseré doré qui sépare la bande du compteur en dessous
+        const liseré = this.add.graphics();
+        liseré.lineStyle(1, 0xc8a85a, 0.5);
+        liseré.beginPath();
+        liseré.moveTo(xGauche, y + 28);
+        liseré.lineTo(xGauche + largeurZone, y + 28);
+        liseré.strokePath();
+        bande.add(liseré);
+
+        this._refreshRessources();
+    }
+
+    _refreshRessources() {
+        const sel = this.registry.get('sel_resonance') ?? 0;
+        if (this.texteSelInv) this.texteSelInv.setText(`${sel}`);
+        const f = this.registry.get('fragments') ?? { blanc: 0, bleu: 0, noir: 0 };
+        for (const fam of ['blanc', 'bleu', 'noir']) {
+            this.compteursFragmentsInv?.[fam]?.setText(`${f[fam] ?? 0}`);
+        }
     }
 
     fermer() {

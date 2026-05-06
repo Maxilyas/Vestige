@@ -17,6 +17,8 @@ import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
 import { ENEMIES, tirerTypeEnnemi } from '../data/enemies.js';
 import { ARCHETYPES } from '../data/archetypes.js';
 import { Enemy } from '../entities/Enemy.js';
+import { EconomySystem } from '../systems/EconomySystem.js';
+import { FRAGMENTS } from '../data/fragments.js';
 import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
     poserVignette, poserParticulesAmbiance, tracerCourbeQuadratique
@@ -87,6 +89,7 @@ export class GameScene extends Phaser.Scene {
         this.monde = new MondeSystem(this.registry);
         this.inventaire = new InventaireSystem(this.registry);
         this.enemySystem = new EnemySystem(this.registry);
+        this.economy = new EconomySystem(this.registry);
         this.inputSystem = new InputSystem(this);
 
         // --- Seed du run (random à la première salle, persistée ensuite) ---
@@ -285,10 +288,11 @@ export class GameScene extends Phaser.Scene {
         }
         this.activerBaissePassive(false);
 
-        // --- Mort d'ennemi : drop éventuel ---
+        // --- Mort d'ennemi : drop éventuel + Sel + Fragment ---
         const handlerEnemyDead = (ennemi) => {
             this.enemySystem.marquerMort('normal', this.indexSalle, ennemi.indexEnnemi);
             this.peutEtreDrop(ennemi);
+            this._dropEconomique(ennemi);
         };
         this.events.on('enemy:dead', handlerEnemyDead);
         this.events.once('shutdown', () => this.events.off('enemy:dead', handlerEnemyDead));
@@ -629,6 +633,28 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
     // DROPS
     // ============================================================
+    /**
+     * À la mort d'un ennemi : Sel garanti + Fragment selon proba.
+     * Famille du Fragment liée au type d'ennemi (Gardien = Blanc, Spectre = Bleu).
+     */
+    _dropEconomique(ennemi) {
+        // Sel garanti (2-5)
+        const sel = 2 + Math.floor(this.rngLoot() * 4);
+        this.economy.ajouterSel(sel);
+
+        // Fragment 35 % de proba
+        if (this.rngLoot() < 0.35) {
+            const famille = ennemi.def.id === 'gardien_pierre' ? 'blanc' : 'bleu';
+            this.economy.ajouterFragment(famille, 1);
+            // Petit feedback flottant
+            const couleur = FRAGMENTS[`fragment_${famille}`].couleur;
+            const couleurCss = '#' + couleur.toString(16).padStart(6, '0');
+            this.afficherMessageFlottant(`+1 Fragment ${famille}`, couleurCss);
+        } else {
+            this.afficherMessageFlottant(`+${sel} Sel`, '#e8e4d8');
+        }
+    }
+
     peutEtreDrop(ennemi) {
         const proba = this.climaxDropDu ? 1 : ennemi.def.probaDrop;
         if (this.rngLoot() >= proba) return;
@@ -703,22 +729,47 @@ export class GameScene extends Phaser.Scene {
 
     ouvrirCoffre() {
         const monde = this.monde.getMonde();
-        const item = tirerItem(monde, this.rngLoot);
-        if (!item) return;
-        if (!this.inventaire.ajouter(item.id)) {
-            this.afficherMessageFlottant("Inventaire plein", '#ff6060');
-            return;
-        }
-        this.inventaire.marquerCoffreOuvert(monde, this.indexSalle);
+        // Doctrine 9a : les coffres dropent en très large majorité des Fragments.
+        //   Présent : 85 % Fragment / 15 % item équipable
+        //   Miroir  : 95 % Fragment / 5 % item (les items déjà forgés y sont rarissimes —
+        //             c'est l'atelier de transformation, on y vient pour les matières).
+        // Trouver un item équipable directement reste possible, mais devient un événement.
+        const probaFragment = monde === 'miroir' ? 0.95 : 0.85;
+        const donneFragment = this.rngLoot() < probaFragment;
 
-        // Animation d'ouverture stylisée : couvercle pivote, étincelles dorées,
-        // cube coloré qui sort et flotte vers le joueur, message au pickup.
+        this.inventaire.marquerCoffreOuvert(monde, this.indexSalle);
         const visuel = this.coffreVisuel;
         const cible = { x: this.player.x, y: this.player.y };
-        const couleur = COULEURS_FAMILLE[item.famille];
-        jouerOuvertureCoffre(this, visuel, item.famille, cible, () => {
-            this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(couleur));
-        });
+
+        if (donneFragment) {
+            // Tire la famille selon le monde (mêmes proba que les items)
+            const r = this.rngLoot();
+            const probas = monde === 'miroir'
+                ? { blanc: 0.2, bleu: 0.6, noir: 0.2 }
+                : { blanc: 0.7, bleu: 0.2, noir: 0.1 };
+            let famille;
+            if (r < probas.blanc) famille = 'blanc';
+            else if (r < probas.blanc + probas.bleu) famille = 'bleu';
+            else famille = 'noir';
+
+            this.economy.ajouterFragment(famille, 1);
+            const couleur = COULEURS_FAMILLE[famille];
+            jouerOuvertureCoffre(this, visuel, famille, cible, () => {
+                this.afficherMessageFlottant(`Fragment ${famille}`, this.coulHex(couleur));
+            });
+        } else {
+            const item = tirerItem(monde, this.rngLoot);
+            if (!item) return;
+            if (!this.inventaire.ajouter(item.id)) {
+                this.afficherMessageFlottant("Inventaire plein", '#ff6060');
+                return;
+            }
+            const couleur = COULEURS_FAMILLE[item.famille];
+            jouerOuvertureCoffre(this, visuel, item.famille, cible, () => {
+                this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(couleur));
+            });
+        }
+
         // Coffre passe en mode "vide" (couleur tamisée) une fois l'ouverture terminée
         this.time.delayedCall(900, () => fermerCoffreVide(this, visuel));
 
