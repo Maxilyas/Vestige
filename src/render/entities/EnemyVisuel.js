@@ -8,7 +8,7 @@
 // Le retour est un Phaser.GameObjects.Container que Enemy.js positionne
 // chaque frame.
 
-import { DEPTH } from '../PainterlyRenderer.js';
+import { DEPTH, tracerCourbeQuadratique } from '../PainterlyRenderer.js';
 
 // ============================================================
 // API publique
@@ -357,15 +357,23 @@ function peindreAccessoire(scene, container, def) {
         g.closePath();
         g.fillPath();
     } else if (acc === 'cornes_arquees') {
+        // Phaser Graphics n'a pas quadraticCurveTo natif — on utilise notre
+        // helper qui découpe la Bézier en N segments lineTo.
         g.lineStyle(3, couleurO, 1);
-        g.beginPath();
-        g.moveTo(-w / 4, -h / 2);
-        g.quadraticCurveTo(-w / 2 - 6, -h / 2 - 12, -w / 4 - 4, -h / 2 - 14);
-        g.strokePath();
-        g.beginPath();
-        g.moveTo( w / 4, -h / 2);
-        g.quadraticCurveTo( w / 2 + 6, -h / 2 - 12,  w / 4 + 4, -h / 2 - 14);
-        g.strokePath();
+        tracerCourbeQuadratique(
+            g,
+            -w / 4, -h / 2,
+            -w / 2 - 6, -h / 2 - 12,
+            -w / 4 - 4, -h / 2 - 14,
+            14
+        );
+        tracerCourbeQuadratique(
+            g,
+             w / 4, -h / 2,
+             w / 2 + 6, -h / 2 - 12,
+             w / 4 + 4, -h / 2 - 14,
+            14
+        );
     } else if (acc === 'cristaux_dos') {
         g.fillStyle(couleur, 0.85);
         for (let i = -2; i <= 2; i++) {
