@@ -32,6 +32,7 @@ import { creerVisuelCoffre, jouerOuvertureCoffre, fermerCoffreVide } from '../re
 import { creerVisuelVortex } from '../render/entities/Vortex.js';
 import { creerVisuelPorteSortie } from '../render/entities/PorteSortie.js';
 import { creerVisuelConsommable, jouerRamassageConsommable } from '../render/entities/Consommable.js';
+import { creerVisuelFondeur } from '../render/entities/Fondeur.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -170,6 +171,18 @@ export class GameScene extends Phaser.Scene {
 
         // Brume au sol (Présent uniquement, après les plateformes pour être devant)
         poserBrumeSol(this, salle.dims, mondeCourant);
+
+        // --- Fondeur (Miroir uniquement, ~33 % de chance par salle) ---
+        // PRNG dédié seedé pour reproductibilité de la présence + position
+        const rngPNJ = creerRng((seedRun ^ 0xA5A5F00D ^ this.indexSalle) >>> 0);
+        if (enMiroir && rngPNJ() < 0.33) {
+            const xF = salle.dims.largeur * (0.3 + rngPNJ() * 0.4);
+            const yF = salle.dims.hauteur - HAUTEUR_SOL;
+            this.fondeurEntite = creerVisuelFondeur(this, xF, yF);
+            this.fondeurEntite.setData('type', 'fondeur');
+        } else {
+            this.fondeurEntite = null;
+        }
 
         // --- Joueur ---
         const positionPendante = this.registry.get(CLE_POSITION_PENDANTE);
@@ -723,8 +736,20 @@ export class GameScene extends Phaser.Scene {
         const px = this.player.x;
         const py = this.player.y;
         const proche = (obj) => obj && Phaser.Math.Distance.Between(px, py, obj.x, obj.y) < 40;
+        const procheFondeur = (obj) => obj && Phaser.Math.Distance.Between(px, py, obj.x, obj.y) < 60;
         if (this.coffre && proche(this.coffre)) { this.ouvrirCoffre(); return; }
-        if (this.dropSol && proche(this.dropSol)) this.ramasserDropSol();
+        if (this.dropSol && proche(this.dropSol)) { this.ramasserDropSol(); return; }
+        if (this.fondeurEntite && procheFondeur(this.fondeurEntite)) { this.ouvrirFondeur(); return; }
+    }
+
+    ouvrirFondeur() {
+        if (this.scene.isActive('FondeurScene')) return;
+        // PRNG pour le tirage de la recette (seedé par run + salle pour cohérence
+        // si on revient sur la même salle, mais varie entre salles)
+        const seed = this.registry.get('seed_run') ?? 0;
+        const rngForge = creerRng((seed ^ 0xC0FFEE ^ this.indexSalle ^ this.time.now) >>> 0);
+        this.scene.pause();
+        this.scene.launch('FondeurScene', { rng: rngForge });
     }
 
     ouvrirCoffre() {

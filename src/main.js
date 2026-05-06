@@ -6,9 +6,10 @@ import { gameConfig } from './config.js';
 import { GameScene } from './scenes/GameScene.js';
 import { UIScene } from './scenes/UIScene.js';
 import { InventaireScene } from './scenes/InventaireScene.js';
+import { FondeurScene } from './scenes/FondeurScene.js';
 
 // L'ordre dans `scene` détermine l'ordre de rendu (les suivantes au-dessus).
-// GameScene est lancée par défaut ; elle se charge ensuite de `launch('UIScene')`
-// et de `launch('InventaireScene')` à la demande (touche I).
+// GameScene est lancée par défaut ; UIScene + InventaireScene + FondeurScene
+// sont des overlays lancés à la demande.
 // eslint-disable-next-line no-new
-new Phaser.Game({ ...gameConfig, scene: [GameScene, UIScene, InventaireScene] });
+new Phaser.Game({ ...gameConfig, scene: [GameScene, UIScene, InventaireScene, FondeurScene] });
