@@ -9,9 +9,11 @@ import { FAMILLES_FRAGMENT } from '../data/fragments.js';
 
 const CLE_SEL = 'sel_resonance';
 const CLE_FRAGMENTS = 'fragments'; // objet { blanc: N, bleu: N, noir: N }
+const CLE_ENCRE = 'encre_temoin_stock';
 
 export const EVT_SEL_CHANGE = 'eco:sel:change';
 export const EVT_FRAGMENTS_CHANGE = 'eco:fragments:change';
+export const EVT_ENCRE_CHANGE = 'eco:encre:change';
 
 export class EconomySystem {
     constructor(registry) {
@@ -23,6 +25,29 @@ export class EconomySystem {
         if (this.registry.get(CLE_FRAGMENTS) === undefined) {
             this.registry.set(CLE_FRAGMENTS, { blanc: 0, bleu: 0, noir: 0 });
         }
+        if (this.registry.get(CLE_ENCRE) === undefined) {
+            this.registry.set(CLE_ENCRE, 0);
+        }
+    }
+
+    // ----- Encre du Témoin (consommable utilisé par l'Identifieur) -----
+    getEncre() {
+        return this.registry.get(CLE_ENCRE) ?? 0;
+    }
+    ajouterEncre(n = 1) {
+        if (n <= 0) return;
+        const v = this.getEncre() + n;
+        this.registry.set(CLE_ENCRE, v);
+        this.registry.events.emit(EVT_ENCRE_CHANGE, v, n);
+    }
+    retirerEncre(n = 1) {
+        if (n <= 0) return true;
+        const courant = this.getEncre();
+        if (courant < n) return false;
+        const v = courant - n;
+        this.registry.set(CLE_ENCRE, v);
+        this.registry.events.emit(EVT_ENCRE_CHANGE, v, -n);
+        return true;
     }
 
     // ----- Sel -----

@@ -33,6 +33,7 @@ import { creerVisuelVortex } from '../render/entities/Vortex.js';
 import { creerVisuelPorteSortie } from '../render/entities/PorteSortie.js';
 import { creerVisuelConsommable, jouerRamassageConsommable } from '../render/entities/Consommable.js';
 import { creerVisuelFondeur } from '../render/entities/Fondeur.js';
+import { creerVisuelIdentifieur } from '../render/entities/Identifieur.js';
 
 // Label affiché dans le HUD pour chaque archétype
 const ARCHETYPES_LABELS = Object.fromEntries(
@@ -172,16 +173,23 @@ export class GameScene extends Phaser.Scene {
         // Brume au sol (Présent uniquement, après les plateformes pour être devant)
         poserBrumeSol(this, salle.dims, mondeCourant);
 
-        // --- Fondeur (Miroir uniquement, ~33 % de chance par salle) ---
-        // PRNG dédié seedé pour reproductibilité de la présence + position
+        // --- PNJs (Miroir uniquement, tirage exclusif) ---
+        // Probabilités cumulatives :
+        //   < 0.33  → Fondeur
+        //   < 0.58  → Identifieur (25 %)
+        //   sinon   → personne (42 %)
         const rngPNJ = creerRng((seedRun ^ 0xA5A5F00D ^ this.indexSalle) >>> 0);
-        if (enMiroir && rngPNJ() < 0.33) {
-            const xF = salle.dims.largeur * (0.3 + rngPNJ() * 0.4);
-            const yF = salle.dims.hauteur - HAUTEUR_SOL;
-            this.fondeurEntite = creerVisuelFondeur(this, xF, yF);
-            this.fondeurEntite.setData('type', 'fondeur');
-        } else {
-            this.fondeurEntite = null;
+        this.fondeurEntite = null;
+        this.identifieurEntite = null;
+        if (enMiroir) {
+            const r = rngPNJ();
+            const xPNJ = salle.dims.largeur * (0.3 + rngPNJ() * 0.4);
+            const yPNJ = salle.dims.hauteur - HAUTEUR_SOL;
+            if (r < 0.33) {
+                this.fondeurEntite = creerVisuelFondeur(this, xPNJ, yPNJ);
+            } else if (r < 0.58) {
+                this.identifieurEntite = creerVisuelIdentifieur(this, xPNJ, yPNJ);
+            }
         }
 
         // --- Joueur ---
@@ -736,20 +744,27 @@ export class GameScene extends Phaser.Scene {
         const px = this.player.x;
         const py = this.player.y;
         const proche = (obj) => obj && Phaser.Math.Distance.Between(px, py, obj.x, obj.y) < 40;
-        const procheFondeur = (obj) => obj && Phaser.Math.Distance.Between(px, py, obj.x, obj.y) < 60;
+        const prochePNJ = (obj) => obj && Phaser.Math.Distance.Between(px, py, obj.x, obj.y) < 60;
         if (this.coffre && proche(this.coffre)) { this.ouvrirCoffre(); return; }
         if (this.dropSol && proche(this.dropSol)) { this.ramasserDropSol(); return; }
-        if (this.fondeurEntite && procheFondeur(this.fondeurEntite)) { this.ouvrirFondeur(); return; }
+        if (this.fondeurEntite && prochePNJ(this.fondeurEntite)) { this.ouvrirFondeur(); return; }
+        if (this.identifieurEntite && prochePNJ(this.identifieurEntite)) { this.ouvrirIdentifieur(); return; }
     }
 
     ouvrirFondeur() {
         if (this.scene.isActive('FondeurScene')) return;
-        // PRNG pour le tirage de la recette (seedé par run + salle pour cohérence
-        // si on revient sur la même salle, mais varie entre salles)
         const seed = this.registry.get('seed_run') ?? 0;
         const rngForge = creerRng((seed ^ 0xC0FFEE ^ this.indexSalle ^ this.time.now) >>> 0);
         this.scene.pause();
         this.scene.launch('FondeurScene', { rng: rngForge });
+    }
+
+    ouvrirIdentifieur() {
+        if (this.scene.isActive('IdentifieurScene')) return;
+        const seed = this.registry.get('seed_run') ?? 0;
+        const rngPhrase = creerRng((seed ^ 0xBADC0DE ^ this.indexSalle ^ this.time.now) >>> 0);
+        this.scene.pause();
+        this.scene.launch('IdentifieurScene', { rng: rngPhrase });
     }
 
     ouvrirCoffre() {
@@ -826,6 +841,9 @@ export class GameScene extends Phaser.Scene {
                     if (this.timerMiroir) this.timerMiroir.paused = false;
                 });
             }
+        } else if (e.type === 'encre_temoin_gain') {
+            // Stocké comme ressource (pas effet immédiat)
+            this.economy.ajouterEncre(e.valeur ?? 1);
         }
     }
 

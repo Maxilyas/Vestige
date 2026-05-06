@@ -5,6 +5,7 @@
 import { peindreEmblemeFamille } from './EmblemeFamille.js';
 import { COULEURS_INVENTAIRE } from './CadreInventaire.js';
 import { COULEURS_FAMILLE } from '../../data/items.js';
+import { IdentificationSystem } from '../../systems/IdentificationSystem.js';
 
 const couleurHex = (n) => '#' + n.toString(16).padStart(6, '0');
 
@@ -140,18 +141,20 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
         }).setOrigin(0.5);
         contenu.add(desc);
 
-        // --- Effets selon tier ---
+        // --- Effets selon tier ET révélations de l'Identifieur ---
         const yEff = 220;
         const lignes = [];
-        const effets = item.effets ?? [];
-        if (item.tier === 1) {
-            for (const e of effets) lignes.push(formatEffet(e));
-        } else if (item.tier === 2) {
-            for (const e of effets) {
+        // IdentificationSystem calcule l'état réel des effets (Tier 1 = tout
+        // visible, Tier 2 = visible:true ou révélé, Tier 3 = uniquement révélé)
+        const ident = new IdentificationSystem(scene.registry);
+        const effetsCalc = ident.effetsEffectifs(item);
+        const aucunVisible = effetsCalc.length > 0 && effetsCalc.every(e => !e.visible);
+        if (aucunVisible) {
+            lignes.push("Cet objet ne se laisse pas lire.");
+        } else {
+            for (const e of effetsCalc) {
                 lignes.push(e.visible ? formatEffet(e) : '? — effet inconnu');
             }
-        } else {
-            lignes.push("Cet objet ne se laisse pas lire.");
         }
 
         // Titre "Effets" en or
@@ -206,12 +209,13 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
         }
     }
 
+
+    afficherTexte('Sélectionne un objet pour voir ses détails.');
+
     function formatEffet(e) {
         const signe = e.delta >= 0 ? '+' : '';
         return `${signe}${e.delta} ${e.cible}`;
     }
-
-    afficherTexte('Sélectionne un objet pour voir ses détails.');
 
     return { container, afficherTexte, afficherItem, vider };
 }

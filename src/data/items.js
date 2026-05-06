@@ -251,10 +251,11 @@ export const CONSOMMABLES = {
     encre_temoin: {
         id: 'encre_temoin',
         nom: 'Encre du Témoin',
-        description: 'Liquide noir. Tu sens qu\'il sait des choses.',
+        description: 'Liquide noir. L\'Identifieur en use pour révéler les effets cachés.',
         couleur: 0x2a2a3a,
-        // Effet "identifie un Tier III en Tier II" — étape 6.5 (pour l'instant : Résonance +15)
-        effet: { type: 'resonance_gain', valeur: 15 }
+        // Stocké comme ressource ; l'Identifieur peut le consommer pour révéler
+        // un effet sans coût en Sel.
+        effet: { type: 'encre_temoin_gain', valeur: 1 }
     }
 };
 
