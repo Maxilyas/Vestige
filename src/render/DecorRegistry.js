@@ -20,6 +20,7 @@ import { peindreSolDecore } from './elements/SolDecore.js';
 import { peindreLanterne } from './elements/Lanterne.js';
 import { peindreBanderole } from './elements/Banderole.js';
 import { peindreTonneau, peindreCaisse, peindrePotFleurs, peindreEtalMarchand } from './elements/MobilierVie.js';
+import { peindreCascade } from './elements/Cascade.js';
 import { paletteDuMonde } from './PainterlyRenderer.js';
 
 const HAUTEUR_SOL = 40;
@@ -405,10 +406,14 @@ const PEINTRES = {
  *   - structures principales (depth -20)
  *   - sol décoré (depth -10) sur le sol principal
  *   - mobilier de vie (depth +10)
+ *   - **cascades signature de biome** (eau / cendres / cristaux / voile /
+ *     reflux) ajoutées de chaque côté du sol principal pour une variabilité
+ *     visuelle forte par étage.
  *
  * Options :
- *   - estCiteMarchande : si true, remplace le plan d'archétype par
- *     `planCiteMarchande` (salle d'entrée Miroir = marché majestueux).
+ *   - estCiteMarchande : remplace le plan d'archétype par planCiteMarchande
+ *   - biomeId : id du biome courant (cf. data/biomes.js) — détermine les
+ *     cascades. Si absent, défaut 'ruines_basses'.
  */
 export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, options = {}) {
     const plan = options.estCiteMarchande ? planCiteMarchande : PLANS[archetype];
@@ -417,6 +422,26 @@ export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, op
     const palette = paletteDuMonde(monde);
     const elements = plan(dims, rng);
     const objets = [];
+
+    // === Cascades signature de biome (Présent uniquement, pas en cité) ===
+    // En Miroir on évite les cascades car le contraste atelier paisible /
+    // élément naturel agressif casse la lecture du monde.
+    const biomeId = options.biomeId ?? 'ruines_basses';
+    if (monde !== 'miroir' && !options.estCiteMarchande) {
+        const ySolPrincipal = dims.hauteur - HAUTEUR_SOL;
+        const hauteurCascade = Math.min(220, dims.hauteur * 0.55);
+        // Une cascade gauche à 8 % de la largeur et une droite à 92 %
+        const xGauche = dims.largeur * 0.08;
+        const xDroite = dims.largeur * 0.92;
+        const yTopCascade = ySolPrincipal - hauteurCascade;
+        // 70 % de chance de cascade gauche, 70 % cascade droite (variable)
+        if (rng() < 0.7) {
+            objets.push(peindreCascade(scene, xGauche, yTopCascade, hauteurCascade, biomeId));
+        }
+        if (rng() < 0.7) {
+            objets.push(peindreCascade(scene, xDroite, yTopCascade, hauteurCascade, biomeId));
+        }
+    }
 
     // 1. Sol décoré (par-dessus le sol uni mais sous les plateformes)
     if (plateformes) {

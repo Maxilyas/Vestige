@@ -23,6 +23,7 @@ import { ARCHETYPES, spawnDepuisPorte, directionOpposee } from '../data/archetyp
 import { Enemy } from '../entities/Enemy.js';
 import { Boss } from '../entities/Boss.js';
 import { Projectile } from '../entities/Projectile.js';
+import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { FRAGMENTS } from '../data/fragments.js';
 import {
@@ -201,7 +202,10 @@ export class GameScene extends Phaser.Scene {
         // Couche 3 (x0.7) : silhouettes proches + structures principales (DecorRegistry)
         // La salle d'entrée en Miroir est une CITÉ MARCHANDE — on enrichit le décor.
         const estCiteMarchande = enMiroir && salle.estEntree;
-        peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes, { estCiteMarchande });
+        peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes, {
+            estCiteMarchande,
+            biomeId: salle.biomeId
+        });
 
         // Particules d'ambiance par monde (poussière Présent, étincelles Miroir)
         poserParticulesAmbiance(this, salle.dims, mondeCourant);
@@ -316,6 +320,32 @@ export class GameScene extends Phaser.Scene {
         }
         if (salle.dropSol && !this.inventaire.dropEstRamasse(mondeCourant, this.cleSalleEtage)) {
             this.creerDropSol(salle.dropSol);
+        }
+
+        // --- Obstacles (pieux, ressorts, plateformes mobiles) ---
+        // Présents dans toutes les salles (Miroir aussi — un sanctuaire peut
+        // avoir des pieux décoratifs ou ressorts). Les obstacles n'infligent
+        // pas de dégâts en Miroir si on souhaite preserver la doctrine
+        // "Miroir paisible", mais le système est neutre : c'est le layout qui
+        // décide d'en placer ou non.
+        this.obstacles = [];
+        if (salle.obstacles?.length) {
+            for (const obsData of salle.obstacles) {
+                const obs = new Obstacle(this, obsData, salle.biomeId);
+                if (!obs.sprite) continue;
+                this.obstacles.push(obs);
+                if (obs.data.type === 'pieu') {
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (obs.data.type === 'ressort') {
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (obs.data.type === 'plateforme_mobile') {
+                    // Collider one-way virtuel : checkCollision.{down,left,right} = false
+                    // côté plateforme. Le joueur peut sauter à travers par le bas.
+                    this.physics.add.collider(this.player, obs.sprite);
+                }
+            }
         }
 
         // --- Ennemis (Présent uniquement) ---
@@ -475,6 +505,9 @@ export class GameScene extends Phaser.Scene {
         // --- Update des projectiles + nettoyage ---
         for (const p of this.projectiles) p.update(this.player);
         this.projectiles = this.projectiles.filter(p => !p.detruit);
+
+        // --- Update des obstacles (plateformes mobiles oscillent) ---
+        for (const o of this.obstacles) o.update();
 
         // --- Update du visuel joueur ---
         if (this.playerVisual) {
@@ -835,6 +868,17 @@ export class GameScene extends Phaser.Scene {
         };
         this.events.on('boss:dead', onBossDead);
 
+        // Pieu touché : dégâts au joueur avec invincibilité globale
+        const onPieuHit = (obs) => {
+            const now = this.time.now;
+            if (now < this.invincibleJusqu) return;
+            this.resonance.prendreDegats(obs.def.degats);
+            this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
+            this.flashJoueur(0xff6060);
+            this.afficherMessageFlottant(`-${obs.def.degats}`, '#ff6060');
+        };
+        this.events.on('obstacle:pieu:hit', onPieuHit);
+
         this.events.once('shutdown', () => {
             this.events.off('enemy:tir', onTir);
             this.events.off('boss:tir', onTir);
@@ -842,6 +886,7 @@ export class GameScene extends Phaser.Scene {
             this.events.off('boss:smash:impact', onImpact);
             this.events.off('boss:phase', onPhase);
             this.events.off('boss:dead', onBossDead);
+            this.events.off('obstacle:pieu:hit', onPieuHit);
         });
     }
 

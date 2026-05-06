@@ -12,6 +12,7 @@ import {
     HAUTEUR_SOL_EXPORT as HAUTEUR_SOL
 } from '../data/archetypes.js';
 import { biomePourEtage } from '../data/biomes.js';
+import { choisirLayout } from './Layouts.js';
 
 // --- PRNG déterministe (Mulberry32) ---
 export function creerRng(seed) {
@@ -91,10 +92,14 @@ export function genererSalle({
     const niveau = niveauDangerEtage(etageNumero);
     const dims = archetype.dimensions;
 
-    // 1. Plateformes (script propre à l'archétype). On passe les directions de
-    //    portes actives en options pour que l'archétype puisse ajouter des
-    //    plateformes conditionnelles (ex : voûte d'accès à la porte N).
-    const plateformes = archetype.genererPlateformes(rng, dims, { portesActives });
+    // 1. Layout — on tire un layout parmi les variantes de l'archétype
+    //    (cf. systems/Layouts.js — 3 par archétype). Le layout retourne
+    //    `{ plateformes, obstacles }`. La sélection est seedée pour
+    //    reproductibilité.
+    const layoutFn = choisirLayout(archetype.id, rng) ?? archetype.genererPlateformes;
+    const layoutResult = layoutFn(rng, dims, { portesActives });
+    const plateformes = Array.isArray(layoutResult) ? layoutResult : layoutResult.plateformes;
+    const obstacles = Array.isArray(layoutResult) ? [] : (layoutResult.obstacles ?? []);
 
     // 2. Spawn par défaut (utilisé si on entre depuis nulle part — boss room
     //    ou première salle du run)
@@ -207,6 +212,7 @@ export function genererSalle({
         etageNumero,
         dims,
         plateformes,
+        obstacles,              // [{ type, x, y, ... }] cf. systems/Layouts.js
         portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur }
         vortex,
         spawnDefault,
@@ -215,6 +221,7 @@ export function genererSalle({
         ennemis,
         niveauDanger: niveau,
         estBoss,
-        estEntree
+        estEntree,
+        biomeId: biome?.id ?? 'ruines_basses'
     };
 }
