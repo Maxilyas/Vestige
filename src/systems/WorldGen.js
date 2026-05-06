@@ -1,19 +1,15 @@
-// Génération procédurale de salles — pilote les archétypes architecturaux.
+// Génération procédurale d'une salle individuelle.
 //
-// La structure de chaque salle (plateformes, dimensions) est déléguée à un
-// archétype (cf. data/archetypes.js). WorldGen ajoute par-dessus :
-//   - position seedée du vortex (sur une plateforme accessible)
-//   - position seedée du coffre (60 % de proba)
-//   - position seedée du drop sol (30 % si pas de coffre)
-//   - liste seedée des ennemis (selon le niveau de danger, Présent uniquement)
+// Une salle = layout d'un archétype + zones interactives (portes, vortex,
+// coffre, drop sol, ennemis). La connectivité entre salles est gérée par
+// EtageGen (Phase A) — WorldGen ne connaît qu'une salle isolée.
 //
-// Tout est seedé : même seed + même indexSalle = même salle exacte. Présent et
-// Miroir partagent la géométrie (la même seed est utilisée pour la structure).
+// Tout est seedé : (seed étage, salleId, archetype) déterminent intégralement
+// la salle. Présent et Miroir partagent la même géométrie (même seed).
 
-import { PLAYER, WORLD } from '../config.js';
 import {
-    ARCHETYPES, choisirArchetype, calculerSortie,
-    VORTEX_DIMS, HAUTEUR_SOL_EXPORT as HAUTEUR_SOL
+    calculerPorte, VORTEX_DIMS,
+    HAUTEUR_SOL_EXPORT as HAUTEUR_SOL
 } from '../data/archetypes.js';
 
 // --- PRNG déterministe (Mulberry32) ---
@@ -31,11 +27,21 @@ export function creerRng(seed) {
 function entre(rng, min, max) { return min + rng() * (max - min); }
 function entreEntier(rng, min, max) { return Math.floor(entre(rng, min, max + 1)); }
 
-// --- Patterns de difficulté (Présent uniquement) ---
-const COURBE_DANGER = [0, 0, 1, 1, 2, 3];
-export function niveauDanger(indexSalle) {
-    return COURBE_DANGER[indexSalle % COURBE_DANGER.length];
+// --- Patterns de difficulté ---
+// Pour Phase A, on garde la courbe simple par numéro d'étage (1..10).
+// Plus on monte, plus c'est dangereux.
+export function niveauDangerEtage(etageNumero) {
+    if (etageNumero <= 2) return 0;
+    if (etageNumero <= 4) return 1;
+    if (etageNumero <= 6) return 2;
+    return 3;
 }
+
+// Conservé pour compat — utilisé par UIScene pour l'affichage textuel
+export function niveauDanger(_indexSalle) {
+    return 0;
+}
+
 const ENNEMIS_PAR_NIVEAU = {
     0: { min: 0, max: 0 },
     1: { min: 0, max: 1 },
@@ -48,61 +54,83 @@ const PROBA_COFFRE = 0.6;
 const PROBA_DROP_SOL = 0.3;
 
 /**
- * Génère la description d'une salle.
- * @returns {{
- *   index: number,
- *   archetype: string,
- *   dims: {largeur:number, hauteur:number},
- *   plateformes: Array,
- *   sortie: object,
- *   vortex: object,
- *   spawnJoueur: object,
- *   coffre: object|null,
- *   dropSol: object|null,
- *   ennemis: Array,
- *   niveauDanger: number
- * }}
+ * Hash stable d'un id de salle (string) pour le mélanger dans un seed.
  */
-export function genererSalle(seed, indexSalle) {
-    const rng = creerRng((seed ^ (indexSalle * 0x9E3779B9)) >>> 0);
-    const niveau = niveauDanger(indexSalle);
-    const archetype = choisirArchetype(niveau, rng);
+function hashStr(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
+/**
+ * Génère une salle complète.
+ *
+ * @param {object} options
+ *   - seedEtage : seed de l'étage
+ *   - etageNumero : 1..10
+ *   - salleId : string unique dans l'étage
+ *   - archetype : objet ARCHETYPES.*
+ *   - portesActives : array de directions ('N','S','E','O') — portes à instancier
+ *   - estBoss : bool — la salle est la salle de boss
+ *   - estEntree : bool — la salle est l'entrée de l'étage
+ *
+ * @returns {object} salle
+ */
+export function genererSalle({
+    seedEtage, etageNumero, salleId,
+    archetype, portesActives = ['E'],
+    estBoss = false, estEntree = false
+}) {
+    const seed = (seedEtage ^ hashStr(salleId)) >>> 0;
+    const rng = creerRng(seed);
+    const niveau = niveauDangerEtage(etageNumero);
     const dims = archetype.dimensions;
 
-    // 1. Plateformes (script propre à l'archétype)
-    const plateformes = archetype.genererPlateformes(rng, dims);
+    // 1. Plateformes (script propre à l'archétype). On passe les directions de
+    //    portes actives en options pour que l'archétype puisse ajouter des
+    //    plateformes conditionnelles (ex : voûte d'accès à la porte N).
+    const plateformes = archetype.genererPlateformes(rng, dims, { portesActives });
 
-    // 2. Spawn joueur
-    const spawnJoueur = archetype.spawnJoueur(dims);
+    // 2. Spawn par défaut (utilisé si on entre depuis nulle part — boss room
+    //    ou première salle du run)
+    const spawnDefault = archetype.spawnJoueur(dims);
 
-    // 3. Sortie
-    const sortie = calculerSortie(archetype, dims);
+    // 3. Portes (une par direction active)
+    const portes = {};
+    for (const dir of portesActives) {
+        const p = calculerPorte(archetype, dims, dir);
+        if (p) portes[dir] = p;
+    }
 
-    // 4. Vortex — sur une plateforme flottante différente du spawn et de la sortie,
+    // 4. Vortex Miroir : sur une plateforme flottante différente du spawn et des portes,
     //    avec distance min. Fallback : centre.
-    // Filtre des plateformes "posables" : pas le sol principal (la plus large),
-    // pas un pilier vertical (hauteur > largeur).
     const platfMaxLargeur = plateformes.reduce((m, p) => Math.max(m, p.largeur), 0);
     const plateformesFlottantes = plateformes.filter(p =>
-        p.largeur < platfMaxLargeur * 0.95 &&  // exclut le sol principal
-        p.largeur > p.hauteur                  // exclut piliers verticaux
+        p.largeur < platfMaxLargeur * 0.95 &&
+        p.largeur > p.hauteur
     );
     const candidatsVortex = plateformesFlottantes.map(p => ({
         x: p.x,
         y: p.y - p.hauteur / 2 - VORTEX_DIMS.hauteur / 2
     }));
     const DIST_MIN = 200;
-    const valides = candidatsVortex.filter(c =>
-        Math.abs(c.x - spawnJoueur.x) >= DIST_MIN &&
-        Math.abs(c.x - sortie.x) >= DIST_MIN
+    const positionsRefus = [
+        { x: spawnDefault.x, marge: DIST_MIN },
+        ...Object.values(portes).map(p => ({ x: p.x, marge: DIST_MIN }))
+    ];
+    const tropProche = (cx, cy) => positionsRefus.some(r =>
+        Math.abs(cx - r.x) < r.marge
     );
+    const valides = candidatsVortex.filter(c => !tropProche(c.x, c.y));
     let posVortex;
     if (valides.length > 0) {
         posVortex = valides[entreEntier(rng, 0, valides.length - 1)];
     } else if (candidatsVortex.length > 0) {
-        // Plateforme la plus proche du centre
-        posVortex = candidatsVortex.reduce((meilleur, c) =>
-            Math.abs(c.x - dims.largeur / 2) < Math.abs(meilleur.x - dims.largeur / 2) ? c : meilleur
+        posVortex = candidatsVortex.reduce((m, c) =>
+            Math.abs(c.x - dims.largeur / 2) < Math.abs(m.x - dims.largeur / 2) ? c : m
         );
     } else {
         posVortex = { x: dims.largeur / 2, y: dims.hauteur - HAUTEUR_SOL - VORTEX_DIMS.hauteur / 2 };
@@ -112,15 +140,14 @@ export function genererSalle(seed, indexSalle) {
         largeur: VORTEX_DIMS.largeur, hauteur: VORTEX_DIMS.hauteur
     };
 
-    // 5. Coffre (60 %)
+    // 5. Coffre — dans une boss room et l'entrée, on n'en met pas
     let coffre = null;
-    if (rng() < PROBA_COFFRE) {
+    if (!estBoss && !estEntree && rng() < PROBA_COFFRE) {
         const candidatsCoffre = plateformesFlottantes
             .map(p => ({ x: p.x, y: p.y - p.hauteur / 2 - 16 }))
             .filter(c =>
                 Math.abs(c.x - vortex.x) > 60 &&
-                Math.abs(c.x - spawnJoueur.x) > 100 &&
-                Math.abs(c.x - sortie.x) > 100
+                !tropProche(c.x, c.y)
             );
         if (candidatsCoffre.length > 0) {
             const choisi = candidatsCoffre[entreEntier(rng, 0, candidatsCoffre.length - 1)];
@@ -134,9 +161,9 @@ export function genererSalle(seed, indexSalle) {
         }
     }
 
-    // 6. Drop orphelin (30 % si pas de coffre)
+    // 6. Drop orphelin (30 % si pas de coffre, et pas dans boss/entrée)
     let dropSol = null;
-    if (!coffre && rng() < PROBA_DROP_SOL) {
+    if (!coffre && !estBoss && !estEntree && rng() < PROBA_DROP_SOL) {
         dropSol = {
             x: entre(rng, 200, dims.largeur - 200),
             y: dims.hauteur - HAUTEUR_SOL - 10,
@@ -144,17 +171,13 @@ export function genererSalle(seed, indexSalle) {
         };
     }
 
-    // 7. Ennemis (selon niveau, Présent uniquement à l'instanciation côté GameScene)
+    // 7. Ennemis (selon niveau de danger d'étage, Présent uniquement à l'instanciation)
+    //    Pas d'ennemis dans la salle d'entrée (pour laisser le joueur s'orienter).
+    //    Boss : géré séparément (Phase C — pour Phase A on laisse vide aussi).
     const fourchette = ENNEMIS_PAR_NIVEAU[niveau];
-    const nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
+    let nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
+    if (estEntree || estBoss) nbEnnemis = 0;
     const ennemis = [];
-    const positionsRefus = [
-        { x: spawnJoueur.x, marge: 150 },
-        { x: sortie.x, marge: 100 },
-        { x: vortex.x, marge: 100 }
-    ];
-    if (coffre) positionsRefus.push({ x: coffre.x, marge: 80 });
-
     for (let i = 0; i < nbEnnemis; i++) {
         const surSol = plateformesFlottantes.length === 0 || rng() < 0.5;
         let x, y;
@@ -166,21 +189,23 @@ export function genererSalle(seed, indexSalle) {
             x = p.x;
             y = p.y - p.hauteur / 2 - 20;
         }
-        // Tentative de respect des zones de refus (best effort, on ne ré-essaye pas)
         ennemis.push({ x, y, idx: i });
     }
 
     return {
-        index: indexSalle,
+        id: salleId,
         archetype: archetype.id,
+        etageNumero,
         dims,
         plateformes,
-        sortie,
+        portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur }
         vortex,
-        spawnJoueur,
+        spawnDefault,
         coffre,
         dropSol,
         ennemis,
-        niveauDanger: niveau
+        niveauDanger: niveau,
+        estBoss,
+        estEntree
     };
 }

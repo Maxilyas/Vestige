@@ -24,6 +24,7 @@ export class InputSystem {
             saut: Phaser.Input.Keyboard.KeyCodes.SPACE,
             interagir: Phaser.Input.Keyboard.KeyCodes.E,
             inventaire: Phaser.Input.Keyboard.KeyCodes.I,
+            carte: Phaser.Input.Keyboard.KeyCodes.M,
             // Combat (étape 7)
             attaquer: Phaser.Input.Keyboard.KeyCodes.X,
             parry: Phaser.Input.Keyboard.KeyCodes.C,
@@ -43,6 +44,7 @@ export class InputSystem {
             sauter: false,
             interagir: false,
             ouvrirInventaire: false,
+            ouvrirCarte: false,
             attaquer: false,
             parry: false,
             sort: false,
@@ -68,6 +70,7 @@ export class InputSystem {
 
         i.interagir = Phaser.Input.Keyboard.JustDown(this.touches.interagir);
         i.ouvrirInventaire = Phaser.Input.Keyboard.JustDown(this.touches.inventaire);
+        i.ouvrirCarte = Phaser.Input.Keyboard.JustDown(this.touches.carte);
 
         i.attaquer = Phaser.Input.Keyboard.JustDown(this.touches.attaquer);
         i.parry = Phaser.Input.Keyboard.JustDown(this.touches.parry);

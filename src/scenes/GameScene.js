@@ -6,7 +6,10 @@
 //   - Miroir   = atelier paisible sous timer (aucun ennemi pour MVP)
 
 import { GAME_WIDTH, GAME_HEIGHT, PLAYER, WORLD } from '../config.js';
-import { genererSalle, creerRng, niveauDanger } from '../systems/WorldGen.js';
+import { creerRng, niveauDangerEtage } from '../systems/WorldGen.js';
+import {
+    genererEtage, etageVersRegistry, etageDepuisRegistry, marquerVisite
+} from '../systems/EtageGen.js';
 import { ResonanceSystem } from '../systems/ResonanceSystem.js';
 import { MondeSystem } from '../systems/MondeSystem.js';
 import { InputSystem } from '../systems/InputSystem.js';
@@ -15,7 +18,7 @@ import { EnemySystem } from '../systems/EnemySystem.js';
 import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
 import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
 import { ENEMIES, tirerTypeEnnemi } from '../data/enemies.js';
-import { ARCHETYPES } from '../data/archetypes.js';
+import { ARCHETYPES, spawnDepuisPorte, directionOpposee } from '../data/archetypes.js';
 import { Enemy } from '../entities/Enemy.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { FRAGMENTS } from '../data/fragments.js';
@@ -45,6 +48,12 @@ const ARCHETYPES_LABELS = Object.fromEntries(
 // pour toute la durée du run (toutes les salles, transitions, basculements).
 // Au prochain rechargement de la page, on tire une nouvelle seed → nouveau run.
 const CLE_SEED_RUN = 'seed_run';
+
+// Modèle d'étage (Phase A) — persistance du graphe et de la salle courante
+const CLE_ETAGE_NUMERO = 'etage_courant';
+const CLE_ETAGE_DATA = 'etage_data';
+const CLE_SALLE_COURANTE = 'salle_courante_id';
+const CLE_PORTE_ARRIVEE = 'porte_arrivee'; // direction par laquelle on arrive
 
 // Couleurs spécifiques aux zones interactives (sortie/vortex), partagées
 const COULEUR_SORTIE = 0xc8a85a; // doré
@@ -78,12 +87,20 @@ const DUREE_INVINCIBILITE_MS = 500;
 export class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
-        this.indexSalle = 0;
     }
 
     init(data) {
-        this.indexSalle = data?.indexSalle ?? 0;
         this.transitionEnCours = false;
+        // L'étage et la salle courante sont lus depuis le registry dans create().
+        // Les data passées à scene.restart peuvent override (transition de salle).
+        if (data?.salleId) {
+            this.registry.set(CLE_SALLE_COURANTE, data.salleId);
+        }
+        if (data?.porteArrivee) {
+            this.registry.set(CLE_PORTE_ARRIVEE, data.porteArrivee);
+        } else if (data?.porteArrivee === null) {
+            this.registry.remove(CLE_PORTE_ARRIVEE);
+        }
     }
 
     create() {
@@ -101,9 +118,43 @@ export class GameScene extends Phaser.Scene {
         }
         const seedRun = this.registry.get(CLE_SEED_RUN);
 
+        // --- Étage courant (charge depuis registry, ou génère le premier) ---
+        let etageNumero = this.registry.get(CLE_ETAGE_NUMERO);
+        if (etageNumero === undefined) {
+            etageNumero = 1;
+            this.registry.set(CLE_ETAGE_NUMERO, 1);
+        }
+        let etageData = this.registry.get(CLE_ETAGE_DATA);
+        let etage = etageDepuisRegistry(etageData);
+        if (!etage || etage.numero !== etageNumero) {
+            etage = genererEtage(etageNumero, seedRun);
+            this.registry.set(CLE_ETAGE_DATA, etageVersRegistry(etage));
+            this.registry.remove(CLE_SALLE_COURANTE);
+        }
+
+        // Salle courante (default = entrée de l'étage)
+        let salleId = this.registry.get(CLE_SALLE_COURANTE);
+        if (!salleId || !etage.salles.has(salleId)) {
+            salleId = etage.salleEntreeId;
+            this.registry.set(CLE_SALLE_COURANTE, salleId);
+        }
+        const salle = etage.salles.get(salleId);
+
+        // Marque la salle comme visitée + persiste
+        marquerVisite(etage, salleId);
+        this.registry.set(CLE_ETAGE_DATA, etageVersRegistry(etage));
+
+        this.etage = etage;
+        this.etageNumero = etageNumero;
+        this.salleId = salleId;
+        this.salle = salle;
+        // Identifiant composé pour les clés persistantes (coffres, drops, ennemis)
+        this.cleSalleEtage = `e${etageNumero}:${salleId}`;
+
         const mondeCourant = this.monde.getMonde();
         this.rngLoot = creerRng(
-            (seedRun ^ (this.indexSalle * 0x85EBCA6B) ^ (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
+            (seedRun ^ (etageNumero * 0x9E3779B9) ^ this._hashStr(salleId) ^
+             (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
         );
 
         this.statsEffectives = calculerStats(STATS_BASE, this.inventaire.getEquipement());
@@ -120,15 +171,13 @@ export class GameScene extends Phaser.Scene {
 
         // --- Palette + salle ---
         const enMiroir = mondeCourant === 'miroir';
-        const niveau = niveauDanger(this.indexSalle);
+        const niveau = niveauDangerEtage(etageNumero);
         const palette = paletteDuMonde(mondeCourant);
         this.palette = palette;
         this.mondeCourant = mondeCourant;
         // Le ciel a son propre dégradé qui couvre le fond — on garde quand même
         // une couleur de secours sur la caméra au cas où une zone reste découverte.
         this.cameras.main.setBackgroundColor(palette.fond);
-
-        const salle = genererSalle(seedRun, this.indexSalle);
 
         // --- Bounds caméra & monde physique selon les dimensions de l'archétype ---
         this.physics.world.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
@@ -141,7 +190,7 @@ export class GameScene extends Phaser.Scene {
         poserEtoilesOuPoussiere(this, salle.dims, mondeCourant);
 
         // Le rng du décor est seedé pour rester reproductible
-        const rngDecor = creerRng((seedRun ^ 0x517CC1B7 ^ this.indexSalle) >>> 0);
+        const rngDecor = creerRng((seedRun ^ 0x517CC1B7 ^ this._hashStr(salleId)) >>> 0);
 
         // Couche 2 (x0.3) : silhouettes très lointaines (rangée de bâtiments à l'horizon)
         poserSilhouettesLointaines(this, salle.dims, mondeCourant, rngDecor);
@@ -180,11 +229,12 @@ export class GameScene extends Phaser.Scene {
         //   < 0.50  → Identifieur (22 %)
         //   < 0.72  → Marchand / Glaneuse (22 %)
         //   sinon   → personne (28 %)
-        const rngPNJ = creerRng((seedRun ^ 0xA5A5F00D ^ this.indexSalle) >>> 0);
+        // Pas de PNJ dans la salle d'entrée ou de boss (laisser respirer).
+        const rngPNJ = creerRng((seedRun ^ 0xA5A5F00D ^ this._hashStr(salleId)) >>> 0);
         this.fondeurEntite = null;
         this.identifieurEntite = null;
         this.marchandEntite = null;
-        if (enMiroir) {
+        if (enMiroir && !salle.estEntree && !salle.estBoss) {
             const r = rngPNJ();
             const xPNJ = salle.dims.largeur * (0.3 + rngPNJ() * 0.4);
             const yPNJ = salle.dims.hauteur - HAUTEUR_SOL;
@@ -199,12 +249,18 @@ export class GameScene extends Phaser.Scene {
 
         // --- Joueur ---
         const positionPendante = this.registry.get(CLE_POSITION_PENDANTE);
+        const porteArrivee = this.registry.get(CLE_PORTE_ARRIVEE);
         let spawn;
         if (positionPendante) {
+            // Cas basculement Présent ↔ Miroir : on conserve la position exacte
             spawn = positionPendante;
             this.registry.remove(CLE_POSITION_PENDANTE);
+        } else if (porteArrivee && salle.portes[porteArrivee]) {
+            // Arrivée par une porte (transition entre salles voisines)
+            spawn = spawnDepuisPorte(salle.portes[porteArrivee]);
+            this.registry.remove(CLE_PORTE_ARRIVEE);
         } else {
-            spawn = salle.spawnJoueur;
+            spawn = salle.spawnDefault;
         }
 
         // Rectangle physique invisible (porte la collision arcade)
@@ -244,16 +300,21 @@ export class GameScene extends Phaser.Scene {
         this.invincibleJusqu = 0;
 
         // --- Zones interactives ---
-        this.creerSortieSalle(salle.sortie, COULEUR_SORTIE);
+        // Portes multiples (une par direction active dans la salle)
+        this.portes = {};
+        for (const dir of Object.keys(salle.portes)) {
+            const porte = salle.portes[dir];
+            this.portes[dir] = this._creerPorte(porte, salle, dir);
+        }
         if (enMiroir) {
             this.creerVortex(salle.vortex, COULEUR_VORTEX);
         }
 
         // --- Coffre + drop sol ---
-        if (salle.coffre && !this.inventaire.coffreEstOuvert(mondeCourant, this.indexSalle)) {
+        if (salle.coffre && !this.inventaire.coffreEstOuvert(mondeCourant, this.cleSalleEtage)) {
             this.creerCoffre(salle.coffre);
         }
-        if (salle.dropSol && !this.inventaire.dropEstRamasse(mondeCourant, this.indexSalle)) {
+        if (salle.dropSol && !this.inventaire.dropEstRamasse(mondeCourant, this.cleSalleEtage)) {
             this.creerDropSol(salle.dropSol);
         }
 
@@ -261,7 +322,7 @@ export class GameScene extends Phaser.Scene {
         this.enemies = [];
         if (!enMiroir && salle.ennemis?.length) {
             for (const e of salle.ennemis) {
-                if (this.enemySystem.estMort('normal', this.indexSalle, e.idx)) continue;
+                if (this.enemySystem.estMort('normal', this.cleSalleEtage, e.idx)) continue;
                 const def = tirerTypeEnnemi('normal', this.rngLoot);
                 if (!def) continue;
                 const ennemi = new Enemy(this, def, e.x, e.y, e.idx);
@@ -281,14 +342,16 @@ export class GameScene extends Phaser.Scene {
         const labelMonde = enMiroir ? ' (Miroir)' : '';
         const labelDanger = !enMiroir ? ['Refuge', 'Calme', 'Tension', 'CLIMAX'][niveau] : '';
         const archetypeLabel = ARCHETYPES_LABELS[salle.archetype] ?? salle.archetype;
+        const labelBoss = salle.estBoss ? '  ·  ☠ SALLE DE BOSS' : '';
+        const labelEntree = salle.estEntree ? '  ·  ENTRÉE' : '';
 
         this.add.text(10, 10,
-            `Vestige — Salle ${salle.index + 1}${labelMonde}  ·  ${archetypeLabel}`,
+            `Vestige — Étage ${etageNumero}${labelMonde}  ·  ${archetypeLabel}${labelBoss}${labelEntree}`,
             { fontFamily: 'monospace', fontSize: '14px', color: enMiroir ? '#f0c890' : '#e8e4d8' }
         ).setScrollFactor(0).setDepth(200);
 
         this.add.text(10, 30,
-            'QD/← →: bouger  ↑/Espace: sauter  S/↓: descendre (corniches)  X: attaque  C: parry  E: interagir  I: inventaire',
+            'QD/← →: bouger  ↑/Espace: sauter  S/↓: descendre  X: attaque  C: parry  E: interagir  I: inventaire  M: carte',
             { fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a' }
         ).setScrollFactor(0).setDepth(200);
 
@@ -316,7 +379,7 @@ export class GameScene extends Phaser.Scene {
 
         // --- Mort d'ennemi : drop éventuel + Sel + Fragment ---
         const handlerEnemyDead = (ennemi) => {
-            this.enemySystem.marquerMort('normal', this.indexSalle, ennemi.indexEnnemi);
+            this.enemySystem.marquerMort('normal', this.cleSalleEtage, ennemi.indexEnnemi);
             this.peutEtreDrop(ennemi);
             this._dropEconomique(ennemi);
         };
@@ -361,11 +424,15 @@ export class GameScene extends Phaser.Scene {
         if (i.parry) this.tenterParry();
         // i.sort : hook réservé, pas d'effet en étape 7
 
-        // --- Interactions / inventaire ---
+        // --- Interactions / inventaire / carte ---
         if (i.interagir) this.essayerInteragir();
         if (i.ouvrirInventaire && !this.scene.isActive('InventaireScene')) {
             this.scene.pause();
             this.scene.launch('InventaireScene');
+        }
+        if (i.ouvrirCarte && !this.scene.isActive('MapScene')) {
+            this.scene.pause();
+            this.scene.launch('MapScene');
         }
 
         // --- Debug Résonance ---
@@ -760,7 +827,8 @@ export class GameScene extends Phaser.Scene {
     ouvrirFondeur() {
         if (this.scene.isActive('FondeurScene')) return;
         const seed = this.registry.get('seed_run') ?? 0;
-        const rngForge = creerRng((seed ^ 0xC0FFEE ^ this.indexSalle ^ this.time.now) >>> 0);
+        const sh = this._hashStr(this.salleId);
+        const rngForge = creerRng((seed ^ 0xC0FFEE ^ sh ^ this.time.now) >>> 0);
         this.scene.pause();
         this.scene.launch('FondeurScene', { rng: rngForge });
     }
@@ -768,7 +836,8 @@ export class GameScene extends Phaser.Scene {
     ouvrirIdentifieur() {
         if (this.scene.isActive('IdentifieurScene')) return;
         const seed = this.registry.get('seed_run') ?? 0;
-        const rngPhrase = creerRng((seed ^ 0xBADC0DE ^ this.indexSalle ^ this.time.now) >>> 0);
+        const sh = this._hashStr(this.salleId);
+        const rngPhrase = creerRng((seed ^ 0xBADC0DE ^ sh ^ this.time.now) >>> 0);
         this.scene.pause();
         this.scene.launch('IdentifieurScene', { rng: rngPhrase });
     }
@@ -776,18 +845,19 @@ export class GameScene extends Phaser.Scene {
     ouvrirMarchand() {
         if (this.scene.isActive('MarchandScene')) return;
         const seed = this.registry.get('seed_run') ?? 0;
-        // Vitrine seedée sur (run + salle) — stable tant qu'on est dans cette salle.
-        // L'identifiant de la vitrine sert à la persister entre deux ouvertures.
-        const cleVitrine = (seed ^ 0x9E3779B1 ^ this.indexSalle) >>> 0;
+        const sh = this._hashStr(this.salleId);
+        // Vitrine seedée sur (run + étage + salleId) — stable tant qu'on est dans cette salle.
+        const cleVitrine = (seed ^ 0x9E3779B1 ^ (this.etageNumero * 1009) ^ sh) >>> 0;
         this.registry.set('marchand_room_id', cleVitrine);
         const rngVitrine = creerRng(cleVitrine);
-        const rngPhrase = creerRng((seed ^ 0x517CC1B7 ^ this.indexSalle ^ this.time.now) >>> 0);
+        const rngPhrase = creerRng((seed ^ 0x517CC1B7 ^ sh ^ this.time.now) >>> 0);
         this.scene.pause();
         this.scene.launch('MarchandScene', { rngVitrine, rngPhrase });
     }
 
     ouvrirCoffre() {
         const monde = this.monde.getMonde();
+        const cleSalle = this.cleSalleEtage;
         // Doctrine 9a : les coffres dropent en très large majorité des Fragments.
         //   Présent : 85 % Fragment / 15 % item équipable
         //   Miroir  : 95 % Fragment / 5 % item (les items déjà forgés y sont rarissimes —
@@ -796,7 +866,7 @@ export class GameScene extends Phaser.Scene {
         const probaFragment = monde === 'miroir' ? 0.95 : 0.85;
         const donneFragment = this.rngLoot() < probaFragment;
 
-        this.inventaire.marquerCoffreOuvert(monde, this.indexSalle);
+        this.inventaire.marquerCoffreOuvert(monde, cleSalle);
         const visuel = this.coffreVisuel;
         const cible = { x: this.player.x, y: this.player.y };
 
@@ -842,7 +912,7 @@ export class GameScene extends Phaser.Scene {
         if (!consommable) return;
         const monde = this.monde.getMonde();
         this.appliquerConsommable(consommable);
-        this.inventaire.marquerDropRamasse(monde, this.indexSalle);
+        this.inventaire.marquerDropRamasse(monde, this.cleSalleEtage);
         this.afficherMessageFlottant(`${consommable.nom} — ${consommable.description}`, '#a8c8e8');
         jouerRamassageConsommable(this, this.dropSol, { x: this.player.x, y: this.player.y });
         this.dropSol = null;
@@ -869,14 +939,62 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
     // ZONES & TRANSITIONS (cf. étapes 3-5)
     // ============================================================
-    creerSortieSalle(s, _couleur) {
-        // Rectangle physique invisible pour l'overlap
-        this.sortie = this.add.rectangle(s.x, s.y, s.largeur, s.hauteur, 0xffffff, 0);
-        this.sortie.setAlpha(0);
-        this.physics.add.existing(this.sortie, true);
-        this.physics.add.overlap(this.player, this.sortie, () => this.salleSuivante());
+    /**
+     * Crée une porte dans la salle. La direction (N/S/E/O) détermine
+     * la salle voisine. Pour la salle BOSS, la porte E (sans voisin)
+     * fait monter d'un étage.
+     */
+    _creerPorte(porte, salle, direction) {
+        const rect = this.add.rectangle(porte.x, porte.y, porte.largeur, porte.hauteur, 0xffffff, 0);
+        rect.setAlpha(0);
+        this.physics.add.existing(rect, true);
+        this.physics.add.overlap(this.player, rect, () => this._traverserPorte(salle, direction));
         // Visuel : arche de pierre avec intérieur lumineux doré
-        creerVisuelPorteSortie(this, s.x, s.y, s.largeur, s.hauteur, this.mondeCourant);
+        creerVisuelPorteSortie(this, porte.x, porte.y, porte.largeur, porte.hauteur, this.mondeCourant);
+        return rect;
+    }
+
+    /**
+     * Traverse une porte → soit on charge la salle voisine, soit on monte
+     * d'étage (porte E de la salle BOSS).
+     */
+    _traverserPorte(salle, direction) {
+        if (this.transitionEnCours) return;
+        const voisinId = salle.voisins?.[direction];
+
+        // Cas spécial : porte E de la salle BOSS sans voisin = transition d'étage
+        if (salle.estBoss && direction === 'E' && !voisinId) {
+            this.monterEtage();
+            return;
+        }
+        if (!voisinId) return; // sécurité : pas de voisin, pas de transition
+
+        this.transitionEnCours = true;
+        const porteArrivee = directionOpposee(direction);
+        this.cameras.main.fadeOut(200, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.restart({ salleId: voisinId, porteArrivee });
+        });
+    }
+
+    /**
+     * Passage à l'étage suivant (après la salle BOSS).
+     */
+    monterEtage() {
+        if (this.transitionEnCours) return;
+        this.transitionEnCours = true;
+        const prochain = (this.etageNumero ?? 1) + 1;
+        // Phase A : on boucle / on plafonne à 10
+        const numero = Math.min(10, prochain);
+        this.registry.set(CLE_ETAGE_NUMERO, numero);
+        this.registry.remove(CLE_ETAGE_DATA);     // force la régen
+        this.registry.remove(CLE_SALLE_COURANTE); // entrée par défaut
+        this.registry.remove(CLE_PORTE_ARRIVEE);
+        this.cameras.main.fadeOut(400, 30, 30, 60);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.afficherMessageFlottant?.(`Étage ${numero}`, '#ffd070');
+            this.scene.restart({});
+        });
     }
 
     creerVortex(v, _couleur) {
@@ -889,15 +1007,6 @@ export class GameScene extends Phaser.Scene {
         creerVisuelVortex(this, v.x, v.y, v.largeur, v.hauteur);
     }
 
-    salleSuivante() {
-        if (this.transitionEnCours) return;
-        this.transitionEnCours = true;
-        this.cameras.main.fadeOut(200, 0, 0, 0);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-            this.scene.restart({ indexSalle: this.indexSalle + 1 });
-        });
-    }
-
     basculerVersMiroir() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
@@ -905,7 +1014,7 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.fadeOut(300, 80, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.monde.basculerVersMiroir();
-            this.scene.restart({ indexSalle: this.indexSalle });
+            this.scene.restart({});
         });
     }
 
@@ -919,7 +1028,7 @@ export class GameScene extends Phaser.Scene {
             this.monde.revenirAuNormal();
             const delta = bonus - 20;
             if (delta !== 0) this.resonance.regagner(delta);
-            this.scene.restart({ indexSalle: this.indexSalle });
+            this.scene.restart({});
         });
     }
 
@@ -1033,5 +1142,15 @@ export class GameScene extends Phaser.Scene {
 
     coulHex(n) {
         return '#' + n.toString(16).padStart(6, '0');
+    }
+
+    /** Hash 32-bit stable d'une string (FNV-1a). Utilisé pour seed les RNG. */
+    _hashStr(s) {
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
     }
 }
