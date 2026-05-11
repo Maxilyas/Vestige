@@ -1,18 +1,15 @@
 // Génération procédurale d'une salle individuelle.
 //
-// Une salle = layout d'un archétype + zones interactives (portes, vortex,
-// coffre, drop sol, ennemis). La connectivité entre salles est gérée par
-// EtageGen (Phase A) — WorldGen ne connaît qu'une salle isolée.
+// Une salle = topographie (structure physique) + thème archétype +
+// zones interactives (portes, vortex, coffre, drop sol, ennemis).
 //
-// Tout est seedé : (seed étage, salleId, archetype) déterminent intégralement
-// la salle. Présent et Miroir partagent la même géométrie (même seed).
+// Phase 2a (2026-05-12) — Refactor : la topographie owns dims + plateformes
+// + obstacles + portes positions + spawnDefault. L'archétype owns thème.
+// WorldGen orchestre : appelle topographie.generer() puis empile les zones
+// interactives par-dessus.
 
-import {
-    calculerPorte, VORTEX_DIMS,
-    HAUTEUR_SOL_EXPORT as HAUTEUR_SOL
-} from '../data/archetypes.js';
+import { VORTEX_DIMS, HAUTEUR_SOL_EXPORT as HAUTEUR_SOL } from '../data/archetypes.js';
 import { biomePourEtage } from '../data/biomes.js';
-import { choisirLayout } from './Layouts.js';
 
 // --- PRNG déterministe (Mulberry32) ---
 export function creerRng(seed) {
@@ -30,8 +27,6 @@ function entre(rng, min, max) { return min + rng() * (max - min); }
 function entreEntier(rng, min, max) { return Math.floor(entre(rng, min, max + 1)); }
 
 // --- Patterns de difficulté ---
-// Pour Phase A, on garde la courbe simple par numéro d'étage (1..10).
-// Plus on monte, plus c'est dangereux.
 export function niveauDangerEtage(etageNumero) {
     if (etageNumero <= 2) return 0;
     if (etageNumero <= 4) return 1;
@@ -39,12 +34,12 @@ export function niveauDangerEtage(etageNumero) {
     return 3;
 }
 
-// Conservé pour compat — utilisé par UIScene pour l'affichage textuel
+// Conservé pour compat — utilisé pour l'affichage textuel
 export function niveauDanger(_indexSalle) {
     return 0;
 }
 
-// Densité de fallback si le biome ne fournit pas la sienne (legacy)
+// Densité de fallback si le biome ne fournit pas la sienne
 const ENNEMIS_PAR_NIVEAU = {
     0: { min: 2, max: 4 },
     1: { min: 3, max: 5 },
@@ -75,45 +70,36 @@ function hashStr(s) {
  *   - seedEtage : seed de l'étage
  *   - etageNumero : 1..10
  *   - salleId : string unique dans l'étage
- *   - archetype : objet ARCHETYPES.*
+ *   - archetype : objet ARCHETYPES.* (thème)
+ *   - topographie : objet TOPOGRAPHIES.* (structure)
  *   - portesActives : array de directions ('N','S','E','O') — portes à instancier
- *   - estBoss : bool — la salle est la salle de boss
- *   - estEntree : bool — la salle est l'entrée de l'étage
+ *   - estBoss : bool
+ *   - estEntree : bool
  *
  * @returns {object} salle
  */
 export function genererSalle({
     seedEtage, etageNumero, salleId,
-    archetype, portesActives = ['E'],
+    archetype, topographie, portesActives = ['E'],
     estBoss = false, estEntree = false
 }) {
     const seed = (seedEtage ^ hashStr(salleId)) >>> 0;
     const rng = creerRng(seed);
     const niveau = niveauDangerEtage(etageNumero);
-    const dims = archetype.dimensions;
 
-    // 1. Layout — on tire un layout parmi les variantes de l'archétype
-    //    (cf. systems/Layouts.js — 3 par archétype). Le layout retourne
-    //    `{ plateformes, obstacles }`. La sélection est seedée pour
-    //    reproductibilité.
-    const layoutFn = choisirLayout(archetype.id, rng) ?? archetype.genererPlateformes;
-    const layoutResult = layoutFn(rng, dims, { portesActives });
-    const plateformes = Array.isArray(layoutResult) ? layoutResult : layoutResult.plateformes;
-    const obstacles = Array.isArray(layoutResult) ? [] : (layoutResult.obstacles ?? []);
+    // 1. Structure physique : la topographie owns dims + plateformes + obstacles
+    //    + portes positions + spawnDefault.
+    const dims = topographie.dims;
+    const result = topographie.generer({ rng, portesActives, dims });
+    const plateformes = result.plateformes;
+    const obstacles = result.obstacles ?? [];
+    const portes = result.portes ?? {};
+    const spawnDefault = result.spawnDefault;
 
-    // 2. Spawn par défaut (utilisé si on entre depuis nulle part — boss room
-    //    ou première salle du run)
-    const spawnDefault = archetype.spawnJoueur(dims);
-
-    // 3. Portes (une par direction active)
-    const portes = {};
-    for (const dir of portesActives) {
-        const p = calculerPorte(archetype, dims, dir);
-        if (p) portes[dir] = p;
-    }
-
-    // 4. Vortex Miroir : sur une plateforme flottante différente du spawn et des portes,
-    //    avec distance min. Fallback : centre.
+    // 2. Vortex Miroir : sur une plateforme flottante différente du spawn et des
+    //    portes, avec distance min. Fallback : centre.
+    //    (En Présent, ce vortex n'est plus utilisé depuis Phase 1 — il vit pour
+    //    la Cité Marchande en Miroir.)
     const platfMaxLargeur = plateformes.reduce((m, p) => Math.max(m, p.largeur), 0);
     const plateformesFlottantes = plateformes.filter(p =>
         p.largeur < platfMaxLargeur * 0.95 &&
@@ -128,7 +114,7 @@ export function genererSalle({
         { x: spawnDefault.x, marge: DIST_MIN },
         ...Object.values(portes).map(p => ({ x: p.x, marge: DIST_MIN }))
     ];
-    const tropProche = (cx, cy) => positionsRefus.some(r =>
+    const tropProche = (cx, _cy) => positionsRefus.some(r =>
         Math.abs(cx - r.x) < r.marge
     );
     const valides = candidatsVortex.filter(c => !tropProche(c.x, c.y));
@@ -147,7 +133,7 @@ export function genererSalle({
         largeur: VORTEX_DIMS.largeur, hauteur: VORTEX_DIMS.hauteur
     };
 
-    // 5. Coffre — dans une boss room et l'entrée, on n'en met pas
+    // 3. Coffre — pas dans boss room ni à l'entrée
     let coffre = null;
     if (!estBoss && !estEntree && rng() < PROBA_COFFRE) {
         const candidatsCoffre = plateformesFlottantes
@@ -168,7 +154,7 @@ export function genererSalle({
         }
     }
 
-    // 6. Drop orphelin (30 % si pas de coffre, et pas dans boss/entrée)
+    // 4. Drop orphelin (30 % si pas de coffre, et pas dans boss/entrée)
     let dropSol = null;
     if (!coffre && !estBoss && !estEntree && rng() < PROBA_DROP_SOL) {
         dropSol = {
@@ -178,28 +164,29 @@ export function genererSalle({
         };
     }
 
-    // 7. Ennemis — densité dictée par le biome de l'étage (cf. data/biomes.js).
-    //    Pas d'ennemis dans la salle d'entrée (pour laisser le joueur s'orienter).
-    //    Boss : géré séparément par GameScene (instanciation depuis data/boss.js).
+    // 5. Ennemis — densité dictée par le biome de l'étage.
+    //    Pas d'ennemis dans la salle d'entrée ni de boss (boss instancié séparément).
     const biome = biomePourEtage(etageNumero);
     const fourchette = biome?.densite ?? ENNEMIS_PAR_NIVEAU[niveau];
     let nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
     if (estEntree || estBoss) nbEnnemis = 0;
+    // Pour éviter que les ennemis spawnent sur les plateformes d'échelle
+    // one-way (rendant la montée pénible), on filtre : ennemi sur plateforme
+    // flottante NORMALE uniquement, fallback sol si aucune normale dispo.
+    const plateformesEnnemiSpawn = plateformesFlottantes.filter(p => !p.oneWay);
     const ennemis = [];
     const pool = biome?.ennemisPool ?? [];
     for (let i = 0; i < nbEnnemis; i++) {
-        // Type d'ennemi seedé : tiré dans le pool du biome pour garantir
-        // que la même salle (même seed) refait spawner les mêmes types.
         const enemyId = pool.length > 0
             ? pool[Math.floor(rng() * pool.length)]
             : null;
-        const surSol = plateformesFlottantes.length === 0 || rng() < 0.5;
+        const surSol = plateformesEnnemiSpawn.length === 0 || rng() < 0.5;
         let x, y;
         if (surSol) {
             x = entre(rng, 150, dims.largeur - 150);
             y = dims.hauteur - HAUTEUR_SOL - 20;
         } else {
-            const p = plateformesFlottantes[entreEntier(rng, 0, plateformesFlottantes.length - 1)];
+            const p = plateformesEnnemiSpawn[entreEntier(rng, 0, plateformesEnnemiSpawn.length - 1)];
             x = p.x;
             y = p.y - p.hauteur / 2 - 20;
         }
@@ -209,11 +196,12 @@ export function genererSalle({
     return {
         id: salleId,
         archetype: archetype.id,
+        topographie: topographie.id,
         etageNumero,
         dims,
         plateformes,
-        obstacles,              // [{ type, x, y, ... }] cf. systems/Layouts.js
-        portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur }
+        obstacles,
+        portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur, interieur }
         vortex,
         spawnDefault,
         coffre,

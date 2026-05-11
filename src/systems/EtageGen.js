@@ -13,9 +13,13 @@
 //
 // Les directions s'inversent automatiquement au retour : si A.portes.E = B.id,
 // alors B.portes.O = A.id. Le joueur peut donc revenir sur ses pas.
+//
+// Phase 2a — Refactor (2026-05-12) : le couple (archétype, topographie)
+// remplace l'archétype seul. L'archétype = thème, la topographie = structure.
 
 import { creerRng, genererSalle } from './WorldGen.js';
 import { ARCHETYPES, directionOpposee } from '../data/archetypes.js';
+import { TOPOGRAPHIES, topographiesPour, choisirTopographie } from '../data/topographies.js';
 import { biomePourEtage } from '../data/biomes.js';
 
 /**
@@ -26,24 +30,27 @@ function combineSeed(a, b) {
 }
 
 /**
- * Choisit un archétype dans le biome qui supporte les directions de portes
- * demandées. On préfère un archétype dont les `portesPossibles` couvrent
- * `portesNecessaires`, et qui correspond au niveau de danger d'étage.
+ * Choisit un (archétype, topographie) pour un noeud "main". Filtre les
+ * archétypes du biome à ceux qui ont au moins une topographie supportant
+ * `portesNec`, puis tire au seed.
  */
-function choisirArchetypeAvecPortes(portesNecessaires, niveauEtage, biome, rng) {
-    const candidats = biome.archetypesAutorises
+function choisirArchetypeEtTopographie(portesNec, biome, rng) {
+    // Archétypes du biome qui ont au moins UNE topographie compatible
+    // supportant toutes les portes nécessaires.
+    const candidatsArch = biome.archetypesAutorises
         .map(id => ARCHETYPES[id])
-        .filter(a => portesNecessaires.every(d => a.portesPossibles.includes(d)));
+        .filter(a => a && topographiesPour(a.id, portesNec).length > 0);
 
-    if (candidats.length === 0) {
-        // Fallback : sanctuaire (E + O) pour les chaînes horizontales basiques
-        return ARCHETYPES.sanctuaire;
+    let archetype;
+    if (candidatsArch.length > 0) {
+        archetype = candidatsArch[Math.floor(rng() * candidatsArch.length)];
+    } else {
+        // Fallback : sanctuaire (toujours connu pour avoir des topographies plates)
+        archetype = ARCHETYPES.sanctuaire;
     }
 
-    // On privilégie ceux qui correspondent au niveau de danger d'étage
-    const matchNiveau = candidats.filter(a => a.niveauxAssocies.includes(niveauEtage));
-    const pool = matchNiveau.length > 0 ? matchNiveau : candidats;
-    return pool[Math.floor(rng() * pool.length)];
+    const topographie = choisirTopographie(archetype.id, portesNec, rng);
+    return { archetype, topographie };
 }
 
 /**
@@ -59,8 +66,6 @@ export function genererEtage(numero, seedRun) {
     const biome = biomePourEtage(numero);
 
     // ─── 1. Place les noeuds (col, row) avec leur rôle ───
-    // Format interne avant compilation en salles :
-    //   { id, col, row, role, voisins: { dir → id } }
     const nodes = [
         { id: 'A',    col: 0, row: 0,  role: 'entree' },
         { id: 'B',    col: 1, row: 0,  role: 'main' },
@@ -87,10 +92,8 @@ export function genererEtage(numero, seedRun) {
     connecter('C',    'E', 'D');
     connecter('D',    'E', 'BOSS');
 
-    // Dead-ends verticaux : B et D ont une porte N vers la salle au-dessus
-    // On choisit aléatoirement (seedé) si l'on garde les deux ou si on en
-    // mute un en ne le générant pas — pour que les étages soient variés.
-    const garderBranche = (clef) => rng() < 0.7;
+    // Dead-ends verticaux : ~70 % de chance de garder chacun, seedé
+    const garderBranche = (_clef) => rng() < 0.7;
     const branchesGardees = [];
     if (garderBranche('B')) {
         connecter('B', 'N', 'B-haut');
@@ -100,26 +103,24 @@ export function genererEtage(numero, seedRun) {
         connecter('D', 'N', 'D-haut');
         branchesGardees.push('D-haut');
     }
-    // Filtre les nodes finalement utilisés
     let nodesActifs = nodes.filter(n =>
         n.role !== 'deadend' || branchesGardees.includes(n.id)
     );
 
-    // ─── 2b. Garde-fou : déconnecter les branches deadend si le noeud
-    // principal n'a aucun archétype capable de supporter ses portes.
-    // Évite les portes "fantômes" sans plateforme d'accès.
+    // ─── 2b. Garde-fou : déconnecter les branches deadend si aucune
+    // topographie ne supporte les portes demandées du node main.
     // ─────────────────────────────────────────────────────────────
-    const niveauEtage = numero <= 2 ? 0 : numero <= 4 ? 1 : numero <= 6 ? 2 : 3;
     for (const n of nodesActifs) {
         if (n.role !== 'main') continue;
         const portesNec = Object.keys(n.voisins);
+        // On simule : y a-t-il un archétype du biome avec une topographie
+        // supportant ces portes ?
         const candidats = biome.archetypesAutorises
             .map(id => ARCHETYPES[id])
-            .filter(a => portesNec.every(d => a.portesPossibles.includes(d)));
+            .filter(a => a && topographiesPour(a.id, portesNec).length > 0);
         if (candidats.length > 0) continue;
 
-        // Aucun archétype ne supporte ces portes → on retire les voisins
-        // deadend (les seuls qu'on peut sacrifier sans casser la chaîne)
+        // Aucun candidat → on retire les voisins deadend (sacrifiables)
         for (const dir of [...Object.keys(n.voisins)]) {
             const voisinId = n.voisins[dir];
             const voisin = byId.get(voisinId);
@@ -127,7 +128,6 @@ export function genererEtage(numero, seedRun) {
                 delete n.voisins[dir];
                 const opp = directionOpposee(dir);
                 if (voisin.voisins[opp] === n.id) delete voisin.voisins[opp];
-                // Retire le deadend de la liste active s'il n'a plus de voisins
                 if (Object.keys(voisin.voisins).length === 0) {
                     nodesActifs = nodesActifs.filter(x => x.id !== voisin.id);
                     const idx = branchesGardees.indexOf(voisin.id);
@@ -137,32 +137,33 @@ export function genererEtage(numero, seedRun) {
         }
     }
 
-    // ─── 3. Génère la salle pour chaque noeud ───
+    // ─── 3. Pour chaque noeud, choisit (archétype, topographie) et génère ───
     const salles = new Map();
     for (const n of nodesActifs) {
         const portesNec = [...Object.keys(n.voisins)];
-        // La salle BOSS reçoit en plus une porte E "transition d'étage" (sans
-        // voisin dans le graphe — interprétée par GameScene comme passage à
+        // La salle BOSS reçoit une porte E "transition d'étage" (sans voisin
+        // dans le graphe — interprétée par GameScene comme passage à
         // l'étage suivant).
         if (n.role === 'boss' && !portesNec.includes('E')) {
             portesNec.push('E');
         }
 
-        let archetype;
+        let archetype, topographie;
         if (n.role === 'boss') {
-            // La salle de boss : Arène du Reflux (sol dégagé pour combat futur).
-            // Phase C ajoutera un vrai boss.
+            // Boss : arène ouverte (combat dégagé pour les patterns de boss)
             archetype = ARCHETYPES.arene;
+            topographie = TOPOGRAPHIES.arene_ouverte;
         } else if (n.role === 'entree') {
-            // L'entrée de l'étage est TOUJOURS un Sanctuaire — c'est la cité
-            // marchande quand on est en Miroir. Layout consistant pour que le
-            // joueur reconnaisse l'endroit comme un repère stable.
+            // Entrée = Cité Marchande en Miroir. Sol plat large pour les 3 PNJ.
             archetype = ARCHETYPES.sanctuaire;
+            topographie = TOPOGRAPHIES.arene_ouverte;
         } else if (n.role === 'deadend') {
-            // Dead-ends verticaux : on privilégie le Puits Inversé (porte N native)
+            // Dead-end vertical : Puits Descendant (entrée par le haut, coffre en bas)
             archetype = ARCHETYPES.puits;
+            topographie = TOPOGRAPHIES.puits_descente;
         } else {
-            archetype = choisirArchetypeAvecPortes(portesNec, niveauEtage, biome, rng);
+            // Main : choix libre dans le pool du biome
+            ({ archetype, topographie } = choisirArchetypeEtTopographie(portesNec, biome, rng));
         }
 
         const salle = genererSalle({
@@ -170,6 +171,7 @@ export function genererEtage(numero, seedRun) {
             etageNumero: numero,
             salleId: n.id,
             archetype,
+            topographie,
             portesActives: portesNec,
             estBoss: n.role === 'boss',
             estEntree: n.role === 'entree'
@@ -185,8 +187,7 @@ export function genererEtage(numero, seedRun) {
     }
 
     // Force coffre garanti dans les dead-ends (récompense pour la verticalité).
-    // Le Puits Inversé a sa porte S au SOMMET (orientation inversée) — donc le
-    // coffre est posé EN BAS, au sol, pour récompenser la descente exploratoire.
+    // Pour le Puits Descendant : coffre EN BAS (orientation inversée historique).
     for (const id of branchesGardees) {
         const salle = salles.get(id);
         if (salle && !salle.coffre) {
@@ -207,7 +208,7 @@ export function genererEtage(numero, seedRun) {
         salles,                          // Map<id, salle>
         salleEntreeId: 'A',
         salleBossId: 'BOSS',
-        sallesVisitees: new Set(['A'])   // l'entrée est connue dès l'arrivée
+        sallesVisitees: new Set(['A'])
     };
 }
 

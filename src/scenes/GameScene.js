@@ -20,6 +20,7 @@ import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
 import { ENEMIES } from '../data/enemies.js';
 import { definitionBoss } from '../data/boss.js';
 import { ARCHETYPES, spawnDepuisPorte, directionOpposee } from '../data/archetypes.js';
+import { TOPOGRAPHIES } from '../data/topographies.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Boss } from '../entities/Boss.js';
 import { Projectile } from '../entities/Projectile.js';
@@ -43,9 +44,12 @@ import { creerVisuelFondeur } from '../render/entities/Fondeur.js';
 import { creerVisuelIdentifieur } from '../render/entities/Identifieur.js';
 import { creerVisuelMarchand } from '../render/entities/Marchand.js';
 
-// Label affiché dans le HUD pour chaque archétype
+// Labels affichés dans le HUD
 const ARCHETYPES_LABELS = Object.fromEntries(
     Object.values(ARCHETYPES).map(a => [a.id, a.nom])
+);
+const TOPOGRAPHIES_LABELS = Object.fromEntries(
+    Object.values(TOPOGRAPHIES).map(t => [t.id, t.nom])
 );
 
 // Seed du run : initialisée au premier démarrage et persistée dans le registry
@@ -415,11 +419,12 @@ export class GameScene extends Phaser.Scene {
         const labelMonde = enMiroir ? ' (Miroir)' : '';
         const labelDanger = !enMiroir ? ['Refuge', 'Calme', 'Tension', 'CLIMAX'][niveau] : '';
         const archetypeLabel = ARCHETYPES_LABELS[salle.archetype] ?? salle.archetype;
+        const topoLabel = TOPOGRAPHIES_LABELS[salle.topographie] ?? salle.topographie;
         const labelBoss = salle.estBoss ? '  ·  ☠ SALLE DE BOSS' : '';
         const labelEntree = salle.estEntree ? '  ·  ENTRÉE' : '';
 
         this.add.text(10, 10,
-            `Vestige — Étage ${etageNumero}${labelMonde}  ·  ${archetypeLabel}${labelBoss}${labelEntree}`,
+            `Vestige — Étage ${etageNumero}${labelMonde}  ·  ${archetypeLabel} (${topoLabel})${labelBoss}${labelEntree}`,
             { fontFamily: 'monospace', fontSize: '14px', color: enMiroir ? '#f0c890' : '#e8e4d8' }
         ).setScrollFactor(0).setDepth(200);
 
