@@ -26,4 +26,15 @@ export class EnemySystem {
             this.registry.set(CLE, [...liste, k]);
         }
     }
+
+    /**
+     * Reset des morts pour un étage entier. Au retour Miroir → Présent,
+     * tous les ennemis (et le boss) de cet étage respawn — "try again".
+     * Les clés ont la forme "monde:e<numero>:<salleId>:<idx>".
+     */
+    resetEtage(etageNumero) {
+        const motif = `:e${etageNumero}:`;
+        const liste = this.registry.get(CLE) ?? [];
+        this.registry.set(CLE, liste.filter(k => !k.includes(motif)));
+    }
 }

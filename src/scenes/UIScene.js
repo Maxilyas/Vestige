@@ -3,6 +3,7 @@
 
 import { GAME_WIDTH } from '../config.js';
 import { RESONANCE_CLE, RESONANCE_MAX } from '../systems/ResonanceSystem.js';
+import { MONDE_CLE, MONDE_MIROIR } from '../systems/MondeSystem.js';
 import { EVT_EQUIP_CHANGE, SLOTS } from '../systems/InventaireSystem.js';
 import { EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
 import { creerSlot } from '../render/ui/SlotInventaire.js';
@@ -40,9 +41,12 @@ export class UIScene extends Phaser.Scene {
             .setOrigin(0, 0);
 
         this.miseAJourResonance(this.registry.get(RESONANCE_CLE) ?? RESONANCE_MAX);
+        this._appliquerOpaciteJauge();
 
         const handlerRes = (_p, valeur) => this.miseAJourResonance(valeur);
+        const handlerMonde = () => this._appliquerOpaciteJauge();
         this.registry.events.on(`changedata-${RESONANCE_CLE}`, handlerRes);
+        this.registry.events.on(`changedata-${MONDE_CLE}`, handlerMonde);
 
         // --- 3 slots équipés stylisés sous la jauge ---
         // Empilés avec les mêmes cadres dorés que dans l'inventaire
@@ -97,10 +101,23 @@ export class UIScene extends Phaser.Scene {
 
         this.events.once('shutdown', () => {
             this.registry.events.off(`changedata-${RESONANCE_CLE}`, handlerRes);
+            this.registry.events.off(`changedata-${MONDE_CLE}`, handlerMonde);
             this.registry.events.off(EVT_EQUIP_CHANGE, handlerEquip);
             this.registry.events.off(EVT_SEL_CHANGE, handlerSel);
             this.registry.events.off(EVT_FRAGMENTS_CHANGE, handlerFragments);
         });
+    }
+
+    /**
+     * En Miroir, la Résonance n'est plus une jauge de combat (pas de drain, pas
+     * de mort possible). On grise la jauge pour signaler son inactivité.
+     */
+    _appliquerOpaciteJauge() {
+        const enMiroir = this.registry.get(MONDE_CLE) === MONDE_MIROIR;
+        const alpha = enMiroir ? 0.35 : 1;
+        this.fond?.setAlpha(alpha);
+        this.barre?.setAlpha(alpha);
+        this.texte?.setAlpha(alpha);
     }
 
     /**

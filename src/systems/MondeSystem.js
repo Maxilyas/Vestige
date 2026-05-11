@@ -11,10 +11,6 @@ export const MONDE_CLE = 'monde';
 export const MONDE_NORMAL = 'normal';
 export const MONDE_MIROIR = 'miroir';
 
-// Tuning du basculement — déplaçables ici sans toucher aux scènes
-export const RESONANCE_APRES_BASCULE = 30; // valeur après bascule Normal → Miroir
-export const RESONANCE_BONUS_RETOUR = 20;  // bonus quand on revient via le portail
-
 export class MondeSystem {
     constructor(registry) {
         this.registry = registry;
@@ -31,19 +27,16 @@ export class MondeSystem {
         return this.getMonde() === MONDE_MIROIR;
     }
 
-    // Bascule Normal → Miroir : déclenchée quand la Résonance touche 0 dans le Normal.
-    // Stabilise la Résonance à RESONANCE_APRES_BASCULE pour donner une marge au joueur.
+    // Bascule Présent → Miroir : déclenchée par la mort (Résonance 0) ou un vortex
+    // volontaire. Pas de pénalité — la cité régénère le Vestige à pleine Résonance.
     basculerVersMiroir() {
         this.registry.set(MONDE_CLE, MONDE_MIROIR);
-        this.registry.set(RESONANCE_CLE, RESONANCE_APRES_BASCULE);
+        this.registry.set(RESONANCE_CLE, RESONANCE_MAX);
     }
 
-    // Retour Miroir → Normal via portail : on rajoute un bonus pour récompenser
-    // l'évasion réussie. Plafonné à RESONANCE_MAX.
+    // Retour Miroir → Présent via vortex : pleine Résonance, on repart en cured.
     revenirAuNormal() {
         this.registry.set(MONDE_CLE, MONDE_NORMAL);
-        const courante = this.registry.get(RESONANCE_CLE) ?? 0;
-        const nouvelle = Math.min(RESONANCE_MAX, courante + RESONANCE_BONUS_RETOUR);
-        this.registry.set(RESONANCE_CLE, nouvelle);
+        this.registry.set(RESONANCE_CLE, RESONANCE_MAX);
     }
 }

@@ -137,8 +137,14 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Salle courante (default = entrée de l'étage)
+        // En Miroir, on FORCE toujours la salle d'entrée (la Cité Marchande) —
+        // pas d'exploration en Miroir, c'est un hub pur.
         let salleId = this.registry.get(CLE_SALLE_COURANTE);
         if (!salleId || !etage.salles.has(salleId)) {
+            salleId = etage.salleEntreeId;
+            this.registry.set(CLE_SALLE_COURANTE, salleId);
+        }
+        if (this.monde.getMonde() === 'miroir' && salleId !== etage.salleEntreeId) {
             salleId = etage.salleEntreeId;
             this.registry.set(CLE_SALLE_COURANTE, salleId);
         }
@@ -304,12 +310,20 @@ export class GameScene extends Phaser.Scene {
         this.invincibleJusqu = 0;
 
         // --- Zones interactives ---
-        // Portes multiples (une par direction active dans la salle)
+        // Portes : en Présent uniquement (le Miroir est un hub pur, on n'y
+        // explore pas, on ne sort que par le vortex).
         this.portes = {};
-        for (const dir of Object.keys(salle.portes)) {
-            const porte = salle.portes[dir];
-            this.portes[dir] = this._creerPorte(porte, salle, dir);
+        if (!enMiroir) {
+            for (const dir of Object.keys(salle.portes)) {
+                const porte = salle.portes[dir];
+                this.portes[dir] = this._creerPorte(porte, salle, dir);
+            }
         }
+        // Vortex : uniquement en Miroir (retour Présent depuis la Cité).
+        // En Présent, on ne peut PAS aller en Miroir volontairement — il faut
+        // mourir (Résonance 0). Choix de design : la Cité est une récompense
+        // de défaite, pas un bouton "save". Cible : finir les 10 étages avec
+        // le moins de visites en Miroir possible.
         if (enMiroir) {
             this.creerVortex(salle.vortex, COULEUR_VORTEX);
         }
@@ -323,13 +337,10 @@ export class GameScene extends Phaser.Scene {
         }
 
         // --- Obstacles (pieux, ressorts, plateformes mobiles) ---
-        // Présents dans toutes les salles (Miroir aussi — un sanctuaire peut
-        // avoir des pieux décoratifs ou ressorts). Les obstacles n'infligent
-        // pas de dégâts en Miroir si on souhaite preserver la doctrine
-        // "Miroir paisible", mais le système est neutre : c'est le layout qui
-        // décide d'en placer ou non.
+        // Skip en Miroir : la Cité est un atelier paisible, on ne veut pas
+        // que des pieux décoratifs blessent le joueur qui crafte tranquille.
         this.obstacles = [];
-        if (salle.obstacles?.length) {
+        if (!enMiroir && salle.obstacles?.length) {
             for (const obsData of salle.obstacles) {
                 const obs = new Obstacle(this, obsData, salle.biomeId);
                 if (!obs.sprite) continue;
@@ -348,10 +359,12 @@ export class GameScene extends Phaser.Scene {
             }
         }
 
-        // --- Ennemis (Présent uniquement) ---
+        // --- Ennemis (Présent uniquement, hors salle d'entrée) ---
+        // La salle d'entrée est le point de respawn après mort / sortie Miroir :
+        // pas d'ennemis pour laisser au joueur le temps de se réorienter.
         this.enemies = [];
         this.projectiles = [];
-        if (!enMiroir && salle.ennemis?.length) {
+        if (!enMiroir && !salle.estEntree && salle.ennemis?.length) {
             for (const e of salle.ennemis) {
                 if (this.enemySystem.estMort('normal', this.cleSalleEtage, e.idx)) continue;
                 const def = ENEMIES[e.enemyId];
@@ -428,14 +441,12 @@ export class GameScene extends Phaser.Scene {
         poserVignette(this, 1);
 
         // --- Hooks selon le monde ---
-        if (enMiroir) {
-            this.activerBaissePassive(true);
-            this.surveillerAncrage();
-            if (this.resonance.getValeur() === 0) this.afficherAncrage();
-        } else {
+        // Doctrine : Miroir = atelier paisible (pas de drain, pas de combat).
+        //            Présent = chasse. La mort (Résonance 0) téléporte à la Cité.
+        if (!enMiroir) {
             this.brancherBasculement();
+            this.activerBaissePassive(false);
         }
-        this.activerBaissePassive(false);
 
         // --- Mort d'ennemi : drop éventuel + Sel + Fragment ---
         const handlerEnemyDead = (ennemi) => {
@@ -1293,22 +1304,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     creerVortex(v, _couleur) {
-        // Rectangle physique invisible pour l'overlap
+        // Vortex uniquement en Miroir (Cité) — ramène en Présent avec reset d'étage.
         this.vortex = this.add.rectangle(v.x, v.y, v.largeur, v.hauteur, 0xffffff, 0);
         this.vortex.setAlpha(0);
         this.physics.add.existing(this.vortex, true);
         this.physics.add.overlap(this.player, this.vortex, () => this.retourAuNormal());
-        // Visuel : portail tourbillonnant cyan-vert
         creerVisuelVortex(this, v.x, v.y, v.largeur, v.hauteur);
     }
 
     basculerVersMiroir() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
-        // Doctrine : la chute en Présent = retour forcé à la cité marchande
-        // (salle d'entrée de l'étage en Miroir). Le joueur "perd" sa progression
-        // dans l'étage Présent mais retrouve un terrain paisible pour transformer.
-        // Différent du vortex (déplacement contrôlé) qui conserve la position.
+        // Présent → Miroir : volontaire (vortex en salle d'entrée) ou involontaire
+        // (mort en combat, Résonance 0). Téléport à la Cité Marchande, plein heal.
+        // L'état de l'étage est figé pendant que le joueur est en Miroir — il sera
+        // reset au retour via le vortex Miroir (cf. retourAuNormal).
         this.registry.remove(CLE_POSITION_PENDANTE);
         this.registry.set(CLE_SALLE_COURANTE, this.etage.salleEntreeId);
         this.registry.remove(CLE_PORTE_ARRIVEE);
@@ -1322,14 +1332,21 @@ export class GameScene extends Phaser.Scene {
     retourAuNormal() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
-        this.registry.set(CLE_POSITION_PENDANTE, { x: this.player.x, y: this.player.y });
+        // Miroir → Présent : on RESET l'état de l'étage (coffres, drops, ennemis,
+        // boss). Doctrine "fail and try again" : à chaque sortie de Cité, l'étage
+        // est régénéré dans son état initial. Le joueur garde tout son méta
+        // (inventaire, équipement, Sel, Fragments, identifications, etc.).
+        this.inventaire.resetEtage(this.etageNumero);
+        this.enemySystem.resetEtage(this.etageNumero);
+        // Spawn forcé sur la salle d'entrée en Présent, depuis le sol (pas de
+        // position pendante : ce n'est plus un déplacement contrôlé).
+        this.registry.remove(CLE_POSITION_PENDANTE);
+        this.registry.set(CLE_SALLE_COURANTE, this.etage.salleEntreeId);
+        this.registry.remove(CLE_PORTE_ARRIVEE);
         this.cameras.main.fadeOut(300, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
-            const bonus = this.statsEffectives.bonusRetour;
             this.monde.revenirAuNormal();
-            const delta = bonus - 20;
-            if (delta !== 0) this.resonance.regagner(delta);
-            this.scene.restart({});
+            this.scene.restart({ salleId: this.etage.salleEntreeId });
         });
     }
 
@@ -1344,53 +1361,20 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    activerBaissePassive(enMiroir) {
-        if (enMiroir) {
-            this.timerMiroir = this.time.addEvent({
-                delay: BAISSE_MIROIR_DELAI_MS,
-                loop: true,
-                callback: () => {
-                    const baisse = Math.max(0, this.statsEffectives.passiveMiroir);
-                    if (baisse > 0) this.resonance.prendreDegats(baisse);
-                }
-            });
-            this.events.once('shutdown', () => {
-                if (this.timerMiroir) this.timerMiroir.remove(false);
-            });
-        } else {
-            this.timerPresent = this.time.addEvent({
-                delay: BAISSE_PRESENT_DELAI_MS,
-                loop: true,
-                callback: () => {
-                    const baisse = Math.max(0, this.statsEffectives.passivePresent);
-                    if (baisse > 0) this.resonance.prendreDegats(baisse);
-                }
-            });
-            this.events.once('shutdown', () => {
-                if (this.timerPresent) this.timerPresent.remove(false);
-            });
-        }
-    }
-
-    surveillerAncrage() {
-        const handler = (_p, valeur) => {
-            if (valeur === 0 && !this.texteAncrage) this.afficherAncrage();
-        };
-        this.registry.events.on('changedata-resonance', handler);
-        this.events.once('shutdown', () => {
-            this.registry.events.off('changedata-resonance', handler);
+    activerBaissePassive(_enMiroir) {
+        // Présent uniquement : baisse passive si un item équipé règle
+        // `passivePresent > 0` (rare). Pas de drain en Miroir (hub paisible).
+        this.timerPresent = this.time.addEvent({
+            delay: BAISSE_PRESENT_DELAI_MS,
+            loop: true,
+            callback: () => {
+                const baisse = Math.max(0, this.statsEffectives.passivePresent);
+                if (baisse > 0) this.resonance.prendreDegats(baisse);
+            }
         });
-    }
-
-    afficherAncrage() {
-        // Fixe à l'écran (setScrollFactor 0) — message de gameplay critique,
-        // doit rester visible peu importe où la caméra est
-        this.texteAncrage = this.add.text(GAME_WIDTH / 2, 70, 'ANCRÉ DANS LE MIROIR', {
-            fontFamily: 'monospace',
-            fontSize: '18px',
-            color: '#ff6060',
-            fontStyle: 'bold'
-        }).setOrigin(0.5, 0).setScrollFactor(0);
+        this.events.once('shutdown', () => {
+            if (this.timerPresent) this.timerPresent.remove(false);
+        });
     }
 
     // ============================================================

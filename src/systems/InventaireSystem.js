@@ -162,4 +162,17 @@ export class InventaireSystem {
             this.registry.set(CLE_DROPS_PRIS, [...liste, cle]);
         }
     }
+
+    /**
+     * Reset les flags coffres+drops d'un étage entier (tous mondes confondus).
+     * Utilisé au retour Miroir → Présent : "try again" → tout réapparaît.
+     * Les clés ont la forme "monde:e<numero>:<salleId>", on filtre par `:e<numero>:`.
+     */
+    resetEtage(etageNumero) {
+        const motif = `:e${etageNumero}:`;
+        const coffres = this.registry.get(CLE_COFFRES_VUS) ?? [];
+        const drops = this.registry.get(CLE_DROPS_PRIS) ?? [];
+        this.registry.set(CLE_COFFRES_VUS, coffres.filter(k => !k.includes(motif)));
+        this.registry.set(CLE_DROPS_PRIS, drops.filter(k => !k.includes(motif)));
+    }
 }
