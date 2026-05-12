@@ -10,11 +10,12 @@ import { FondeurScene } from './scenes/FondeurScene.js';
 import { IdentifieurScene } from './scenes/IdentifieurScene.js';
 import { MarchandScene } from './scenes/MarchandScene.js';
 import { MapScene } from './scenes/MapScene.js';
+import { FinScene } from './scenes/FinScene.js';
 
 // L'ordre dans `scene` détermine l'ordre de rendu (les suivantes au-dessus).
 // GameScene est lancée par défaut ; les overlays sont lancés à la demande.
-// eslint-disable-next-line no-new
-new Phaser.Game({
+// Expose l'instance sur window.game pour faciliter le debug (snippets console).
+window.game = new Phaser.Game({
     ...gameConfig,
-    scene: [GameScene, UIScene, InventaireScene, FondeurScene, IdentifieurScene, MarchandScene, MapScene]
+    scene: [GameScene, UIScene, InventaireScene, FondeurScene, IdentifieurScene, MarchandScene, MapScene, FinScene]
 });

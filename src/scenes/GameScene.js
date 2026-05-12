@@ -32,6 +32,7 @@ import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { executerGeste } from '../systems/GesteSystem.js';
+import { lancerCinematiqueFin } from '../systems/CinematiqueFusion.js';
 import { FRAGMENTS } from '../data/fragments.js';
 import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
@@ -524,6 +525,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     update() {
+        // Phase 5c — Pendant la cinématique de fin, on suspend toute la logique
+        // d'input/combat/IA. Les tweens (joueur, Artefact, fade) tournent seuls.
+        // Le visuel joueur continue de suivre le Rectangle physique pour
+        // matcher le tween de position vers l'Artefact.
+        if (this._cinematiqueFinEnCours) {
+            if (this.playerVisual && this.player) {
+                this.playerVisual.setPosition(this.player.x, this.player.y);
+            }
+            return;
+        }
+
         this.inputSystem.update();
         const i = this.inputSystem.intentions;
 
@@ -1212,14 +1224,22 @@ export class GameScene extends Phaser.Scene {
         // Boss mort : drop Vestige signature + débloquage porte + sceau d'étage
         const onBossDead = (boss) => {
             this.enemySystem.marquerMort('normal', this.cleSalleEtage, 'boss');
-            this._dropBossVestige(boss);
             this.bossVivant = false;
-            this.afficherMessageFlottant('La voie s\'ouvre', '#ffd070');
             // Phase 5a : sceau d'étage. marquerSceau retourne vrai si NOUVEAU
             // (déjà acquis dans un run précédent = pas de re-anim).
             if (marquerSceau(this.etageNumero)) {
                 this.registry.events.emit(EVT_SCEAU_OBTENU, this.etageNumero);
             }
+            // Phase 5c — Boss étage 10 : déclenche la cinématique de fin
+            // (à la place du drop classique). L'Artefact est l'objet de la
+            // cinématique, pas un item à ramasser au sol.
+            if ((boss.def.etage ?? this.etageNumero) === 10) {
+                lancerCinematiqueFin(this, boss);
+                return;
+            }
+            // Boss étages 1-9 : drop Vestige + message standard
+            this._dropBossVestige(boss);
+            this.afficherMessageFlottant('La voie s\'ouvre', '#ffd070');
         };
         this.events.on('boss:dead', onBossDead);
 
