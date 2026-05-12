@@ -10,19 +10,19 @@
 //   - Légendaire : tier Rare + comportement boosted, aura cramoisie massive,
 //                  screen-shake au spawn, drop T3 garanti + signature-drop hook
 //
-// PHASE 3a — État INITIAL
-// ────────────────────────
-// Les probas sont DÉSACTIVÉES (commun = 1.0). L'API est en place mais aucun
-// ennemi ne sera tagué non-commun tant que les probas ne sont pas activées.
-// Phase 3g (Rareté & polish) règlera les probas + FX visuels.
+// PHASE 3g — ACTIVÉ
+// ─────────────────
+// Probas progressives par paire d'étages (cf. PROBAS_PAR_ETAGE). Tier tiré à
+// la génération de salle (seedé, stable entre visites). Boost cooldowns
+// global -25 % sur les Légendaires (hook `comportementBoosted`).
 //
-// USAGE PRÉVU (Phase 3g+)
-// ───────────────────────
-// Au spawn d'un ennemi dans EnemySystem :
-//   1. `const tier = tirerRarete(rng);`
+// USAGE
+// ─────
+// Au spawn d'un ennemi dans GameScene._instancierEnnemi :
+//   1. `const tier = e.tier ?? TIERS.COMMUN;` (déjà tiré par WorldGen)
 //   2. `const defModifie = defAvecRarete(def, tier);`
 //   3. instancier Enemy avec defModifie
-//   4. appliquer FX visuel via AURA_PAR_TIER[tier]
+//   4. appliquer FX visuel via attacherAura()
 //
 // À la mort :
 //   1. `const signature = dropSignature(enemy, scene);`
@@ -36,14 +36,35 @@ export const TIERS = {
     LEGENDAIRE: 'legendaire'
 };
 
-// ─── Probas par défaut (DÉSACTIVÉES en Phase 3a) ───
-// Phase 3g : envisagé { commun 0.80, elite 0.15, rare 0.04, legendaire 0.01 }
+// ─── Probas par défaut (fallback) ───
 export const PROBAS_DEFAUT = {
     [TIERS.COMMUN]:     1.0,
     [TIERS.ELITE]:      0.0,
     [TIERS.RARE]:       0.0,
     [TIERS.LEGENDAIRE]: 0.0
 };
+
+// ─── Probas par paire d'étages ───
+// Progression lisible : Élite dès étage 1, Rare émerge à 3-4, Légendaire
+// devient possible à 5-6 et reste un événement même à 9-10.
+export const PROBAS_PAR_ETAGE = {
+    1:  { [TIERS.COMMUN]: 0.90, [TIERS.ELITE]: 0.10, [TIERS.RARE]: 0.00, [TIERS.LEGENDAIRE]: 0.00 },
+    2:  { [TIERS.COMMUN]: 0.90, [TIERS.ELITE]: 0.10, [TIERS.RARE]: 0.00, [TIERS.LEGENDAIRE]: 0.00 },
+    3:  { [TIERS.COMMUN]: 0.80, [TIERS.ELITE]: 0.17, [TIERS.RARE]: 0.03, [TIERS.LEGENDAIRE]: 0.00 },
+    4:  { [TIERS.COMMUN]: 0.80, [TIERS.ELITE]: 0.17, [TIERS.RARE]: 0.03, [TIERS.LEGENDAIRE]: 0.00 },
+    5:  { [TIERS.COMMUN]: 0.72, [TIERS.ELITE]: 0.22, [TIERS.RARE]: 0.05, [TIERS.LEGENDAIRE]: 0.01 },
+    6:  { [TIERS.COMMUN]: 0.72, [TIERS.ELITE]: 0.22, [TIERS.RARE]: 0.05, [TIERS.LEGENDAIRE]: 0.01 },
+    7:  { [TIERS.COMMUN]: 0.65, [TIERS.ELITE]: 0.25, [TIERS.RARE]: 0.08, [TIERS.LEGENDAIRE]: 0.02 },
+    8:  { [TIERS.COMMUN]: 0.65, [TIERS.ELITE]: 0.25, [TIERS.RARE]: 0.08, [TIERS.LEGENDAIRE]: 0.02 },
+    9:  { [TIERS.COMMUN]: 0.55, [TIERS.ELITE]: 0.30, [TIERS.RARE]: 0.12, [TIERS.LEGENDAIRE]: 0.03 },
+    10: { [TIERS.COMMUN]: 0.55, [TIERS.ELITE]: 0.30, [TIERS.RARE]: 0.12, [TIERS.LEGENDAIRE]: 0.03 }
+};
+
+/** Retourne les probas pour un étage (clamp 1..10). */
+export function probasPourEtage(etageNumero) {
+    const n = Math.max(1, Math.min(10, etageNumero | 0));
+    return PROBAS_PAR_ETAGE[n] ?? PROBAS_DEFAUT;
+}
 
 /**
  * Tire un tier selon les probas fournies. Cumulatif.
@@ -86,13 +107,20 @@ export function modificateursStats(tier) {
     return MODIFS_STATS[tier] ?? MODIFS_STATS[TIERS.COMMUN];
 }
 
+// Clés "cooldown / délai" auxquelles s'applique le boost `comportementBoosted`
+// (Légendaire). -25 % systématique pour des Légendaires plus agressifs.
+const COOLDOWN_KEYS = [
+    'delaiTir', 'delaiTelegraph', 'delaiCharge', 'delaiRecuperation',
+    'delaiSpawn', 'delaiPattern', 'cadence', 'cooldown'
+];
+
 /**
  * Clone une `def` ennemi avec stats modifiées selon le tier. Ne modifie pas
  * la def d'origine (qui est partagée entre tous les ennemis du même type).
  */
 export function defAvecRarete(def, tier) {
     const m = modificateursStats(tier);
-    return {
+    const clone = {
         ...def,
         hp: Math.max(1, Math.round(def.hp * m.hpMult)),
         vitesse: Math.round((def.vitesse ?? 0) * m.vitesseMult),
@@ -100,6 +128,16 @@ export function defAvecRarete(def, tier) {
         capaciteBonus: m.capaciteBonus,
         comportementBoosted: m.comportementBoosted
     };
+    // Légendaire : -25 % sur tous les cooldowns connus. Préserve la valeur si
+    // absente, plancher à 100 ms pour éviter les boucles serrées.
+    if (m.comportementBoosted) {
+        for (const k of COOLDOWN_KEYS) {
+            if (typeof def[k] === 'number') {
+                clone[k] = Math.max(100, Math.round(def[k] * 0.75));
+            }
+        }
+    }
+    return clone;
 }
 
 // ─── Modificateurs de drop par tier (consommé par LootSystem) ───

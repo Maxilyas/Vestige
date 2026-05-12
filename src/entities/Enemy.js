@@ -9,6 +9,7 @@
 
 import { COMPORTEMENTS } from '../systems/EnemyComportements/index.js';
 import { creerVisuelEnnemi } from '../render/entities/EnemyVisuel.js';
+import { attacherAura, suivreAura, detruireAura } from '../render/entities/AuraRarete.js';
 import { DEPTH, tracerCourbeQuadratique } from '../render/PainterlyRenderer.js';
 
 export class Enemy {
@@ -39,6 +40,11 @@ export class Enemy {
         this.visual = creerVisuelEnnemi(scene, def);
         this.visual.setPosition(x, y);
 
+        // Aura de rareté (no-op pour Commun). Le screen-shake Légendaire est
+        // déclenché ici, au moment où l'ennemi entre en scène.
+        this.aura = attacherAura(scene, this);
+        suivreAura(this.aura, x, y);
+
         // Init du comportement (si requis)
         const compo = COMPORTEMENTS[def.archetype];
         if (compo?.init) compo.init(this);
@@ -68,6 +74,8 @@ export class Enemy {
                 this.visual.scaleX = this.direction || 1;
             }
         }
+        // L'aura suit également (sans flip — symétrique)
+        suivreAura(this.aura, this.sprite.x, this.sprite.y);
     }
 
     recevoirDegats(montant) {
@@ -302,6 +310,15 @@ export class Enemy {
         if (this.mort) return;
         this.mort = true;
         this.sprite.body.enable = false;
+
+        // Fade-out de l'aura en parallèle du visuel
+        if (this.aura?.halo?.active) {
+            this.scene.tweens.add({
+                targets: [this.aura.halo, this.aura.particles].filter(Boolean),
+                alpha: 0, duration: 250,
+                onComplete: () => detruireAura(this.aura)
+            });
+        }
 
         if (this.visual?.active) {
             this.scene.tweens.add({

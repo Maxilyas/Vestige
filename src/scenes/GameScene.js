@@ -16,6 +16,9 @@ import { InputSystem } from '../systems/InputSystem.js';
 import { InventaireSystem } from '../systems/InventaireSystem.js';
 import { EnemySystem } from '../systems/EnemySystem.js';
 import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
+import {
+    defAvecRarete, modificateursDrop, dropSignature, TIERS
+} from '../systems/RaritySystem.js';
 import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
 import { ENEMIES } from '../data/enemies/index.js';
 import { definitionBoss } from '../data/boss.js';
@@ -381,7 +384,7 @@ export class GameScene extends Phaser.Scene {
                 if (this.enemySystem.estMort('normal', this.cleSalleEtage, e.idx)) continue;
                 const def = ENEMIES[e.enemyId];
                 if (!def) continue;
-                this._instancierEnnemi(def, e.x, e.y, e.idx);
+                this._instancierEnnemi(def, e.x, e.y, e.idx, e.tier);
             }
         }
 
@@ -871,19 +874,24 @@ export class GameScene extends Phaser.Scene {
      * À la mort d'un ennemi : Sel garanti + Fragment selon proba.
      * La famille est lue depuis `def.familleFragment` (cf. data/enemies.js).
      * Boss : pluie de Sel + Fragment garanti de la bonne famille.
+     * Phase 3g : tier de rareté ajoute des bonus (sel, fragments, item garanti).
      */
     _dropEconomique(ennemi) {
         const estBoss = !!ennemi.estBoss;
-        // Sel garanti — boss multiplié par 5
+        const tier = ennemi.def?.rarete ?? TIERS.COMMUN;
+        const mod = modificateursDrop(tier);
+
+        // Sel garanti — boss multiplié par 5, bonus tier additif
         const base = 2 + Math.floor(this.rngLoot() * 4);
-        const sel = estBoss ? base * 5 : base;
+        const sel = (estBoss ? base * 5 : base) + (mod.selBonus ?? 0);
         this.economy.ajouterSel(sel);
 
-        // Fragment : 35 % en normal, 100 % pour un boss
-        const proba = estBoss ? 1 : 0.35;
-        if (this.rngLoot() < proba) {
+        // Fragment : 35 % en normal, 100 % pour un boss, 100 % si tier le garantit
+        const probaFrag = estBoss ? 1 : (mod.fragmentGaranti ? 1 : 0.35);
+        const drapFragment = this.rngLoot() < probaFrag;
+        if (drapFragment) {
             const famille = ennemi.def.familleFragment ?? 'blanc';
-            const nb = estBoss ? 3 : 1;
+            const nb = (estBoss ? 3 : 1) + (mod.nbFragmentsBonus ?? 0);
             this.economy.ajouterFragment(famille, nb);
             const couleur = FRAGMENTS[`fragment_${famille}`].couleur;
             const couleurCss = '#' + couleur.toString(16).padStart(6, '0');
@@ -891,16 +899,85 @@ export class GameScene extends Phaser.Scene {
         } else {
             this.afficherMessageFlottant(`+${sel} Sel`, '#e8e4d8');
         }
+
+        // Drop item garanti pour Rare/Légendaire (en plus du fragment ci-dessus)
+        if (mod.tierItemMin != null) {
+            const signature = (tier === TIERS.LEGENDAIRE) ? dropSignature(ennemi, this) : null;
+            if (signature) {
+                this._appliquerSignatureDrop(signature);
+            } else {
+                this._dropItemTierMin(mod.tierItemMin, tier);
+            }
+        }
+    }
+
+    /**
+     * Drop d'item garanti — tire un item de famille pondérée par le monde
+     * (cf. tirerItem) et filtre par tier minimum. L'item entre directement
+     * dans l'inventaire avec un message coloré par tier.
+     */
+    _dropItemTierMin(tierMin, tierEnnemi) {
+        // Quelques essais pour trouver un item du tier minimal requis. Si on
+        // épuise les tries, on accepte n'importe quel item (filet de sécurité).
+        let item = null;
+        for (let i = 0; i < 8; i++) {
+            const candidat = tirerItem('normal', this.rngLoot);
+            if (candidat && (candidat.tier ?? 1) >= tierMin) {
+                item = candidat;
+                break;
+            }
+        }
+        if (!item) item = tirerItem('normal', this.rngLoot);
+        if (!item) return;
+        if (!this.inventaire.ajouter(item.id)) {
+            this.afficherMessageFlottant("Inventaire plein", '#ff6060');
+            return;
+        }
+        const couleurMsg = tierEnnemi === TIERS.LEGENDAIRE ? '#ff8090' : '#d8d8e8';
+        this.afficherMessageFlottant(`Butin : ${item.nom}`, couleurMsg);
+    }
+
+    /**
+     * Applique un signature-drop Légendaire (cf. RaritySystem.dropSignature).
+     * Format : { item?, sel?, fragments? : { famille, nb }, ... }
+     */
+    _appliquerSignatureDrop(signature) {
+        if (signature.sel) this.economy.ajouterSel(signature.sel);
+        if (signature.fragments) {
+            this.economy.ajouterFragment(signature.fragments.famille, signature.fragments.nb);
+        }
+        if (signature.item) {
+            if (this.inventaire.ajouter(signature.item)) {
+                this.afficherMessageFlottant(`Butin signature : ${signature.item}`, '#ff8090');
+            }
+        }
     }
 
     /**
      * Instancie un ennemi normal — factorisation pour réutilisation
      * (en cas de besoin futur, et pour clarifier la création).
+     *
+     * @param {object} def         def brute (depuis ENEMIES)
+     * @param {number} x, y, idx
+     * @param {string} [tier]      rarete (commun par défaut). Pour les enfants
+     *                             spawn (death-shards, sister-link), passer
+     *                             commun pour éviter l'explosion combinatoire.
      */
-    _instancierEnnemi(def, x, y, idx) {
-        const ennemi = new Enemy(this, def, x, y, idx);
+    _instancierEnnemi(def, x, y, idx, tier = TIERS.COMMUN) {
+        let defFinale;
+        if (tier && tier !== TIERS.COMMUN) {
+            defFinale = defAvecRarete(def, tier);
+        } else if (def.rarete && def.rarete !== TIERS.COMMUN) {
+            // Cas spawn enfant (sister-link, death-shards) : la def clonée
+            // par le comportement parent peut hériter de `rarete` du parent
+            // Légendaire. On force Commun pour éviter le cumul d'auras.
+            defFinale = { ...def, rarete: TIERS.COMMUN };
+        } else {
+            defFinale = def;
+        }
+        const ennemi = new Enemy(this, defFinale, x, y, idx);
         ennemi.sprite.setDepth(DEPTH.ENTITES);
-        if (def.gravite) {
+        if (defFinale.gravite) {
             this.physics.add.collider(ennemi.sprite, this.platforms);
         }
         this.physics.add.overlap(this.player, ennemi.sprite, () => this.contactEnnemi(ennemi));

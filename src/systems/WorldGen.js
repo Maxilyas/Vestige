@@ -10,6 +10,7 @@
 
 import { VORTEX_DIMS, HAUTEUR_SOL_EXPORT as HAUTEUR_SOL } from '../data/archetypes.js';
 import { biomePourEtage } from '../data/biomes.js';
+import { tirerRarete, probasPourEtage } from './RaritySystem.js';
 
 // --- PRNG déterministe (Mulberry32) ---
 export function creerRng(seed) {
@@ -185,6 +186,10 @@ export function genererSalle({
     const plateformesEnnemiSpawn = plateformesFlottantes.filter(p => !p.oneWay);
     const ennemis = [];
     const pool = biome?.ennemisPool ?? [];
+    // RNG dédié à la rareté — découplé du tirage géométrie/ennemi pour rester
+    // stable même si la liste d'ennemis ou les plateformes évoluent.
+    const rngRarete = creerRng((seedEtage ^ 0x5A17B0B0 ^ hashStr(salleId)) >>> 0);
+    const probasRarete = probasPourEtage(etageNumero);
     for (let i = 0; i < nbEnnemis; i++) {
         const enemyId = pool.length > 0
             ? pool[Math.floor(rng() * pool.length)]
@@ -199,7 +204,8 @@ export function genererSalle({
             x = p.x;
             y = p.y - p.hauteur / 2 - 20;
         }
-        ennemis.push({ x, y, idx: i, enemyId });
+        const tier = tirerRarete(rngRarete, probasRarete);
+        ennemis.push({ x, y, idx: i, enemyId, tier });
     }
 
     return {
