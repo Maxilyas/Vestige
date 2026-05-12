@@ -1,4 +1,4 @@
-// HUD — jauge de Résonance + slots équipés + compteurs Sel/Fragments.
+// HUD — jauge de Résonance + slots équipés + compteurs Sel/Fragments + sceaux.
 // S'abonne aux events du registry pour se redessiner à chaque changement.
 
 import { GAME_WIDTH } from '../config.js';
@@ -6,8 +6,12 @@ import { RESONANCE_CLE, RESONANCE_MAX } from '../systems/ResonanceSystem.js';
 import { MONDE_CLE, MONDE_MIROIR } from '../systems/MondeSystem.js';
 import { EVT_EQUIP_CHANGE, SLOTS } from '../systems/InventaireSystem.js';
 import { EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
+import { sceauObtenu, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { creerSlot } from '../render/ui/SlotInventaire.js';
 import { peindreEmblemeFamille } from '../render/ui/EmblemeFamille.js';
+import { peindreSceau, SCEAU_DIAMETRE } from '../render/ui/Sceau.js';
+
+const ECART_SCEAU = 6;
 
 const LARGEUR_BARRE = 200;
 const HAUTEUR_BARRE = 14;
@@ -99,12 +103,76 @@ export class UIScene extends Phaser.Scene {
         this.registry.events.on(EVT_SEL_CHANGE, handlerSel);
         this.registry.events.on(EVT_FRAGMENTS_CHANGE, handlerFragments);
 
+        // --- Bandeau de sceaux (10 emblèmes centrés en haut) ---
+        this._dessinerSceaux();
+        const handlerSceau = (etageNumero) => this._refreshSceau(etageNumero, true);
+        this.registry.events.on(EVT_SCEAU_OBTENU, handlerSceau);
+
         this.events.once('shutdown', () => {
             this.registry.events.off(`changedata-${RESONANCE_CLE}`, handlerRes);
             this.registry.events.off(`changedata-${MONDE_CLE}`, handlerMonde);
             this.registry.events.off(EVT_EQUIP_CHANGE, handlerEquip);
             this.registry.events.off(EVT_SEL_CHANGE, handlerSel);
             this.registry.events.off(EVT_FRAGMENTS_CHANGE, handlerFragments);
+            this.registry.events.off(EVT_SCEAU_OBTENU, handlerSceau);
+        });
+    }
+
+    /**
+     * Bandeau de 10 sceaux centrés horizontalement en haut de l'écran.
+     * Chaque sceau est un Container — on les stocke dans `this.sceaux[i]` pour
+     * pouvoir les remplacer à chaud quand un boss tombe.
+     */
+    _dessinerSceaux() {
+        const total = 10 * SCEAU_DIAMETRE + 9 * ECART_SCEAU;
+        const xDebut = (GAME_WIDTH - total) / 2 + SCEAU_DIAMETRE / 2;
+        // Sous les 3 lignes texte du HUD gauche (titre y=10, touches y=30,
+        // label danger y=48). 64 laisse 4-6 px d'air.
+        const y = 64;
+
+        this.sceaux = [];
+        for (let i = 1; i <= 10; i++) {
+            const sx = xDebut + (i - 1) * (SCEAU_DIAMETRE + ECART_SCEAU);
+            const obtenu = sceauObtenu(i);
+            const s = peindreSceau(this, sx, y, i, obtenu);
+            s.setDepth(220);
+            this.sceaux[i] = s;
+        }
+    }
+
+    /**
+     * Replace le visuel d'un sceau. Si `flash` est vrai, joue une anim de
+     * scale + flash doré pour souligner l'obtention.
+     */
+    _refreshSceau(etageNumero, flash = false) {
+        if (etageNumero < 1 || etageNumero > 10) return;
+        const ancien = this.sceaux[etageNumero];
+        const x = ancien?.x;
+        const y = ancien?.y;
+        ancien?.destroy();
+        const s = peindreSceau(this, x, y, etageNumero, sceauObtenu(etageNumero));
+        s.setDepth(220);
+        this.sceaux[etageNumero] = s;
+
+        if (!flash) return;
+        // Anim "pop" + flash doré
+        s.setScale(0.2);
+        this.tweens.add({
+            targets: s,
+            scale: 1,
+            duration: 280,
+            ease: 'Back.Out'
+        });
+        const halo = this.add.graphics().setDepth(219);
+        halo.fillStyle(0xffd070, 0.85);
+        halo.fillCircle(x, y, SCEAU_DIAMETRE * 1.3);
+        halo.setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({
+            targets: halo,
+            alpha: 0,
+            duration: 600,
+            ease: 'Quad.Out',
+            onComplete: () => halo.destroy()
         });
     }
 

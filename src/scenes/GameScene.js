@@ -29,6 +29,7 @@ import { Boss } from '../entities/Boss.js';
 import { Projectile } from '../entities/Projectile.js';
 import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
+import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { FRAGMENTS } from '../data/fragments.js';
 import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
@@ -1024,12 +1025,17 @@ export class GameScene extends Phaser.Scene {
         };
         this.events.on('boss:phase', onPhase);
 
-        // Boss mort : drop Tier 3 garanti + débloquage porte
+        // Boss mort : drop Tier 3 garanti + débloquage porte + sceau d'étage
         const onBossDead = (boss) => {
             this.enemySystem.marquerMort('normal', this.cleSalleEtage, 'boss');
             this._dropBossTier3(boss);
             this.bossVivant = false;
             this.afficherMessageFlottant('La voie s\'ouvre', '#ffd070');
+            // Phase 5a : sceau d'étage. marquerSceau retourne vrai si NOUVEAU
+            // (déjà acquis dans un run précédent = pas de re-anim).
+            if (marquerSceau(this.etageNumero)) {
+                this.registry.events.emit(EVT_SCEAU_OBTENU, this.etageNumero);
+            }
         };
         this.events.on('boss:dead', onBossDead);
 
