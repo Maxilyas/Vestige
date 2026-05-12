@@ -1,202 +1,209 @@
 # VESTIGE — Claude Code Context
 
 ## Projet
-Jeu vidéo 2D plateformer fantasy médiéval en JavaScript + Phaser.js.
-Prototype jouable dans le navigateur.
+Jeu vidéo 2D plateformer fantasy médiéval en JavaScript + Phaser.js, jouable dans le navigateur.
 
 **Documentation de référence :**
-- [GDD.md](GDD.md) — mécaniques de jeu, scope MVP
-- [LORE.md](LORE.md) — cosmologie, civilisation, Résonance, Vestiges, Reflux, Doctrine du Miroir
+- [GDD.md](GDD.md) — mécaniques de jeu actuelles + scope MVP
+- [LORE.md](LORE.md) — cosmologie, civilisation, Résonance, Vestiges, Reflux, Doctrine
 
-## Concept core (lire GDD.md + LORE.md pour le détail)
-- **Deux mondes** : Présent (ruines, post-Reflux, **terrain de chasse**) ↔ Miroir (passé vivant, **atelier paisible sous timer**)
-- **La Résonance** = mesure de cohérence d'existence du Vestige (le joueur). Baisse = on devient flou. À 0 → Basculement (Présent → Miroir) ou Absorption (Miroir → fin de run)
-- **Pas de mort, mais Absorption** : Résonance 0 en Miroir → fenêtre de grâce → si pas d'Artefact, le perso devient un habitant du passé. Le run termine, méta-progression survit, son corps réapparaît en Présent comme Vestige pillable au prochain run.
-- **Doctrine des Deux Mondes** : *Présent = chasser, Miroir = transformer, aucun ne suffit seul*. Le Présent contient ennemis, combats, drops bruts (Fragments). Le Miroir contient marchands, forge, identification, lore — mais tu y es repoussé par la baisse passive. Cycle naturel : `chasser → transformer → chasser plus fort`.
-- **Loot énigmatique** : 3 familles (Blanc/Bleu/Noir = Présent/Miroir/Reflux), pas de stats explicites, 3 tiers de révélation (visible / partiel / caché ★)
-- **Combat RPG** : attaque (X), parry (C), sort (Z, hook). Toute la complexité passe par les items Corps (portée, dégâts, cooldown).
-- **Aucun tutoriel** — le joueur découvre les règles en jouant
+## Concept core
+- **Deux mondes** : Présent (ruines post-Reflux, terrain de chasse) ↔ Miroir (passé fixé, **hub d'atelier paisible** : Fondeur + Identifieur + Marchand)
+- **La Résonance** = jauge de cohérence du Vestige (équivalent PV). À 0 → mort = téléport Cité Miroir, plein heal, sans pénalité.
+- **Boucle mini-jeu** : Présent (chasse) → mort/abandon → Cité (forge/identifie/vend) → vortex retour = **reset de l'étage courant** → retente plus fort. Pas de vortex volontaire en Présent : la Cité est une *récompense de défaite*, pas un bouton "save".
+- **Objectif court terme** : finir les 10 étages.
+- **Loot énigmatique** : 3 familles (Blanc / Bleu / Noir = Présent / Miroir / Reflux), pas de stats explicites, 3 tiers de révélation (visible / partiel / caché ★).
+- **Combat RPG** : attaque (X), parry (C), sort (Z, hook). Items Corps modifient portée / dégâts / cooldown.
+- **Aucun tutoriel** — le joueur découvre les règles en jouant.
 
 ## Stack technique
-- Phaser.js 3 (via CDN dans `index.html`)
+- Phaser.js 3 (via CDN dans `index.html`) — pas de bundler
 - JavaScript vanilla (modules ES), pas de TypeScript
-- Pas de framework UI — tout en canvas Phaser
+- Tout en canvas Phaser, pas de framework UI
 - Serveur de dev : `npx live-server .` ou `npx vite`
 
-## Structure du projet
+## Structure du projet (réelle, 2026-05-12)
 ```
 vestige/
 ├── index.html
-├── CLAUDE.md
-├── GDD.md
-├── src/
-│   ├── main.js
-│   ├── config.js
-│   ├── scenes/         ← GameScene, MirrorScene, UIScene
-│   ├── systems/        ← WorldGen, LootSystem, ResonanceSystem
-│   ├── entities/       ← Player, Enemy
-│   └── data/           ← items.js
-└── assets/
+├── CLAUDE.md, GDD.md, LORE.md
+└── src/
+    ├── main.js              ← Boot + enregistrement scènes
+    ├── config.js            ← Constantes globales (PLAYER, WORLD, GAME_W/H)
+    ├── data/                ← Définitions statiques (templates, palettes)
+    │   ├── archetypes.js    ← 6 thèmes de salle (Sanctuaire, Hall, Crypte, Pont, Puits, Arène)
+    │   ├── topographies.js  ← 5 structures physiques (Phase 2a)
+    │   ├── biomes.js        ← 5 biomes × 2 étages
+    │   ├── enemies.js       ← 20 ennemis paramétriques
+    │   ├── boss.js          ← 10 boss skinned (3 patterns)
+    │   ├── obstacles.js     ← Pieux / ressorts / plateformes mobiles
+    │   ├── items.js         ← 15 items équipables + 6 consommables
+    │   ├── fragments.js     ← 3 types (Blanc/Bleu/Noir)
+    │   ├── recettes.js      ← 9 recettes Fondeur cachées
+    │   ├── phrases-identifieur.js, phrases-marchand.js
+    ├── scenes/
+    │   ├── GameScene.js     ← Scène principale (Présent + Miroir conditionnel)
+    │   ├── UIScene.js       ← HUD (Résonance, équipement, Sel, Fragments)
+    │   ├── InventaireScene.js, MapScene.js
+    │   ├── FondeurScene.js, IdentifieurScene.js, MarchandScene.js  ← Overlays Cité
+    ├── systems/             ← Logique pure (pas de Phaser GameObject)
+    │   ├── WorldGen.js      ← genererSalle() (orchestrateur)
+    │   ├── EtageGen.js      ← graphe 7-salles par étage (Phase A)
+    │   ├── ResonanceSystem.js, MondeSystem.js, InputSystem.js
+    │   ├── InventaireSystem.js, EconomySystem.js, IdentificationSystem.js
+    │   ├── EnemySystem.js, LootSystem.js
+    │   ├── FondeurSystem.js, MarchandSystem.js
+    │   ├── EnemyComportements.js, BossComportements.js  ← 4 archétypes + 3 patterns
+    ├── entities/            ← GameObjects physiques
+    │   ├── Enemy.js, Boss.js, Projectile.js, Obstacle.js
+    └── render/              ← Couches visuelles (containers Phaser, pas de sprite)
+        ├── PainterlyRenderer.js, DecorRegistry.js, Parallaxe.js
+        ├── AnimationsAmbiance.js, PlateformeStyle.js
+        ├── elements/        ← Primitives décor (Colonne, Statue, Lanterne, Cascade, etc.)
+        ├── entities/        ← Visuels animés (Joueur, EnemyVisuel, Coffre, Fondeur, etc.)
+        └── ui/              ← UI réutilisable (SlotInventaire, EmblemeFamille, etc.)
 ```
 
 ## Lancer le projet
 ```bash
 npx live-server .
-# ou
-npx vite
+# touches : QD/← → bouger, ↑/Espace sauter, S/↓ descendre,
+#           X attaque, C parry, E interagir, I inventaire, M carte
+# debug   : K (-10 Résonance), H (+10 Résonance)
 ```
 
 ## Règles de développement
 - Une feature à la fois, testable immédiatement dans le navigateur
 - Pas de sur-ingénierie — la solution la plus simple qui fonctionne
 - Commenter en français
-- Les systèmes communiquent via événements Phaser (`this.events.emit`)
+- Les systèmes communiquent via événements Phaser (`this.events.emit`) et le registry
 - Ne jamais casser ce qui fonctionne déjà sans prévenir
-- Pas de TypeScript, pas de transpilation — du JS lisible directement par le navigateur
+- Pas de TypeScript, pas de transpilation
+- Tout input passe par `InputSystem` — JAMAIS de `Keyboard` direct dans la logique gameplay (prépare le portage mobile)
 
-## Ordre d'implémentation (MVP)
-1. ✅ GDD rédigé
-2. ✅ Setup Phaser + personnage qui se déplace (rectangle + plateformes statiques + saut)
-3. ✅ Génération procédurale de salles (PRNG seedé + zone de sortie + transition)
-4. ✅ Système de Résonance + HUD (UIScene parallèle, registry, jauge)
-5. ✅ Basculement Monde Normal ↔ Monde Miroir (palette + portail + baisse passive + ancrage)
-6. ✅ Système de loot — coffres, drops orphelins (consommables), inventaire 40 slots, équipement 3 slots, 3 tiers de révélation, 15 items + 6 consommables
-7. ✅ Ennemis basiques + combat RPG (attaque/parry, patterns de difficulté, drops, doctrine inversée Présent=combat / Miroir=atelier paisible)
-8a. ✅ Direction artistique — 6 archétypes architecturaux (Sanctuaire, Hall des Échos, Crypte des Murmures, Pont Suspendu, Puits Inversé, Arène du Reflux), salles dimensionnées par archétype, caméra qui suit avec deadzone, seed du run randomisée. Refonte 8a' : voie principale plate + verticalité bonus, drop-through one-way, tous les sauts confortables (≤ 70 px vert / 130 px horiz)
-8b1. ✅ Décor & couches z-order — `src/render/` (PainterlyRenderer, DecorRegistry, primitives Colonne / Statue / RacineLierre), palettes Présent (Mémoire Endormie) et Miroir (Mémoire Vive), vignette globale, particules d'ambiance par monde (poussière vs étincelles dorées), z-order strict (DEPTH.*)
-8b2. ✅ Diversité architecturale — 9 nouvelles primitives (Bâtiment, Tour, Dôme, Atelier, SolDecore, Lanterne, Banderole, MobilierVie : Tonneau / Caisse / PotFleurs / EtalMarchand). Couche silhouettes lointaines (depth -50, alpha 0.45). Sol décoré (pavé + végétation rampante par-dessus le sol uni). Mobilier de vie aussi en Présent sous forme dégradée. Animations dès 8b2 : flicker lanternes (halo additif `BlendModes.ADD`), ondulation banderoles, fenêtres allumées qui clignotent, drapeaux qui ondulent, fumée d'atelier en Miroir. Variation seedée des compositions par archétype.
-8b3. ✅ Environnement vivant — Parallax 4 couches (ciel/abîme avec dégradé Canvas + étoiles ou poussière d'or, silhouettes lointaines x0.3, silhouettes proches x0.7, foreground x1.05/1.15). Redesign plateformes/sol via `PlateformeStyle` (pierre cassée + fissures + mousse Présent / pavés ornés + chasse-pieds doré + frise Miroir, traitement spécial pour le sol principal). Animations atmosphériques : halo lumineux qui suit le joueur en Miroir (BlendModes.ADD, pulse), brume bleutée qui rampe au sol en Présent, rayons de lumière dorée obliques en Miroir.
-8b4. ✅ Direction artistique des entités — Joueur (silhouette stylisée + cœur lumineux dont la couleur reflète la Résonance, animations idle/saut/atterrissage/flash hit), Gardien de Pierre (silhouette quadrupède + œil rougeoyant additif pulsant + fissures), Spectre de Cendre (silhouette flottante + voile + traînée de fumée + yeux clignotants), Coffre (bois + cerclages dorés + serrure, animation d'ouverture : couvercle qui pivote + burst d'étincelles dorées + cube qui sort et flotte vers le joueur)
-8b5. ✅ Refonte UI inventaire — Carnet du Vestige (cadre stylisé, emblèmes vectoriels, slots dorés, panneau détail avec boutons, cascade d'ouverture)
-8b6. ✅ Polish UI/animations — visuels stylisés des consommables (Larme/Cendre/Sel/Œil/Pierre/Encre, chacun avec emblème vectoriel propre + halo additif pulsant + flottement), HUD équipement reskinné (slots dorés ornementés réutilisant `creerSlot` avec label TÊTE/CORPS/ACC.), animation d'attaque refaite (slash courbe Bézier 3 couches + screen shake + hit-stop + flash écran), animation de parry refaite (anneau doré qui s'élargit + halo qui suit + effet renforcé pour parry réussi), animations d'attaque ennemis signatures (Gardien : poing rocailleux + œil rouge / Spectre : 4 serres courbes Bézier en éventail + yeux qui s'enflamment), fix layout panneau détail
-9a. ✅ Économie — Sel de Résonance (monnaie) + Fragments (3 familles, matière première). `EconomySystem` (compteurs dans le registry, événements). Drops modifiés : ennemis donnent toujours 2-5 Sel + 35 % chance Fragment de leur famille naturelle (Gardien=Blanc, Spectre=Bleu). Coffres : 30 % chance Fragment en Présent, 60 % en Miroir. HUD : compteur Sel doré + 3 compteurs Fragments (avec emblèmes vectoriels) sous l'équipement.
-9b. ✅ Le Fondeur — table de forge avec 3 emplacements, 9 recettes (1 et 2 Fragments) cachées au joueur, phrases cryptiques contextuelles ("Curieux. L'un éteint l'autre."), coût en Sel (3/8/15), visuel signature (silhouette robuste + brasero + flammes additives + halo doré), spawn 33 % par salle Miroir, interaction touche E, overlay style Carnet du Vestige
-9c. ✅ L'Identifieur — révélation 1 effet à la fois, phrases poétiques cryptiques par cible (*"Cet objet hâte ton bras."* / *"Tu portes une autre âme."*), tracking globale par itemId, coût 5/12 Sel ou 1 Encre du Témoin (choix explicite). Visuel : être hiératique en méditation, robe blanche/crème, voile blanc sur les yeux, mains paumes vers le haut, halo bleu argenté. Spawn 25 % par salle Miroir (exclusif avec Fondeur 33 %). PanneauDetail (Carnet du Vestige) respecte les révélations.
-9d. ✅ Le Marchand — la Glaneuse (vitrine + rachat + fragmentation)
-9d'. ✅ Cité marchande — les 3 artisans rassemblés dans la salle d'entrée du Miroir, basculement Présent→Miroir téléporte vers la cité
-9e. ⬜ Recettes 3 Fragments + humeurs du Fondeur + paris du Marchand
+## Roadmap actuelle — mini-jeu 10 étages
+*Décidée le 2026-05-12. Recentrage : finir un mini-jeu jouable (vaincre les 10 étages) avant d'ajouter des couches. Polish étage par étage.*
 
-## Bestiaire & boss (étape A+B)
-- **20 ennemis** = 4 archétypes × 5 variantes par archétype (un par biome).
-  - **Veilleur** (stationnaire pierreux) : Gardien de Pierre / Sentinelle de Cendre / Idole Fissurée / Colosse du Voile / Veilleur du Reflux.
-  - **Traqueur** (vol + poursuite) : Spectre de Cendre / Goule Volante / Ombre des Murmures / Larme Tisseuse / Cri du Reflux.
-  - **Chargeur** (telegraph → rush) : Bélier Brisé / Ombre Galopante / Coureur de Cendre / Rage du Voile / Tonnerre du Reflux.
-  - **Tireur** (projectiles à distance) : Œil-Témoin / Suintement / Cracheur Pâle / Voix Lointaine / Œil du Reflux.
-- **5 biomes** par paires d'étages : Ruines basses (1-2) / Halls Cendrés (3-4) / Cristaux Glacés (5-6) / Voile Inversé (7-8) / Cœur du Reflux (9-10). Chaque biome a sa palette + son pool de 4 ennemis + sa densité (de 2-4 à 7-12 par salle).
-- **10 boss** skinned-but-shared : 3 patterns × 10 skins × scaling. Patterns : Colosse (smash AOE périodique), Tisseur (salves de projectiles téléguidés), Hydre (composite multi-phases). Skins : Roi de Pierre / Effigie Brisée / Marteau-Glas / Tisseur de Cendre / Voix de l'Abîme / Œil Sans Fin / Hydre Naissante / Tisseuse du Voile / Échos Multipliés / Le Souverain du Reflux.
-- **Gating** : la porte E de la salle BOSS ne s'ouvre qu'après la mort du boss. Drop garanti : 1 item Tier 3 de la famille du boss + 10-25 Sel + 3 Fragments de la famille.
+**Boucle cible :** Présent (chasse) → mort = Cité Miroir (forge/identifie/vend) → vortex = reset étage → retente. Cible perso : finir les 10 étages avec ≤ 3 visites en Miroir.
 
-## Variété des salles & obstacles
-- **18 layouts** (3 par archétype × 6 archétypes) dans `systems/Layouts.js`. Chaque layout a son "feel" :
-  - **Sanctuaire** : classique / pèlerinage (escaliers latéraux) / piégé (pieux + ressorts).
-  - **Hall** : classique / galerie étagée / double chemin (haut + bas piégé).
-  - **Crypte** : classique / catacombes (pieux plafond) / niche (dépression + ressort).
-  - **Pont** : classique / pont brisé (ressorts dans le gouffre) / pont double (plateforme mobile).
-  - **Puits** : classique / pieux (ressort obligatoire) / cascade (plateforme mobile verticale).
-  - **Arène** : classique / piégée / estrade.
-- **3 obstacles** dans `data/obstacles.js` : pieux (3 dégâts au contact), ressorts (boost vy=-600), plateformes mobiles (horizontale/verticale, sinusoïdal).
-- **Cascades signature** par biome : eau bleutée / cendres ambrées / cristaux glacés / voile spectral mauve / flux cramoisi du Reflux. Posées de chaque côté du sol principal en Présent (70 % de chance par côté).
-- **Combinatoire** : 18 layouts × 5 biomes × seed décor × proba cascade × placements obstacles → plusieurs milliers de configurations distinctes.
-9f. ⬜ Items générés procéduralement (variants)
-8c. ⬜ Innovations mécaniques signature (aura Sanctuaire, échos Hall, drop-down Crypte, plateformes résonantes Pont, gravité inversée Puits, espace rétrécissant Arène)
-8d. ⬜ Parallax 4 couches (ciel, silhouettes lointaines)
-8e. ⬜ Polish (animations idle/marche du joueur, post-process)
+| Phase | État | Description |
+|---|---|---|
+| **1** | ✅ | **Simplification Miroir + mort = retour Cité.** Drain Miroir retiré, Cité = hub pur, vortex retour reset étage, heal complet, méta-progression conservée. |
+| **2a** | ✅ | **Refactor topographie / archétype.** Découplage thème (archétype) ⊥ structure (topographie). 5 topographies pilotes. `Layouts.js` supprimé. Doctrine head-bonk documentée (plateformes empilées au même x avec 70 px vert → la plate du haut doit être one-way). |
+| **2b** | ⬜ | **Compléter à 18-20 topographies.** `labyrinthe_murs`, `pont_brise`, `gouffre_lateral`, `corridor_pieges`, `cascade_plateformes`, `salle_pieux_plafond`, `arene_boss` dédiée, etc. |
+| **3** | ⬜ | **Étages déterministes.** `data/etages.js` assigne (archétype, topographie, ennemis) fixes par (étage, salleId). Variance seedée résiduelle. Mémoire de carte entre runs. |
+| **4** | ⬜ | **Boss + clés d'étage + écran de victoire.** 10 boss câblés (1 par étage), drop Clé d'étage, étage 10 = Souverain du Reflux + Artefact = fin. **Mini-jeu terminable.** |
+| **5** | ⬜ | **Identité visuelle par paire d'étages.** Polish itératif biome par biome. |
+| **6** | ⬜ (long terme) | **Spells & combos d'équipement.** Items qui octroient un sort (touche Z), recettes re-forge combinant 2 items → nouvelle capacité. |
 
-## Roadmap macro — Étages, biomes et boss
-*Refonte structurelle décidée le 2026-05-06. Passage d'un roguelike linéaire infini à un roguelike structuré en 10 étages avec objectif final (l'Artefact de Résonance au sommet, cf. LORE §6).*
+## Systèmes implémentés (récap pour reprise)
 
-- **Phase A** ✅ — Graphe d'étage + carte + fix Puits Inversé. Modèle (etage, salleId), 7 salles par étage en arbre (chaîne main A→B→C→D→BOSS + dead-ends verticaux B-haut/D-haut), portes N/S/E/O multidirectionnelles avec retour bidirectionnel, MapScene avec découverte à mesure (touche M).
-- **Phase B** ⬜ — Biomes + gradient destruction/reconstruction. 10 étages → 3-4 biomes (palettes, archétypes, ennemis). Présent : ruiné en bas, reconstruit en haut. Miroir : intact en bas, effondré en haut sous le Reflux.
-- **Phase C** ⬜ — Boss + objectif. 1 boss par étage, drop garanti (clé / Artefact). 1er boss prototypé.
-- **Phase D** ⬜ — Polish navigation & méta (téléport vers salles visitées, mémoire de carte entre runs).
+### Génération de monde
+- **Graphe d'étage (Phase A)** : 7 salles par étage en arbre — `A → B → C → D → BOSS` (chaîne main) + dead-ends verticaux `B-haut` / `D-haut` (coffre garanti). Portes N/S/E/O bidirectionnelles. État persistant `(etage, salleId)` dans le registry. Carte avec touche M (découverte à mesure).
+- **Topographies (Phase 2a)** : 5 pilotes dans `data/topographies.js` :
+  - `arene_ouverte` (1600×720) : sanctuaire / hall / arene / crypte
+  - `tour_verticale` (1280×1080) : sanctuaire / hall / puits / crypte
+  - `croix_centrale` (1400×900) : sanctuaire / hall / crypte
+  - `puits_descente` (960×1080) : puits / crypte
+  - `double_etage` (1700×800) : sanctuaire / hall / pont
+  - Chaque topographie owns dims + plateformes + obstacles + portes positions + spawnDefault.
+- **5 biomes par paires d'étages** (`data/biomes.js`) : Ruines basses (1-2) / Halls Cendrés (3-4) / Cristaux Glacés (5-6) / Voile Inversé (7-8) / Cœur du Reflux (9-10). Chacun : palette + pool de 4 ennemis + densité (2-4 à 7-12 par salle).
+- **Obstacles** (`data/obstacles.js`) : pieux (3 dégâts contact), ressorts (vy=-600), plateformes mobiles sinusoïdales. Désactivés en Miroir et en salle d'entrée Présent.
+- **PRNG Mulberry32** seedé par run. Géométrie reproductible.
 
-## Cadrage mini-jeu 10 étages
-*Décidé le 2026-05-12. Recentrage : on fait un mini-jeu fini (vaincre les 10 étages) avant d'ajouter de la profondeur. Polish étage par étage, pas de nouvelle feature majeure tant que la boucle de base n'est pas solide.*
+### Combat
+- **Joueur** : Rectangle physique invisible + JoueurVisuel (silhouette + cœur lumineux dont couleur reflète Résonance). Combat X (attaque, 3-couches slash Bézier + screen shake + hit-stop + flash) / C (parry, anneau doré, fenêtre 300ms + bonus Résonance) / Z (sort, hook réservé Phase 6).
+- **20 ennemis** : 4 archétypes comportementaux (Veilleur stationnaire / Traqueur volant poursuiveur / Chargeur telegraph-rush / Tireur projectile) × 5 variantes par biome. Tous en visuel paramétrique (`render/entities/EnemyVisuel.js`).
+- **10 boss** : 3 patterns (Colosse smash AOE / Tisseur projectiles téléguidés / Hydre composite multi-phases) × 10 skins. Halo additif pulsant + traînée de braises. Gating : porte E salle BOSS bloquée tant que boss vivant. Drop : T3 garanti + 10-25 Sel + 3 Fragments.
+- **Projectiles** : orbe + halo + traînée + homing optionnel + parry-able.
 
-**Boucle cible :** Présent = chasse → mort (Résonance 0) = téléport Cité Miroir → forge/identifie/marchand → vortex retour = reset étage courant → retente avec meilleur gear. Pas de vortex volontaire en Présent : la Cité est une **récompense de défaite**, pas un bouton "save". Cible perso : finir les 10 étages avec ≤ 3 visites en Miroir.
+### Loot & économie
+- **Inventaire 40 slots** + 3 slots équipement (tête/corps/accessoire). Persisté dans le registry.
+- **15 items** équipables (3 familles × 5 par famille, plusieurs tiers). 3 tiers de révélation des effets (visible / partiel / caché ★).
+- **6 consommables** : Larme / Cendre / Sel / Œil de Verre / Pierre d'Ancrage / Encre du Témoin.
+- **Économie** : Sel de Résonance (monnaie) + 3 types de Fragments (matière première). Drops ennemis : 2-5 Sel + 35 % chance Fragment de famille naturelle. Coffres : 85 %+ Fragment (mini-jeu).
+- **Carnet du Vestige** (UI inventaire) : cadre stylisé, emblèmes vectoriels, slots dorés, panneau détail avec révélations contextuelles.
 
-- **Phase 1** ✅ — **Simplification Miroir + mort = retour Cité**. Drain Miroir supprimé, portes Miroir désactivées (Cité = hub pur), ennemis & obstacles supprimés en Miroir et en salle d'entrée Présent (safe respawn), vortex retour reset l'étage courant (coffres re-fermés, ennemis re-respawnés, boss revit), heal complet sur les deux transitions, jauge Résonance grisée en Miroir, Ancrage retiré (dead code). Méta-progression conservée (inventaire/équipement/Sel/Fragments/identifications survivent au reset).
-- **Phase 2a** ✅ — **Refactor architectural topographie / archétype**. Découplage `structure ↔ thème`. Nouveau `data/topographies.js` (5 pilotes : `arene_ouverte` / `tour_verticale` / `croix_centrale` / `puits_descente` / `double_etage`). Chaque topographie owns dims + plateformes + obstacles + positions des portes + spawnDefault, et déclare `archetypesCompatibles` + `portesPossibles`. L'archétype slimé à id+nom+niveauxAssocies (thème seulement). `EtageGen` pick archétype puis topographie compatible supportant les portes nécessaires. `systems/Layouts.js` supprimé. HUD étendu : `Étage X — Archetype (Topographie)`. Bugs reachability corrigés (corniches arène à cx±320, échelle croix one-way + hub/palier one-way pour éviter head-bonk, escalier double_etage hors range balcon, balcon étendu jusqu'au bord droit pour porte E). Ennemis ne spawn plus sur plateformes one-way (échelles).
-- **Phase 2b** ⬜ — **Compléter à 18-20 topographies**. Ajouter labyrinthe_murs, pont_brise, gouffre_lateral, corridor_pieges, cascade_plateformes, salle_pieux_plafond, arene_estrade, etc.
-- **Phase 3** ⬜ — **Étages déterministes**. `data/etages.js` assigne archétype + topographie + ennemis fixes par (étage, salleId). Variance seedée résiduelle sur positions d'ennemis et loot des coffres. MapScene affiche les étages déjà visités entre runs (mémoire de carte méta).
-- **Phase 4** ⬜ — **Boss + clés d'étage + fin de jeu**. 10 boss câblés (1 par étage), drop d'une Clé d'étage qui débloque la porte E, étage 10 = Souverain du Reflux + Artefact = écran de victoire. Mini-jeu terminable.
-- **Phase 5** ⬜ — **Identité visuelle par paire d'étages**. Polish itératif biome par biome : palettes renforcées, particules signature, décor spécifique, plateformes thématisées.
-- **Phase 6** ⬜ (long terme) — **Spells & combos d'équipement**. Items qui octroient un sort (touche Z), recettes de re-forge combinant 2 items équipés en nouvelle capacité.
+### Cité Marchande (Miroir)
+- **Salle A en Miroir** est forcée en `arene_ouverte` thématisée Sanctuaire → cité marchande majestueuse (`planCiteMarchande` dans DecorRegistry).
+- **3 PNJ artisans** rassemblés sur le sol (positions fixes 30/50/72 % de largeur) :
+  - **Le Fondeur** (`FondeurScene`) : combine 1-2 Fragments + Sel → item Tier 3. 9 recettes cachées. Phrases cryptiques.
+  - **L'Identifieur** (`IdentifieurScene`) : révèle 1 effet à la fois, coût 5/12 Sel ou 1 Encre du Témoin. Phrases poétiques par cible.
+  - **Le Marchand / la Glaneuse** (`MarchandScene`) : vitrine 4 items / rachat 30 % / fragmentation (item → Fragments, 10 % chance bonus Noir en T3). Onglets VITRINE / RACHAT / FRAGMENTER.
+
+### Direction artistique
+- **Palette Présent (Mémoire Endormie)** vs **Miroir (Mémoire Vive)**. Tinte par biome.
+- **Parallax 4 couches** : ciel/abîme (Canvas dégradé) → silhouettes lointaines (x0.3) → silhouettes proches (x0.7) → foreground (x1.05-1.15).
+- **Plateformes** ornées (pierre cassée + mousse Présent / pavés ornés + chasse-pieds doré Miroir).
+- **Animations atmosphériques** : halo joueur additif en Miroir, brume bleutée au sol en Présent, rayons dorés obliques en Miroir, lanternes flicker, banderoles ondulent, drapeaux ondulent, fumée d'atelier.
+- **Cascades signature** par biome (eau / cendres / cristaux / voile / Reflux).
+- **Entités** : tous les visuels sont des Containers Phaser qui suivent un Rectangle physique invisible. Coffre = animation d'ouverture (couvercle pivote + étincelles + cube vol vers joueur).
 
 ## État actuel
-*Cette section doit être mise à jour à la fin de chaque session de travail.*
+*À mettre à jour à la fin de chaque session.*
 
-- **Dernière étape franchie :** **Phase 2a — Refactor topographie / archétype**. Découplage propre entre **thème** (archétype : id + nom + niveauxAssocies) et **structure** (topographie : dims + plateformes + obstacles + portes positions + spawnDefault). Nouveau `data/topographies.js` avec 5 topographies pilotes : `arene_ouverte` (1600×720, sol large + plateformes flottantes), `tour_verticale` (1280×1080, tour one-way au centre), `croix_centrale` (1400×900, mid-floor + échelle one-way + top palier), `puits_descente` (960×1080, entrée par le haut, zigzag descendant), `double_etage` (1700×800, sol combat + balcon haut accessible par escalier). Chaque topographie déclare `archetypesCompatibles` + `portesPossibles`. `data/archetypes.js` slimé radicalement (suppression de `dimensions`, `genererPlateformes`, `spawnJoueur`, `portesPossibles`, `portePosN`, `portePalierE`, `calculerPorte`, `calculerSortie`, `choisirArchetype` — tout migré dans topographies). `systems/Layouts.js` supprimé (les 18 layouts hand-crafted absorbés dans les nouvelles topographies). `systems/EtageGen.js` refactoré : pick archétype puis topographie compatible supportant les portes nécessaires (`choisirArchetypeEtTopographie`). `systems/WorldGen.js` refactoré : reçoit `(archetype, topographie)` et utilise `topographie.generer({rng, portesActives, dims})` au lieu du legacy `archetype.script(dims)`. HUD étendu : `Vestige — Étage X · Archetype (Topographie) · ENTRÉE`. **Bugs reachability corrigés** (toutes plateformes maintenant atteignables) : corniches `arene_ouverte` rapprochées à cx±320 (au lieu de ±460), échelle `croix_centrale` one-way avec hub+palier one-way pour éviter head-bonk (overlap de 8 px entre dernière marche et hub si normal), escalier `double_etage` hors range balcon + balcon étendu jusqu'au bord droit (porte E). Filtre ennemi spawn dans WorldGen pour exclure les plateformes one-way (les échelles ne sont plus encombrées). **Doctrine apprise** : 2 plateformes empilées au même `x` avec 70 px vert et toutes deux NORMALES → head-bonk (60 player + 18 plate = 78 px requis). Solution : la plateforme du haut doit être one-way.
-- **Précédente étape :** **Phase 1 — Simplification Miroir + mort = retour Cité**. Recentrage gros du jeu sur un mini-jeu "vaincre les 10 étages" en mode *fail and try again*. **Doctrine renforcée** : Présent = chasse, Miroir = hub d'atelier pur (Cité Marchande), pas de drain. **Seul accès au Miroir = mort** (Résonance 0). Pas de vortex volontaire en Présent — la Cité est une récompense de défaite, pas un bouton "save". Au retour via vortex Miroir → reset complet de l'étage courant (coffres re-fermés, ennemis et boss respawn). Heal complet à 100 sur les deux transitions. Méta-progression conservée intégralement (inventaire, équipement, Sel, Fragments, identifications). **Changements concrets** : `MondeSystem` simplifié (plus de constantes APRES_BASCULE/BONUS_RETOUR, heal full), `InventaireSystem.resetEtage(numero)` et `EnemySystem.resetEtage(numero)` (filtrent les clés `:e<numero>:`), `GameScene` : suppression du timer Miroir + handlers Ancrage (dead code), portes désactivées en Miroir, vortex créé uniquement en Miroir, ennemis et obstacles désactivés en salle d'entrée Présent et en Miroir (safe respawn / atelier paisible), `retourAuNormal()` appelle les `resetEtage` avant fadeOut. `UIScene` : jauge Résonance grisée (alpha 0.35) en Miroir via listener `changedata-monde`. Codes morts conservés : items qui modifient `passiveMiroir` ou `pause_miroir` deviennent silencieux (à nettoyer plus tard).
-- **Précédente étape :** **Variété des salles + obstacles + cascades**. Refonte massive de la génération de salle pour offrir "des centaines de configurations uniques" via combinatoire paramétrique. Nouveau `systems/Layouts.js` : 18 layouts hand-crafted (3 par archétype × 6) avec gameplay différencié — gauntlet de pieux, double chemin, dépression centrale, pont brisé avec ressorts, plateforme mobile, estrade, etc. Nouveau système d'obstacles dans `data/obstacles.js` + `entities/Obstacle.js` : pieux (3 dégâts contact, sol/plafond), ressorts (vy=-600 boost, déclenchement animé), plateformes mobiles horizontales/verticales (oscillation sinusoïdale via body.velocity, transport correct du joueur). Visuels par biome dans `render/entities/{Pieux,Ressort,PlateformeMobile}.js` (palette adaptée aux 5 biomes). `WorldGen.js` choisit un layout seedé par salle (`choisirLayout(archetype.id, rng)`) au lieu d'appeler le `genererPlateformes` unique. Le retour `{ plateformes, obstacles }` est propagé jusqu'à GameScene qui instancie les obstacles + collisions appropriées (overlap pour pieux/ressorts, collider one-way pour plateformes mobiles). Nouvel élément `render/elements/Cascade.js` : flux décoratif vertical signature par biome (eau bleutée / cendres ambrées / cristaux glacés / voile mauve / Reflux cramoisi), avec colonne + bandes animées + halo source + bassin éclaboussure + particules. `DecorRegistry.js` peint 0-2 cascades par salle Présent selon `salle.biomeId`. `peindreDecor()` accepte `biomeId` en option. **Combinatoire** : 18 × 5 × seed décor × proba cascade × proba layout = plusieurs milliers de configurations. Événement `obstacle:pieu:hit` câblé dans GameScene avec invincibilité globale.
-- **Précédente étape :** **Bestiaire (A+B) — 20 ennemis paramétriques + 10 boss skinned + 5 biomes**. Refonte complète du combat. Architecture : 4 archétypes de comportement (Veilleur/Traqueur/Chargeur/Tireur) dans `systems/EnemyComportements.js`, 3 patterns de boss (Colosse/Tisseur/Hydre) dans `systems/BossComportements.js`. 20 ennemis et 10 boss définis comme des variantes paramétriques (palette + accessoire + scaling stats) dans `data/enemies.js` et `data/boss.js`. Visuel paramétrique : `render/entities/EnemyVisuel.js` (4 silhouettes × accessoires : cornes_courtes/longues/arquees, cristaux_dos, crocs, voile_double, aura_glace, couronne_yeux/épines), `render/entities/BossVisuel.js` (silhouette amplifiée + halo additif pulsant + liseré écarlate + traînée de braises permanente). Nouveau `entities/Projectile.js` : orbe + halo + traînée + homing optionnel + collision plateformes/joueur + parry. `entities/Boss.js` étend Enemy avec dispatcher de pattern. 5 biomes dans `data/biomes.js` mappés par paires d'étages (Ruines basses → Halls Cendrés → Cristaux Glacés → Voile Inversé → Cœur du Reflux), chacun avec palette + pool d'ennemis + densité (2-4 à 7-12 par salle). `systems/WorldGen.js` : densité scalée par biome, tirage seedé du type d'ennemi à la génération de salle (chaque salle a ses types stables). `scenes/GameScene.js` : spawn boss en salle BOSS si pas déjà tué (`enemySystem.estMort('boss')`), bandeau d'annonce du nom, gating de la porte E (bloquée tant que `bossVivant`, message "La voie est scellée"), événements Phaser `enemy:tir / boss:tir / boss:smash:telegraph / boss:smash:impact / boss:phase / boss:dead` câblés vers les effets visuels (smash AOE 160 px de rayon avec onde de choc + 22 gravats + screen shake + dégâts si dans le rayon, projectiles overlap avec parry + invincibilité), drop boss = T3 garanti de la famille + ×5 Sel + 3 Fragments. Drop économique des ennemis normaux passe par `def.familleFragment` (plus de hardcode). Suppression des fichiers legacy `GardienPierre.js` / `SpectreCendre.js`. **Chiffres** : ~2300 lignes de code ajoutées, 9 fichiers créés, 4 modifiés, 2 supprimés.
-- **Précédente étape :** **9d' — Cité marchande**. Refonte du spawn des PNJ : on supprime le tirage aléatoire 28/22/22/28 par salle Miroir (qui était dégénéré avec seulement 5 salleIds possibles depuis Phase A — un même run pouvait ne JAMAIS faire spawner Fondeur ni Marchand selon la seed). Désormais : la salle d'entrée de l'étage (`role: 'entree'`, salleId='A') est FORCÉE en archétype `sanctuaire` dans `EtageGen.js`, et en Miroir devient une **cité marchande majestueuse** où les 3 artisans (Fondeur 30 %, Identifieur 50 %, Marchand 72 % de la largeur) sont rassemblés à des positions fixes sur le sol. Doctrine renforcée : *Présent = chasse, Miroir = atelier paisible centralisé*. Nouveau plan `planCiteMarchande` dans `DecorRegistry.js` : skyline ville étendue (8 silhouettes : tours/dômes/bâtiments), grand dôme central, statue derrière l'autel, 4 colonnes monumentales, 4 banderoles tendues, 6 lanternes, 4 étals de marchand, 8 pots de fleurs aux pieds des colonnes, tonneaux + caisses. `peindreDecor()` gagne une option `estCiteMarchande` qui remplace le plan d'archétype. **Téléport sur basculement** : `basculerVersMiroir()` ne sauvegarde plus la position pendante, il vide `CLE_POSITION_PENDANTE`, force `CLE_SALLE_COURANTE = salleEntreeId`, et `scene.restart({ salleId: 'A' })`. Le joueur atterrit donc TOUJOURS dans la cité marchande quand sa Résonance tombe à 0 en Présent. Le vortex (Miroir↔Présent volontaire) conserve toujours la position — c'est un déplacement contrôlé. Une cité par étage (régénérée à chaque montée). Bug corrigé au passage : Fondeur et Marchand qui ne spawnaient plus en Phase A à cause de l'échantillonnage dégénéré sur 5 salles.
-- **Précédente étape :** **Phase A** — Graphe d'étage + carte + fix Puits Inversé. **Refonte structurelle majeure** : on quitte le roguelike linéaire (`indexSalle: 0,1,2,...`) pour un modèle (étage, salleId) avec graphe de salles bidirectionnel et 10 étages au total. Nouveau : `data/biomes.js` (placeholder Phase B, un seul biome "ruines basses" pour l'instant), `systems/EtageGen.js` (génération seedée d'un graphe d'étage : 7 salles en arbre — chaîne principale A→B→C→D→BOSS connectée E/O + 2 dead-ends verticaux B-haut / D-haut connectés par N avec coffre garanti, sérialisation `etageVersRegistry` / `etageDepuisRegistry` car le registry n'aime pas Map/Set), `scenes/MapScene.js` (overlay carte avec touche M : nœuds des salles visitées en plein, salles adjacentes-connues en pointillés, salles inconnues invisibles, salle courante surlignée pulsante, étoile rouge pour le boss, gestion `connus = visités ∪ voisins de visités`). Refactor `systems/WorldGen.js` : `genererSalle({seedEtage, etageNumero, salleId, archetype, portesActives, estBoss, estEntree})` produit `{id, archetype, dims, plateformes, portes: {N?,S?,E?,O?}, vortex, spawnDefault, coffre, dropSol, ennemis, estBoss, estEntree}`. `data/archetypes.js` étendu avec `portesPossibles: ['E','O',...]` par archétype + `calculerPorte(archetype, dims, direction)` qui calcule la position d'une porte selon la direction (E=droite sol, O=gauche sol, N=centre haut, S=centre bas) + `spawnDepuisPorte(porte)` (spawn à 60 px à l'intérieur de la porte) + `directionOpposee(dir)`. **Fix Puits Inversé** : `portesPossibles: ['N','S','E']`, plateforme du sommet élargie (320 px) pour porter une vraie porte N, porte E sur le palier-sortie à yTop=900 inchangée, porte O au sol, porte S au sol. GameScene refactoré : state model `(etageNumero, salleId)` dans le registry, génération d'étage à la volée si manquant, `_traverserPorte(salle, direction)` charge la salle voisine via `salle.voisins[direction]` et passe `porteArrivee = directionOpposee(direction)` pour spawn correct côté voisin, `monterEtage()` quand la salle BOSS est traversée par E (porte de transition d'étage sans voisin dans le graphe). Touche M dans InputSystem (`ouvrirCarte`). Clés persistantes des coffres/drops/ennemis passées en `${etage}:${salleId}` pour éviter les collisions entre étages. **Le retour entre salles fonctionne** : tu peux ressortir par la porte par laquelle tu es entré, l'état de la salle persiste (coffres ouverts restent ouverts, ennemis tués restent morts, ennemis non-tués respawn à leur position d'origine — anti-farm naturel).
-- **Précédente étape :** 9d — Le Marchand (la Glaneuse). `data/phrases-marchand.js` (phrases lassées et cryptiques par contexte : accueil, vente réussie / vente pauvre, rachat, fragmentation, fragmentation bonus Reflux, inventaire plein, vitrine vide). `systems/MarchandSystem.js` (logique pure : `acheter/vendre/fragmenter` atomiques sur EconomySystem + InventaireSystem ; `genererVitrine` 4 items seedés selon proba Miroir ; prix d'achat 8/20/50 Sel par tier, rachat à 30 %, fragments rendus = tier, **10 % chance Fragment Noir bonus en T3** comme easter egg lore). `render/entities/Marchand.js` (la Glaneuse : tapis brodé étalé + 4 items silhouettes décoratifs sur le tapis, vieille femme assise jambes croisées, châle mauve à franges dorées, robe pourpre, cheveux gris en chignon, yeux mi-clos, longue pipe avec braise rougeoyante additive et fumée ParticleEmitter, halo mauve discret pour repérage). `scenes/MarchandScene.js` (overlay Carnet du Vestige avec 3 onglets cliquables VITRINE/RACHAT/FRAGMENTER, slots à gauche, panneau détail à droite, bouton d'action contextuel ACHETER/VENDRE/FRAGMENTER, animation de transaction (flash + 14 particules — dorée pour vente/rachat, couleur famille pour fragments, violette si bonus Reflux), bande ressources Sel+Encre+3 Fragments en bas). Vitrine persistée dans le registry sous clé `vitrine:<seed^salle>` : tu peux quitter et revenir, c'est la même vitrine. Spawn revisité : Fondeur 28 % / Identifieur 22 % / Marchand 22 % / rien 28 %. Interaction touche E rayon 60 px comme les autres PNJ.
-- **Précédente étape :** 9c — L'Identifieur. `data/phrases-identifieur.js` (phrases poétiques par cible d'effet — JAMAIS la valeur, juste ce que ça FAIT SENTIR), `systems/IdentificationSystem.js` (tracking { itemId: [indices effets révélés] } dans le registry, calcul tier effectif, premier effet caché), `render/entities/Identifieur.js` (être hiératique en robe crème + voile blanc + cheveux blancs + mains levées paumes vers le haut + cordon doré + halo bleu argenté pulsant + tapis de méditation), `scenes/IdentifieurScene.js` (overlay : liste filtrée Tier 2/3 avec effets cachés à gauche, panneau item à droite avec effets visibles/cachés selon tier, 2 boutons RÉVÉLER (5/12 Sel ou 1 Encre du Témoin), animation de révélation flash doré + 14 particules + phrase poétique italique bleu pâle, bande ressources avec Sel + Encre + Fragments). Spawn exclusif Fondeur 33 % / Identifieur 25 % / rien 42 %. Encre du Témoin transformée en ressource cumulable (compteur `encre_temoin_stock` dans EconomySystem). PanneauDetail du Carnet du Vestige modifié pour utiliser IdentificationSystem.effetsEffectifs() — les révélations sont visibles partout dans l'inventaire.
-- **Précédente étape :** 9b — Le Fondeur. `data/recettes.js` (9 combinaisons codées en dur, jamais affichées au joueur, plus phrases cryptiques contextuelles), `systems/FondeurSystem.js` (logique pure atomique : vérifie conditions, tire résultat, consomme Fragments + Sel), `render/entities/Fondeur.js` (visuel signature : silhouette robuste avec gants brûlés, brasero rougeoyant à 3 couches de flammes additives + fumée ParticleEmitter, halo doré pulsant pour repérage), `scenes/FondeurScene.js` (overlay style Carnet : phrase italique du Fondeur en haut, 3 emplacements pour Fragments, 3 boutons d'ajout par famille avec compteur de stock disponible, coût en Sel calculé live, bouton FONDRE + indication contextuelle d'échec, zone résultat avec emblème agrandi + halo + nom + ★ Tier 3, bande ressources en bas). Spawn aléatoire seedé : 33 % de chance par salle Miroir, position sur le sol entre 0.3-0.7 de la largeur. Interaction touche E avec rayon 60 px. Tout est seedé pour reproductibilité du run.
-- **Précédente étape :** 9a — économie de base. `data/fragments.js` définit 3 types (blanc/bleu/noir, matière première inerte). `systems/EconomySystem.js` gère le Sel de Résonance (monnaie) et les compteurs de Fragments dans le registry, méthodes `ajouterSel/retirerSel/peutPayer/ajouterFragment/retirerFragment/retirerLot` (atomique pour les recettes). Drops d'ennemis : 2-5 Sel garanti + 35 % chance d'1 Fragment de la famille du type (Gardien=Blanc, Spectre=Bleu). Coffres : 30 % chance Fragment en Présent / 60 % en Miroir, selon les mêmes proba de famille que les items équipables. HUD étendu dans `UIScene` : compteur Sel doré (cristal en losange) + 3 compteurs Fragments alignés à droite, chacun avec emblème vectoriel cliquable (cercle/triangle/losange), sous l'équipement.
-- **Précédente étape :** 8b6 — polish UI/animations. `src/render/entities/Consommable.js` ajoute un visuel par type de consommable (Larme = goutte, Cendre = nuage, Sel = cristal facetté, Œil de Verre = œil rond avec iris, Pierre d'Ancrage = forme angulaire, Encre du Témoin = flacon noir bouchon doré). Chaque consommable a un halo additif pulsant + un léger flottement. UIScene reskinné : `creerSlot` réutilisé pour les 3 slots équipés (mode équipé compact, label gravé, liseré doré). Attaque refaite : croissant lumineux additif (deux couches large+étroite) + étincelles dorées explose, tween de scale qui s'élargit. Parry refait : anneau doré qui s'élargit (signal de déclenchement) + halo qui suit le joueur pendant la fenêtre + `_jouerEffetParryReussi` (flash expansif additif + 14 particules dorées). Fix UI : `yBtn = max(yL + 24, hauteur - 44)` dans le panneau détail pour éviter le chevauchement des boutons sur les effets, panneau hauteur 320 pour accommoder 4-5 effets.
-- **Précédente étape :** 8b5 — refonte UI inventaire (Carnet du Vestige). 4 nouveaux modules dans `src/render/ui/` :
-  - `EmblemeFamille.js` : cercle perle Blanc / triangle élévation Bleu / losange Reflux Noir, taille paramétrable
-  - `CadreInventaire.js` : fond pierre + double bordure dorée + 4 coins ornementés (motifs en L + petits losanges) + titre gravé "CARNET DU VESTIGE" avec liseré central, bouton fermer ✕ stylisé
-  - `SlotInventaire.js` : slot vide ou plein avec emblème centré, étoile rouge vectorielle pour Tier III + halo, glow doré au hover, mode équipé avec cadre doré + petits coins ornementés + label sous le slot
-  - `PanneauDetail.js` : emblème 38px avec halo pulsant additif, nom stroke épais coloré famille, sous-titre famille•slot, description italique encadrée, effets puces dorées selon tier (visible/partiel/caché), boutons "manuscrit" hover doré (Équiper/Jeter/Déséquiper)
-  Animation d'ouverture en cascade : cadre fade-in puis slots équipés un à un puis grille inventaire entière avec délais successifs.
-- **Précédente étape :** 8b4 — direction artistique des entités, portes et vortex. 4 nouveaux fichiers dans `src/render/entities/` :
-  - `Joueur.js` : silhouette humanoïde sombre (tête, torse, jambes, bras suggérés) + **cœur lumineux additif** (BlendModes.ADD) dont la couleur reflète la Résonance courante (blanc bleuté → ambre → rouge → noir vacillant). Animations : respiration idle, squash-stretch en saut, squash atterrissage, flash blanc/rouge sur hit.
-  - `GardienPierre.js` : silhouette quadrupède trapue + œil rougeoyant additif central qui pulse + fissures dessinées. Respiration rocailleuse lente.
-  - `SpectreCendre.js` : silhouette flottante semi-transparente + voile clair + bord en zigzag + 2 yeux noirs creux qui clignotent + traînée de fumée (ParticleEmitter qui suit). Flottement vertical + ondulation de robe.
-  - `Coffre.js` : Container avec corps en bois (veines + 2 cerclages dorés) + couvercle articulé (Container pivot pour rotation) + serrure dorée. Animation d'ouverture : couvercle pivote -110°, burst de 24 étincelles dorées additives, cube de la couleur de la famille qui monte puis vole vers le joueur, coffre passe en mode tamisé.
-  Architecture : tous les visuels sont des Containers Phaser qui suivent un Rectangle physique invisible (alpha 0). Les Rectangle gardent les hitboxes pour la physique arcade. `Enemy.js` choisit le visuel selon `def.id`.
-- **Précédente étape :** 8b3 — environnement vivant (parallax, plateformes ornées, animations atmosphériques). 3 nouveaux modules dans `src/render/` :
-  - `Parallaxe.js` : ciel/abîme avec dégradé vertical Canvas (x0 fixe), étoiles Présent ou poussière d'or Miroir (x0.15), silhouettes très lointaines (x0.3) avec composition seedée
-  - `AnimationsAmbiance.js` : halo lumineux additif qui suit le joueur en Miroir (BlendModes.ADD + pulse), brume bleutée rampante au sol en Présent (5 nuages cycliques), rayons de lumière dorée obliques en Miroir (3 faisceaux animés en alpha)
-  - `PlateformeStyle.js` : ornement par-dessus chaque plateforme — pierre cassée + fissures + mousse + brindilles Présent / pavés joints + chasse-pieds doré + frise centrale + petites fleurs Miroir. Le sol principal reçoit un traitement spécial (frise/herbes plus fournies)
-  Silhouettes proches du DecorRegistry passées à scrollFactor 0.7 pour le parallax.
-- **Précédente étape :** 8b2 — diversité architecturale et de sol. 9 nouvelles primitives en `src/render/elements/` : `Batiment` (à étages avec fenêtres, allumées et clignotantes en Miroir), `Tour` (avec drapeau ondulant), `Dome` (cassé/intact, vitraux), `Atelier` (forge avec fumée animée en Miroir), `SolDecore` (pavé + végétation rampante + pierres, par-dessus le sol uni), `Lanterne` (halo lumineux additif `BlendModes.ADD` qui flicker en Miroir), `Banderole` (tissu suspendu qui ondule), `MobilierVie` (Tonneau / Caisse / PotFleurs / EtalMarchand). Plans enrichis par archétype dans `DecorRegistry` avec couche silhouettes lointaines (depth -50), structures principales, sol décoré, mobilier. Variation seedée par run. La diversité visuelle correspond enfin à l'identité "ville morte vs ville vivante".
-- **Précédente étape :** 8a — direction artistique & structure architecturale. `data/archetypes.js` définit 6 archétypes (Sanctuaire 1280×540, Hall des Échos 1920×540, Crypte des Murmures 1280×540, Pont Suspendu 2200×540, Puits Inversé 960×900 *vertical*, Arène du Reflux 1280×720). Chaque archétype a son script de génération de plateformes propre (architecture forte au lieu de plateformes random). `WorldGen` choisit un archétype selon le niveau de danger (`niveauxAssocies`) avec variation aléatoire seedée. Caméra Phaser : `startFollow(player)` + `setDeadzone(200, 150)`, bounds physiques dynamiques par salle. Seed du run **randomisée à l'init** et persistée dans le registry pendant tout le run (`Math.random()` au démarrage). HUD textuel passé en `setScrollFactor(0)` pour rester fixe à l'écran malgré le scrolling.
-- **Étape 7 (récap)** : combat RPG (X attaque / C parry / Z hook sort), 2 types ennemis Présent, patterns de difficulté en cycles 6 salles. Inversion doctrinale : Présent = chasse, Miroir = atelier paisible. Voir [LORE.md §11](LORE.md#11-doctrine-des-deux-mondes).
-- **Prochain chantier :** **Phase 2b — Compléter à 18-20 topographies**. La base architecturale est posée (Phase 2a). Maintenant ajouter : `labyrinthe_murs`, `pont_brise`, `gouffre_lateral`, `corridor_pieges` (gauntlet de pieux), `cascade_plateformes`, `salle_pieux_plafond`, `arene_estrade`, `pont_double`, etc. + une `arene_boss` dédiée pour la salle BOSS (actuellement utilise `arene_ouverte`, fonctionnel mais à différencier).
-- **Pistes ultérieures (mini-jeu) :** Phase 3 (étages déterministes via `data/etages.js`), Phase 4 (boss intégrés + clés + écran de victoire), Phase 5 (identité visuelle par biome), Phase 6 (spells & combos d'équipement, long terme). Roadmap macro 8c/8d/8e en suspens — sera réintégrée dans le polish post-mini-jeu.
-- **Compromis MVP (dette narrative documentée) :**
-  - Items du Miroir directement équipables, alors que LORE prévoit des Fragments bruts à transformer en **Miroir** (Fondeur/Identifieur). Le système actuel reste compatible avec cette couche future.
-  - Doctrine du Miroir réduite (volontairement) : pour le mini-jeu, Miroir = hub d'atelier sans drain. La mécanique d'Absorption / fenêtre de grâce / Artefact est sortie du scope court terme — la Cité est juste un respawn point amélioré. Le LORE garde la mécanique cible pour une éventuelle réintroduction post-mini-jeu.
-  - Pas encore : sorts (touche Z réservée — Phase 6), malédictions temporelles des Noir, identification des Tier III par Œil-Témoin, items "game-changers" (wall-grip, drop-down, slow-mo, fil d'Ariane)
-  - Phases de perception des habitants Miroir non implémentées — ils sont 100 % paisibles
-- **Points d'attention :**
-  - Le joueur est toujours un `Phaser.GameObjects.Rectangle` — à remplacer par un sprite plus tard
-  - Aucun asset graphique, tout est en primitives colorées
-  - Seed du run randomisée au démarrage et persistée dans le registry pendant tout le run
-  - Génération en graphe d'étage (Phase A) — 7 salles en arbre, retour bidirectionnel possible. Phase 3 du mini-jeu passera ce graphe en déterministe via `data/etages.js`.
-  - Pas encore d'Artefact de Résonance ni d'écran de victoire — Phase 4 du mini-jeu ajoutera tout le scaffolding "fin de jeu"
-  - La couche "capitalisation" du Présent (Sanctuaires) n'est pas implémentée — hors scope mini-jeu
-  - Toute proposition touchant au Miroir doit être lue à travers la Doctrine ([LORE.md §11](LORE.md)) — Miroir = hub paisible, sans drain
-  - Toute proposition touchant au loot doit favoriser la profondeur et le choix (préférence utilisateur en mémoire)
-  - Tout input doit passer par `InputSystem` — jamais de `Keyboard` direct dans la logique gameplay (préférence en mémoire, prépare le portage mobile)
-  - Salle BOSS sans vrai combat encore : la porte E gate sur `bossVivant`, et le boss spawn se fait via `definitionBoss(etage, ENEMIES)`. Phase 4 du mini-jeu finalisera l'intégration (drop d'une Clé d'étage au lieu du gating auto)
-  - Items qui modifient `passiveMiroir` ou consomment `pause_miroir` sont devenus silencieux (no-op) suite à la suppression du drain Miroir. À nettoyer dans la passe Phase 5 polish items
-- **Décisions notables :**
-  - Phaser chargé via CDN (pas de bundler), pour garder le projet ultra-simple à lancer
-  - **Règle d'imports** : `config.js` ne doit RIEN importer du projet (sinon TDZ par import circulaire). L'enregistrement des scènes vit dans `main.js`.
-  - PRNG Mulberry32 seedé pour reproductibilité — la même seed sert aux deux mondes, géométrie identique entre Normal et Miroir
-  - Capacités physiques (portée de saut ≈ 176 px, hauteur ≈ 96 px) calculées dans `WorldGen.js`
-  - **État du jeu (résonance, monde) dans le `registry` Phaser** : survit aux `scene.restart()` des transitions de salle / basculements. Communication scène ↔ scène via `changedata-*` events automatiques.
-  - Pas de scène `MirrorScene` séparée : la `GameScene` branche normal/miroir conditionnellement (palette, hooks, zone interactive)
-  - `Phaser.Scale.FIT` + `CENTER_BOTH` : on raisonne en coordonnées internes 960×540, le canvas s'adapte à la fenêtre
+- **Dernière étape franchie** : **Phase 2a — Refactor topographie / archétype**. Découplage thème ⊥ structure. Nouveau `data/topographies.js` (5 pilotes). Archétype réduit à id+nom+niveauxAssocies. `EtageGen` pick (archétype, topographie compatible+portes). `Layouts.js` supprimé. HUD étendu : `Étage X · Archétype (Topographie) · ENTRÉE`. Bugs reachability corrigés (head-bonk : plateformes hautes empilées doivent être one-way). Ennemis ne spawn plus sur plateformes one-way.
+
+- **Précédente étape** : **Phase 1 — Simplification Miroir**. Drain retiré, Cité = hub pur, mort = retour Cité (heal complet, méta conservée), vortex retour = reset étage courant. Pas de vortex volontaire en Présent. `MondeSystem` simplifié. `InventaireSystem.resetEtage()` + `EnemySystem.resetEtage()` filtrent par `:e<numero>:`.
+
+- **Historique compact** *(commits précédents — voir `git log` pour le détail)* :
+  - **Variété des salles** (3c159d9) — 18 layouts + obstacles + cascades. Layouts.js depuis supprimé en 2a, mais obstacles + cascades restent.
+  - **Bestiaire A+B** (4358cde) — 20 ennemis + 10 boss + 5 biomes.
+  - **Étape 9d'** — Cité marchande (3 PNJ rassemblés en salle A Miroir).
+  - **Phase A** (d9e87f8) — graphe d'étage 7-salles + carte M + fix Puits Inversé.
+  - **Étapes 9a-9d** — économie + Fondeur + Identifieur + Marchand.
+  - **Étapes 8a-8b6** — direction artistique (archétypes, décor, parallax, entités stylisées, UI Carnet du Vestige, polish animations).
+  - **Étape 7** — combat RPG (X/C/Z, parry, patterns difficulté).
+  - **Étape 6** — loot (3 familles, 3 tiers, inventaire 40 slots, équipement 3 slots).
+  - **Étape 5** — basculement Présent ↔ Miroir (avant Phase 1 qui l'a simplifié).
+  - **Étapes 2-4** — Phaser setup + génération de salles + Résonance + HUD.
+
+- **Prochain chantier** : **Phase 2b — Compléter à 18-20 topographies**. Architecture posée, maintenant remplir : `labyrinthe_murs`, `pont_brise`, `gouffre_lateral`, `corridor_pieges` (gauntlet pieux), `cascade_plateformes`, `salle_pieux_plafond`, `arene_estrade`, `pont_double`, `arene_boss` dédiée.
+
+## Compromis MVP — dette technique / narrative documentée
+- **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce, pas d'Artefact. La Cité = juste un respawn point amélioré. La mécanique complète d'Absorption + Artefact + fenêtre de grâce (cf. [LORE.md §6](LORE.md)) reste **vision long terme post-mini-jeu**.
+- **Items qui modifient `passiveMiroir` ou consomment `pause_miroir`** sont devenus silencieux (no-op) suite à la suppression du drain. À nettoyer dans la passe polish items (Phase 5).
+- **Items du Miroir équipables directement** : alors que LORE prévoit que seuls les Fragments bruts existent et qu'il faut les transformer en Miroir pour obtenir des items. Le pipeline Fragment → Fondeur → item existe ; mais les coffres peuvent encore donner directement un item Tier 1-2. Compatible avec une future transition "Fragments-only" si décidée.
+- **Pas encore implémenté** : sorts (Z hook réservé), malédictions temporelles des Noir, identification des Tier III par Œil-Témoin, items "game-changers" (wall-grip, drop-down, slow-mo, fil d'Ariane), Vestiges du run précédent (cadavres pillables), codex, sons/musique.
+- **Habitants Miroir** : phases de perception (transparence → curiosité → hostilité, cf. LORE §8) non implémentées — ils sont 100 % paisibles et invisibles.
+- **Mort en combat = retour Cité sans pénalité** : choix design *fail and try again* du mini-jeu. La méta-progression conserve tout (inventaire, Sel, Fragments, identifications).
+
+## Points d'attention pour reprendre
+
+### Architecture
+- **Joueur** = `Phaser.GameObjects.Rectangle` invisible (hitbox physique) + `JoueurVisuel` (Container animé qui suit). Pareil pour ennemis / boss / coffre / PNJ.
+- **Aucun asset graphique** : tout en primitives Phaser (Graphics, Rectangle, ParticleEmitter, Tween). Préférence utilisateur pour ce style "painterly vectoriel" — à conserver.
+- **Seed du run** randomisée au démarrage (`Math.random()`) et persistée dans le registry pour tout le run. Même seed = même géométrie en Présent et Miroir.
+- **Registry Phaser** = état persistant. Survit aux `scene.restart()` (transitions de salle, basculements). Communication scène ↔ scène via `changedata-<cle>` events.
+- **Pas de `MirrorScene` séparée** : `GameScene` branche normal/miroir conditionnellement.
+- **`Phaser.Scale.FIT` + `CENTER_BOTH`** : coordonnées internes 960×540, canvas s'adapte à la fenêtre.
+
+### Règles d'imports
+- **`config.js` ne doit RIEN importer du projet** (sinon TDZ par import circulaire). L'enregistrement des scènes vit dans `main.js`.
+
+### Doctrine "head-bonk" (Phase 2a)
+- Joueur 60 px de haut + plateforme 18 px = 78 px minimum entre tops de plateformes empilées au même x. Avec 70 px (`ECART_VERT_SAFE`), il y a 8 px d'overlap → la plateforme du HAUT doit être **one-way** (`oneWay: true`) sous peine de head-bonk qui rend la plateforme du bas inaccessible.
+- Pour les empilements latéraux (x différents, pas d'overlap), 70 px vert reste OK avec les deux plateformes normales.
+- Jump max ≈ 96 px vert. Jump horiz safe ≈ 130 px edge-to-edge (le legacy puits utilisait 144 px, jouable mais limite).
+
+### Phase A — graphe d'étage
+- 7 salles : 5 main (A→BOSS) + 2 dead-ends verticaux possibles. La porte E de la salle BOSS gère la transition d'étage (sans voisin dans le graphe). Phase 4 du mini-jeu remplacera ce gating par une **Clé d'étage** dropée par le boss.
+
+### Boss
+- Spawnent en salle BOSS en Présent si non tués (`enemySystem.estMort('normal', cleSalleEtage, 'boss')`). Phase A : boss FONCTIONNEL mais pas encore "objectif final" — Phase 4 ajoutera Clé d'étage + Artefact + écran victoire.
+
+### Préférences utilisateur retenues
+- **Plan + challenge avant code** sur les features non triviales. Proposer plan + 1-3 questions de design avant de coder. Pour les fixes triviaux ou corrections explicites, exécuter direct.
+- **Loot = profondeur et choix**, jamais simplification. Décisions touchant au loot doivent privilégier la richesse mécanique.
+- **Innovation visuelle et mécanique forte** cohérente au lore — sortir du plateformer générique. Préférence pour le style "painterly vectoriel" (primitives Phaser, pas de sprite).
+- **Mémoire persistante Claude** maintenue entre conversations (préférences, décisions de design non évidentes).
 
 ## Travailler avec Claude (méta)
+- **Plan + challenge avant code** : pour chaque feature non triviale, proposer plan court (objectif, fichiers touchés, archi, alternatives) + 1-3 questions de design. Pas une ligne avant validation.
+- **Mise à jour de ce fichier** à la fin de chaque session : "État actuel" + roadmap. Les anciennes étapes vont en "Historique compact".
+- **Commits** : un par étape MVP franchie (ou sous-étape claire). Le `git log` sert de mémoire de progression.
+- **Mémoire Claude** : dire explicitement *"retiens ça"* la première fois qu'une règle apparaît.
+- **En début de session longue** : demander *"où on en est ?"*. Claude relit CLAUDE.md + `git log` + mémoire avant de coder.
 
-Ces règles aident Claude à rester cohérent entre les sessions.
-
-- **Plan + challenge avant code :** pour chaque étape MVP ou feature non triviale, Claude propose d'abord un plan court (objectif, fichiers touchés, choix d'archi, alternatives écartées) et **identifie 1-3 questions de design à trancher**. Pas une ligne de code écrite avant que l'utilisateur ait validé. Pour les fixes triviaux ou les corrections demandées explicitement, pas de plan — juste exécuter.
-- **Mise à jour de ce fichier :** quand une étape MVP avance, qu'une décision technique est prise, ou qu'un point d'attention apparaît, mettre à jour la section "État actuel" et la checklist MVP avant la fin de la session.
-- **Commits :** un commit par étape MVP franchie (ou sous-étape claire). Le `git log` sert de mémoire de progression.
-- **Mémoire persistante :** Claude maintient une mémoire à travers les conversations (préférences, décisions de design non évidentes, retours répétés). Lui dire explicitement *"retiens ça"* la première fois qu'une règle apparaît.
-- **Posture par défaut :** game dev pragmatique — code minimal qui marche dans le navigateur, pas d'abstraction prématurée, pas de couche d'outillage non demandée. Si une feature peut être testée à l'œil dans le navigateur, c'est l'étalon de validation.
-- **En début de session longue :** demander *"où on en est ?"* — Claude relit ce fichier + `git log` + sa mémoire avant de coder.
-
-### Conventions provisoires (à nettoyer plus tard)
-*Outillage de test ajouté pour valider visuellement, à retirer quand les vrais déclencheurs gameplay arrivent.*
-
-- **Touches `K` / `H`** dans `GameScene` : -10 / +10 Résonance. Provisoire — à retirer quand ennemis (étape 7) et zones du Miroir (étape 5) feront bouger la jauge naturellement.
+### Conventions provisoires de test
+- **Touches `K` / `H`** : -10 / +10 Résonance. Provisoire pour tester rapidement mort = retour Cité. À retirer quand stable.

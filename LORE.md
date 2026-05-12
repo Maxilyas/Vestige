@@ -1,6 +1,6 @@
 # VESTIGE — Lore & Cosmologie
-> Document narratif. Donne du sens aux mécaniques décrites dans `GDD.md`.
-> Version 0.1 — à enrichir au fil des décisions de design.
+> Document narratif. Donne du sens aux mécaniques décrites dans [GDD.md](GDD.md).
+> Version 0.2 — Lore-cible long terme. La §12 documente les écarts avec le mini-jeu actuel.
 
 ---
 
@@ -183,17 +183,17 @@ Plusieurs **fins de jeu** sont envisageables (hors scope MVP) :
 | Mécanique du jeu | Justification lore |
 |---|---|
 | Jauge de Résonance | Mesure ta cohérence d'existence dans le monde courant |
-| Baisse en Miroir | Ton corps de Présent fond dans la densité du passé |
+| Baisse en Miroir *(lore-cible, ajourné)* | Ton corps de Présent fond dans la densité du passé |
 | Basculement à 0 (Présent) | La Trame du Miroir te tire pour te garder en vie |
-| Absorption à 0 (Miroir) | Tu fusionnes avec le passé — tu deviens un habitant |
-| Fenêtre de grâce + Artefact | Reste de cohérence avant la fusion totale |
-| Fragments bruts | Matière de passé qui doit être stabilisée en Présent |
-| Forge / Identification en Présent uniquement | Le Présent est le seul lieu *stable* où la Résonance peut être travaillée sans danger |
-| Loot Bleu fait baisser la Résonance | Tu portes une fraction de conscience étrangère |
-| Loot Noir imprévisible | Objet déchiré par le Reflux, oscillant entre les deux mondes |
-| Habitants qui te perçoivent peu à peu | La Trame du passé reconnaît ton anomalie |
-| Vestiges du run précédent | Les morts ne disparaissent pas, ils se fixent |
-| Méta-progression (codex, carte) | Connaissance accumulée, transmise entre runs |
+| Absorption à 0 (Miroir) *(lore-cible, ajourné)* | Tu fusionnes avec le passé — tu deviens un habitant |
+| Fenêtre de grâce + Artefact *(lore-cible, ajourné)* | Reste de cohérence avant la fusion totale |
+| Fragments bruts | Matière de passé qui doit être stabilisée par les artisans |
+| Forge / Identification en Miroir uniquement | Le savoir des Sources est resté dans le passé ; les artisans du Miroir transforment ce que tu glanes en Présent |
+| Loot Bleu fait baisser la Résonance *(lore-cible)* | Tu portes une fraction de conscience étrangère |
+| Loot Noir imprévisible *(lore-cible)* | Objet déchiré par le Reflux, oscillant entre les deux mondes |
+| Habitants qui te perçoivent peu à peu *(ajourné)* | La Trame du passé reconnaît ton anomalie |
+| Vestiges du run précédent *(ajourné)* | Les morts ne disparaissent pas, ils se fixent |
+| Méta-progression (carte, identifications, inventaire) | Connaissance accumulée, transmise entre runs et entre resets d'étage |
 
 ---
 
@@ -202,11 +202,44 @@ Plusieurs **fins de jeu** sont envisageables (hors scope MVP) :
 
 > **Le Présent est où tu chasses. Le Miroir est où tu transformes. Aucun des deux ne suffit seul.**
 
-Quatre conséquences à ne jamais perdre de vue :
+Quatre piliers à ne jamais perdre de vue :
 
-1. **Le Présent attire le combat** : ennemis, drops bruts (Fragments), patterns de difficulté en cycles (refuge → climax). C'est ton terrain de chasse, là où tu prouves ta maîtrise.
+1. **Le Présent attire le combat** : ennemis, drops bruts (Fragments), boss qui gate les étages. C'est ton terrain de chasse, là où tu prouves ta maîtrise.
 2. **Le Miroir attire la transformation** : marchands, forge, identification, lore, PNJ vivants paisibles. C'est l'atelier où tes matériaux deviennent du pouvoir réel.
-3. **Le Miroir te repousse** : baisse passive de Résonance, vortex de retour positionné aléatoirement, risque d'Absorption. Tu ne peux jamais y vivre — tu y passes, vite.
+3. **Le Miroir te repousse** *(lore-cible, ajourné dans le mini-jeu)* : baisse passive de Résonance, vortex de retour positionné aléatoirement, risque d'Absorption. Tu ne peux jamais y vivre — tu y passes, vite. **Mini-jeu actuel** : la Cité Miroir est un hub paisible sans drain. La pression est remplacée par une autre contrainte de design : *seul un échec en Présent (mort) te téléporte en Cité*. Pas de vortex volontaire. La Cité reste une récompense de défaite, pas un confort permanent.
 4. **Les deux mondes sont indissociables** : sans matériaux du Présent, le Miroir n'a rien à te vendre. Sans transformations du Miroir, ta chasse en Présent n'a pas de finalité. La boucle naturelle est `Présent (chasser) → Miroir (transformer) → Présent (chasser plus fort)`.
 
 Toute proposition de feature touchant à l'un des deux mondes doit être lue à travers cette doctrine. Si une feature **dilue la frontière** (combat en Miroir, forge en Présent, ou un monde qui se suffit à lui-même), elle est probablement en dette avec la cohérence du jeu.
+
+---
+
+## 12. État du mini-jeu actuel vs Lore-cible
+*Section ajoutée en 2026-05-12. Le mini-jeu "vaincre les 10 étages" allège volontairement certaines mécaniques LORE pour rester finissable. Cette section documente l'écart, à reconsidérer post-mini-jeu.*
+
+### Ce qui est implémenté conformément au LORE
+- ✅ **Deux mondes Présent/Miroir** partageant la géographie, palettes contrastées (Présent ruiné / Miroir vivant)
+- ✅ **3 familles de loot** (Blanc/Bleu/Noir = Présent/Miroir/Reflux) avec descriptions cryptiques
+- ✅ **3 tiers de révélation** des effets (visible / partiel / caché ★)
+- ✅ **Fragments bruts** ramassés en Présent, transformés en Miroir par les artisans (Fondeur / Identifieur / Marchand)
+- ✅ **Cité Marchande** comme lieu vivant peuplé de la civilisation des Sources (skyline, lanternes, banderoles, statues)
+- ✅ **Vortex** aux positions seedées (jamais à un endroit fixe, "la Trame ne facilite pas la fuite")
+- ✅ **Ennemis du Présent** : Veilleurs (gardiens), Traqueurs (spectres), Chargeurs (béliers), Tireurs (yeux-témoins) — déclinés en 5 biomes
+- ✅ **Boss skinned** : 10 variations sur 3 patterns archétypaux
+
+### Ce qui est ajourné (mécaniques LORE non implémentées)
+- ⬜ **Drain passif en Miroir** (§4 §6) — pas dans le mini-jeu. La Cité est un hub paisible sans timer.
+- ⬜ **Absorption à Résonance 0 en Miroir** (§6) — n'existe pas. Mort en Présent → téléport Cité sans pénalité.
+- ⬜ **Fenêtre de grâce 30-60s + Artefact de Résonance** (§6) — non implémenté.
+- ⬜ **Vestige du run précédent** (§6) — pas de cadavre pillable à respawn.
+- ⬜ **Phases de perception des habitants Miroir** (§8) — ils restent 100 % transparents/paisibles.
+- ⬜ **Loot Bleu fait baisser la Résonance** (§7) — pas appliqué (l'item peut le stipuler en stat mais n'a pas d'effet visible vu qu'il n'y a pas de drain).
+- ⬜ **Malédictions cachées des objets Noir** (§7) — pas appliquées.
+- ⬜ **Fins de jeu multiples** (§9) — l'objectif unique du mini-jeu est de vaincre les 10 étages.
+- ⬜ **Sons et musique** (l'ambiance vit purement par le visuel).
+
+### Compromis cohérence
+- **Mort dans le mini-jeu = retour Cité sans pénalité** : narrativement on peut justifier par "la Trame du Miroir te happe avant la dissolution complète et te dépose chez les artisans pour que tu te ressources". C'est une variation acceptable de §6 sans le drama de l'Absorption.
+- **Cité accessible uniquement par la mort** : narrativement, c'est compatible avec §4 "le Miroir rejette les corps étrangers" — c'est précisément parce que le Miroir est inhospitalier que la Trame ne t'y dépose que quand tu n'as plus le choix. Le vortex en Présent (§6) qui permettait l'entrée volontaire n'existe pas dans le mini-jeu — réintroductible plus tard.
+- **Reset d'étage au retour Cité** : narrativement, le passé "réinitialise" la salle dans laquelle tu te trouvais — les ennemis que tu avais abattus dans l'étage courant sont des ennemis non-encore-morts dans la mémoire du Miroir, et reviennent quand tu replonges.
+
+Ces compromis sont **réversibles** — le code laisse les hooks en place. Une future "Phase 7" pourrait réactiver le drain, l'Absorption, et les phases de perception sans bouleverser l'architecture.
