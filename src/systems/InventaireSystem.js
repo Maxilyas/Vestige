@@ -189,15 +189,32 @@ export class InventaireSystem {
      * Équipe un Vestige depuis l'inventaire à l'index donné. L'ancien Vestige
      * du slot retourne dans l'inventaire (à la place du nouveau). Retourne
      * true si OK.
+     *
+     * @param {number} index   index dans l'inventaire
+     * @param {object} vestige  def du Vestige
+     * @param {string} [slotForce]  Si fourni, force le slot cible
+     *   ('geste'/'maitrise1'/'maitrise2'). Validation: doit être compatible
+     *   avec le sousType (Geste → 'geste' uniquement, Maîtrise → 'maitriseN'
+     *   uniquement, Trophée → n'importe lequel).
      */
-    equiperVestigeDepuisInventaire(index, vestige) {
+    equiperVestigeDepuisInventaire(index, vestige, slotForce = null) {
         if (!vestige || vestige.categorie !== 'vestige') return false;
         const inv = [...this.getInventaire()];
         if (index < 0 || index >= inv.length) return false;
         if (inv[index] !== vestige.id) return false;
 
         const v = { ...this.getVestiges() };
-        const slot = this._slotPourVestige(vestige);
+        let slot;
+        if (slotForce) {
+            // Validation slotForce : compat avec sousType
+            const okGeste = slotForce === 'geste' && (vestige.sousType === 'geste' || vestige.sousType === 'trophee');
+            const okMaitrise = (slotForce === 'maitrise1' || slotForce === 'maitrise2') &&
+                                (vestige.sousType === 'maitrise' || vestige.sousType === 'trophee');
+            if (!okGeste && !okMaitrise) return false;
+            slot = slotForce;
+        } else {
+            slot = this._slotPourVestige(vestige);
+        }
         if (!slot) return false;
 
         const ancienId = v[slot];

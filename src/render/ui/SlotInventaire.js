@@ -134,6 +134,45 @@ export function creerSlot(scene, x, y, options = {}) {
             const emb = peindreEmblemeFamille(scene, 0, 0, item.famille, tEmb);
             couches.add(emb);
 
+            // Phase 5b.2 — Petit marqueur pour les Vestiges selon sous-type :
+            //   Geste     = triangle blanc (action)
+            //   Maîtrise  = anneau ouvert (passif continu)
+            //   Trophée   = étoile dorée (Artefact)
+            if (item.categorie === 'vestige') {
+                const marker = scene.add.graphics();
+                const mx = -taille / 2 + 5;
+                const my = -taille / 2 + 5;
+                if (item.sousType === 'geste') {
+                    // Triangle blanc cerné de noir (action)
+                    marker.fillStyle(0x000000, 0.8);
+                    marker.fillTriangle(mx + 1, my + 1, mx + 7, my + 4, mx + 1, my + 7);
+                    marker.fillStyle(0xffffff, 1);
+                    marker.fillTriangle(mx, my, mx + 6, my + 3, mx, my + 6);
+                } else if (item.sousType === 'maitrise') {
+                    // Cercle ouvert (passif)
+                    marker.lineStyle(1.5, 0x000000, 0.9);
+                    marker.strokeCircle(mx + 3, my + 3, 4);
+                    marker.lineStyle(1.5, 0xa0d0ff, 1);
+                    marker.strokeCircle(mx + 3, my + 3, 3);
+                } else if (item.sousType === 'trophee') {
+                    // Étoile dorée 5 branches
+                    marker.fillStyle(0xffd070, 1);
+                    const cx = mx + 4, cy = my + 4;
+                    marker.beginPath();
+                    for (let i = 0; i < 10; i++) {
+                        const ang = (i * Math.PI) / 5 - Math.PI / 2;
+                        const r = (i % 2 === 0) ? 4 : 1.7;
+                        const ex = cx + Math.cos(ang) * r;
+                        const ey = cy + Math.sin(ang) * r;
+                        if (i === 0) marker.moveTo(ex, ey);
+                        else marker.lineTo(ex, ey);
+                    }
+                    marker.closePath();
+                    marker.fillPath();
+                }
+                couches.add(marker);
+            }
+
             // Étoile rouge pour Tier III
             if (item.tier === 3) {
                 const eto = scene.add.graphics();

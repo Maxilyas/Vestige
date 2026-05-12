@@ -139,12 +139,30 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
         // de sa hauteur dynamique (1, 2 ou 3 lignes) en mesurant sa height réelle.
         const yEff = Math.max(108, 70 + desc.height + 8);
         const lignes = [];
+
+        // Phase 5b.2 — Vestiges : on liste d'abord la mécanique (Geste / flags)
+        // avant les effets stat additifs (souvent vides pour les Vestiges).
+        if (item.categorie === 'vestige') {
+            if (item.geste?.code) {
+                const cd = ((item.geste.cooldownMs ?? 1000) / 1000).toFixed(1);
+                lignes.push(`→ GESTE (V) — ${descriptionGeste(item.geste.code, item.geste.params)}`);
+                lignes.push(`→ Cooldown ${cd}s`);
+            }
+            if (item.flags) {
+                for (const flag of Object.keys(item.flags)) {
+                    if (item.flags[flag] === true) {
+                        lignes.push(`→ MAÎTRISE — ${descriptionFlag(flag)}`);
+                    }
+                }
+            }
+        }
+
         // IdentificationSystem calcule l'état réel des effets (Tier 1 = tout
         // visible, Tier 2 = visible:true ou révélé, Tier 3 = uniquement révélé)
         const ident = new IdentificationSystem(scene.registry);
         const effetsCalc = ident.effetsEffectifs(item);
         const aucunVisible = effetsCalc.length > 0 && effetsCalc.every(e => !e.visible);
-        if (aucunVisible) {
+        if (aucunVisible && lignes.length === 0) {
             lignes.push("Cet objet ne se laisse pas lire.");
         } else {
             for (const e of effetsCalc) {
@@ -196,6 +214,15 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
         const yBtn = hauteur - 32;
         if (ctx.equipe) {
             ajouterBouton(scene, contenu, 20, yBtn, 'Déséquiper', () => actions.onDesequiper());
+        } else if (item.categorie === 'vestige' && item.sousType === 'maitrise') {
+            // Phase 5b.2 — choix du slot Maîtrise (2 boutons + Jeter à droite)
+            ajouterBouton(scene, contenu, 12, yBtn, '→ MAÎT. I', () => actions.onEquiperVestigeSlot?.('maitrise1'));
+            ajouterBouton(scene, contenu, 116, yBtn, '→ MAÎT. II', () => actions.onEquiperVestigeSlot?.('maitrise2'));
+            ajouterBouton(scene, contenu, 220, yBtn, 'Jeter', () => actions.onJeter(), true);
+        } else if (item.categorie === 'vestige' && item.sousType === 'geste') {
+            // Geste : un seul bouton vers le slot dédié
+            ajouterBouton(scene, contenu, 20, yBtn, '→ GESTE (V)', () => actions.onEquiperVestigeSlot?.('geste'));
+            ajouterBouton(scene, contenu, 130, yBtn, 'Jeter', () => actions.onJeter(), true);
         } else {
             ajouterBouton(scene, contenu, 20, yBtn, 'Équiper', () => actions.onEquiper());
             ajouterBouton(scene, contenu, 130, yBtn, 'Jeter', () => actions.onJeter(), true);
@@ -211,6 +238,34 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
     }
 
     return { container, afficherTexte, afficherItem, vider };
+}
+
+// ============================================================
+// Helpers de description — Vestiges Geste / Maîtrise
+// ============================================================
+function descriptionGeste(code, params = {}) {
+    switch (code) {
+        case 'onde_du_glas':
+            return `onde devant toi (${params.portee ?? 180} px, ${params.degats ?? 6} dmg)`;
+        case 'filet_de_cendre':
+            return `tir rectiligne (${params.degats ?? 4} dmg)`;
+        case 'oeil_temoin_boss':
+            return `tir téléguidé (${params.degats ?? 5} dmg)`;
+        case 'seve_hydre':
+            return `dash (${params.distance ?? 380} px, invu ${(params.invuMs ?? 500) / 1000}s)`;
+        default:
+            return code;
+    }
+}
+
+function descriptionFlag(flag) {
+    switch (flag) {
+        case 'doubleSaut':       return 'Saut additionnel en l\'air';
+        case 'slowMoParry':      return 'Parry réussi → temps ralenti 1.5s';
+        case 'renaissance':      return 'Une fois par run, annule un coup fatal';
+        case 'revelationTotale': return 'Révèle instantanément tous les effets cachés';
+        default:                 return flag;
+    }
 }
 
 // ============================================================

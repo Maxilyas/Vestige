@@ -329,6 +329,12 @@ export class InventaireScene extends Phaser.Scene {
                                     : this.inventaire.equiperDepuisInventaire(idx, def);
                                 this.panneau.afficherTexte(ok ? `Équipé : ${def.nom}` : 'Équipement impossible.');
                             },
+                            onEquiperVestigeSlot: (slot) => {
+                                const ok = this.inventaire.equiperVestigeDepuisInventaire(idx, def, slot);
+                                this.panneau.afficherTexte(
+                                    ok ? `Équipé : ${def.nom} → ${slot}` : 'Slot incompatible.'
+                                );
+                            },
                             onJeter: () => {
                                 this.inventaire.jeter(idx);
                                 this.panneau.afficherTexte('Jeté.');

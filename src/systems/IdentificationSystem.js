@@ -42,11 +42,17 @@ export class IdentificationSystem {
     /**
      * Calcule l'état "effectif" des effets d'un item :
      *   { ...effet, visible: bool calculé selon tier + révélations }
+     *
+     * Phase 5b.2 — si le Vestige Œil Saigné est équipé (flag `revelationTotale`
+     * actif via le registre), tous les effets sont rendus visibles. C'est un
+     * raccourci puissant qui dispense d'aller chez l'Identifieur.
      */
     effetsEffectifs(item) {
         if (!item || !item.effets) return [];
         const reveles = this.getEffetsReveles(item.id);
+        const revelationTotale = this.registry.get('vestige_revelation_totale') === true;
         return item.effets.map((e, i) => {
+            if (revelationTotale) return { ...e, visible: true };
             // Tier 1 : tous visibles
             if (item.tier === 1) return { ...e, visible: true };
             // Tier 2 : visible si flag d'origine est true OU effet révélé

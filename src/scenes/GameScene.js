@@ -31,6 +31,7 @@ import { Projectile } from '../entities/Projectile.js';
 import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
+import { executerGeste } from '../systems/GesteSystem.js';
 import { FRAGMENTS } from '../data/fragments.js';
 import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
@@ -125,7 +126,23 @@ export class GameScene extends Phaser.Scene {
         const _origPrendreDegats = this.resonance.prendreDegats.bind(this.resonance);
         this.resonance.prendreDegats = (montant) => {
             const vuln = (this.player?._vulnerabiliteJusqu ?? 0) > this.time.now;
-            return _origPrendreDegats(vuln ? Math.round(montant * 1.5) : montant);
+            const montantEffectif = vuln ? Math.round(montant * 1.5) : montant;
+
+            // Phase 5b.2 — Renaissance (Vestige Échos du Néant) : si le coup
+            // amènerait à 0 et qu'on ne l'a pas encore utilisée ce run, on
+            // bloque à 1 + invu 2 s + flash + marquage.
+            const aRenaissance = this.inventaire.aVestigeFlag?.('renaissance');
+            const dejaUtilisee = this.registry.get('renaissance_utilisee') === true;
+            const actuelle = this.resonance.getValeur();
+            if (aRenaissance && !dejaUtilisee && actuelle - montantEffectif <= 0 && actuelle > 0) {
+                // On encaisse juste assez pour rester à 1
+                _origPrendreDegats(actuelle - 1);
+                this.registry.set('renaissance_utilisee', true);
+                this.invincibleJusqu = this.time.now + 2000;
+                this._jouerEffetRenaissance?.();
+                return;
+            }
+            return _origPrendreDegats(montantEffectif);
         };
         this.monde = new MondeSystem(this.registry);
         this.inventaire = new InventaireSystem(this.registry);
@@ -184,12 +201,29 @@ export class GameScene extends Phaser.Scene {
              (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
         );
 
-        this.statsEffectives = calculerStats(STATS_BASE, this.inventaire.getEquipement());
-        const handlerEquip = () => {
-            this.statsEffectives = calculerStats(STATS_BASE, this.inventaire.getEquipement());
+        // Phase 5b.2 — stats prennent en compte ITEMS + VESTIGES.
+        const recalcStats = () => {
+            this.statsEffectives = calculerStats(
+                STATS_BASE,
+                this.inventaire.getEquipement(),
+                this.inventaire.getVestiges()
+            );
+            // Rebornir la Résonance si max change (Cœur Pierreux : +20)
+            this._recomputerResonanceMax?.();
+            // Phase 5b.2 — flag révélation totale (Œil Saigné) consulté par
+            // IdentificationSystem.effetsEffectifs.
+            this.registry.set(
+                'vestige_revelation_totale',
+                this.inventaire.aVestigeFlag?.('revelationTotale') === true
+            );
         };
-        this.registry.events.on('equipement:change', handlerEquip);
-        this.events.once('shutdown', () => this.registry.events.off('equipement:change', handlerEquip));
+        recalcStats();
+        this.registry.events.on('equipement:change', recalcStats);
+        this.registry.events.on('vestiges:change', recalcStats);
+        this.events.once('shutdown', () => {
+            this.registry.events.off('equipement:change', recalcStats);
+            this.registry.events.off('vestiges:change', recalcStats);
+        });
 
         // --- HUD parallèle ---
         if (!this.scene.isActive('UIScene')) {
@@ -428,6 +462,12 @@ export class GameScene extends Phaser.Scene {
         // Drop garanti au climax (niveau 3) — Bleu ou Noir uniquement
         this.climaxDropDu = !enMiroir && niveau === 3;
 
+        // Phase 5b.2 — Si on entre dans la salle BOSS et qu'un Vestige est en
+        // attente (drop manqué pour inventaire plein), on tente la récupération.
+        if (!enMiroir && salle.estBoss) {
+            this.time.delayedCall(200, () => this._tenterRecupererVestigePending?.());
+        }
+
         // --- HUD textuel (fixe à l'écran avec setScrollFactor(0)) ---
         const labelMonde = enMiroir ? ' (Miroir)' : '';
         const labelDanger = !enMiroir ? ['Refuge', 'Calme', 'Tension', 'CLIMAX'][niveau] : '';
@@ -442,7 +482,7 @@ export class GameScene extends Phaser.Scene {
         ).setScrollFactor(0).setDepth(200);
 
         this.add.text(10, 30,
-            'QD/← →: bouger  ↑/Espace: sauter  S/↓: descendre  X: attaque  C: parry  E: interagir  I: inventaire  M: carte',
+            'QD: bouger  ↑/Espace: sauter  S: descendre  X: attaque  C: parry  V: geste  E: interagir  I: inventaire  M: carte',
             { fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a' }
         ).setScrollFactor(0).setDepth(200);
 
@@ -515,8 +555,14 @@ export class GameScene extends Phaser.Scene {
             this.player._graviteInverseeAppliquee = false;
         }
 
+        // Phase 5b.2 — Pendant un dash (Sève d'Hydre), on court-circuite le
+        // contrôle horizontal pour préserver la vélocité injectée par le Geste.
+        const enDash = (this._dashJusqu ?? 0) > now;
+
         if (immobilise) {
             body.setVelocityX(0);
+        } else if (enDash) {
+            // Vélocité préservée — pas de write côté contrôles
         } else if (iGauche && !iDroite) {
             // Sur tile glissante, l'accélération est aussi sluggish
             if (surGlissant) {
@@ -539,8 +585,20 @@ export class GameScene extends Phaser.Scene {
             body.setVelocityX(0);
         }
 
-        if (i.sauter && auSol && !immobilise) {
-            body.setVelocityY(-this.statsEffectives.jumpVelocity);
+        // Phase 5b.2 — Double-saut (Vestige Voix Profonde) : 1 saut de plus
+        // en l'air si flag actif. Reset au touche-sol.
+        const aDoubleSaut = this.inventaire.aVestigeFlag?.('doubleSaut');
+        if (auSol) {
+            this.sautsRestants = aDoubleSaut ? 1 : 0;
+        }
+        if (i.sauter && !immobilise) {
+            if (auSol) {
+                body.setVelocityY(-this.statsEffectives.jumpVelocity);
+            } else if (this.sautsRestants > 0 && aDoubleSaut) {
+                body.setVelocityY(-this.statsEffectives.jumpVelocity * 0.92);
+                this.sautsRestants--;
+                this._jouerEffetDoubleSaut?.();
+            }
         }
 
         // --- Drop-through (descendre via plateforme one-way) ---
@@ -553,6 +611,7 @@ export class GameScene extends Phaser.Scene {
         // --- Combat ---
         if (i.attaquer) this.tenterAttaque();
         if (i.parry) this.tenterParry();
+        if (i.geste) this._tenterGeste?.();
         // i.sort : hook réservé, pas d'effet en étape 7
 
         // --- Interactions / inventaire / carte ---
@@ -792,6 +851,89 @@ export class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Phase 5b.2 — Recalcule le max de Résonance selon les Vestiges équipés
+     * (Cœur Pierreux : +20). Le registre `resonance_max` est lu par
+     * ResonanceSystem (clamp) et par UIScene (affichage). Appelé à chaque
+     * change d'équipement / vestige via le handler `vestiges:change`.
+     */
+    _recomputerResonanceMax() {
+        const bonus = this.statsEffectives?.resonanceMax ?? 0;
+        this.resonance?.setMaxEffectif(100 + bonus);
+    }
+
+    /**
+     * Phase 5b.2 — Déclenche le Geste équipé en slot Vestige (touche V).
+     * Cooldown propre à chaque Geste. Aucun effet si pas de Vestige Geste
+     * équipé, ou si toujours en cooldown.
+     */
+    _tenterGeste() {
+        const vestiges = this.inventaire.getVestiges();
+        const id = vestiges?.geste;
+        if (!id) return;
+        const vestige = this.inventaire.getVestigesDefs()[0]; // slot 0 = geste
+        if (!vestige?.geste?.code) return;
+
+        const now = this.time.now;
+        if (now < (this.cooldownGesteFin ?? 0)) return;
+        this.cooldownGesteFin = now + (vestige.geste.cooldownMs ?? 1000);
+
+        const ok = executerGeste(vestige.geste.code, this, this.player, vestige.geste.params ?? {});
+        if (ok) {
+            this.afficherMessageFlottant?.(`${vestige.nom}`, '#ff8060');
+        }
+    }
+
+    /**
+     * Phase 5b.2 — Effet visuel + message pour Renaissance (un coup fatal
+     * annulé). Halo cramoisi expansif autour du joueur + texte poétique.
+     */
+    _jouerEffetRenaissance() {
+        this.afficherMessageFlottant?.('✦ Renaissance', '#ff80a0');
+        const halo = this.add.graphics();
+        halo.x = this.player.x;
+        halo.y = this.player.y;
+        halo.setDepth(DEPTH.EFFETS + 2);
+        halo.setBlendMode(Phaser.BlendModes.ADD);
+        halo.fillStyle(0xff4060, 0.85);
+        halo.fillCircle(0, 0, 48);
+        halo.fillStyle(0xffffff, 0.7);
+        halo.fillCircle(0, 0, 22);
+        this.tweens.add({
+            targets: halo,
+            scale: { from: 0.3, to: 3 },
+            alpha: { from: 1, to: 0 },
+            duration: 700,
+            ease: 'Cubic.Out',
+            onComplete: () => halo.destroy()
+        });
+        this.cameras?.main?.shake(300, 0.012);
+    }
+
+    /**
+     * Phase 5b.2 — Effet visuel du double-saut (Voix Profonde). Petit anneau
+     * éphémère sous le joueur qui marque l'élan additionnel.
+     */
+    _jouerEffetDoubleSaut() {
+        const ring = this.add.graphics();
+        ring.x = this.player.x;
+        ring.y = this.player.y + 18;
+        ring.setDepth(DEPTH.EFFETS);
+        ring.setBlendMode(Phaser.BlendModes.ADD);
+        ring.lineStyle(2.5, 0x60d0ff, 1);
+        ring.strokeCircle(0, 0, 14);
+        ring.fillStyle(0xa0e0ff, 0.4);
+        ring.fillCircle(0, 0, 10);
+        this.tweens.add({
+            targets: ring,
+            scale: { from: 0.5, to: 2 },
+            alpha: { from: 1, to: 0 },
+            duration: 320,
+            ease: 'Cubic.Out',
+            onComplete: () => ring.destroy()
+        });
+    }
+
+    /**
      * Effet visuel renforcé pour un parry réussi : flash expansif + burst doré.
      */
     _jouerEffetParryReussi() {
@@ -830,6 +972,47 @@ export class GameScene extends Phaser.Scene {
             burst.explode(14);
             this.time.delayedCall(520, () => burst.destroy());
         }
+
+        // Phase 5b.2 — Slow-mo Parry (Vestige Voile-Tisseuse) : ralentit le
+        // monde 1500 ms après chaque parry réussi. Anti-spam : 4000 ms entre
+        // deux déclenchements possibles (lisible et puissant sans être abusable).
+        if (this.inventaire.aVestigeFlag?.('slowMoParry')) {
+            const now = this.time.now;
+            if (now >= (this._slowMoFin ?? 0) + 4000) {
+                this._declencherSlowMoParry();
+            }
+        }
+    }
+
+    /**
+     * Phase 5b.2 — Ralentit la physique mondiale pendant 1500 ms après un
+     * parry réussi (flag slowMoParry actif). FX overlay bleu-violet subtil.
+     */
+    _declencherSlowMoParry() {
+        const dureeMs = 1500;
+        const facteur = 0.35;
+        this.physics.world.timeScale = 1 / facteur;  // Phaser : timeScale > 1 = ralenti
+        this._slowMoFin = this.time.now + dureeMs;
+
+        // Overlay bleu-violet diffus pendant la durée
+        const overlay = this.add.rectangle(
+            this.cameras.main.midPoint.x, this.cameras.main.midPoint.y,
+            GAME_WIDTH * 3, GAME_HEIGHT * 3,
+            0x4040ff, 0.18
+        );
+        overlay.setBlendMode(Phaser.BlendModes.MULTIPLY);
+        overlay.setScrollFactor(0);
+        overlay.setDepth(DEPTH.EFFETS + 5);
+        this.tweens.add({
+            targets: overlay,
+            alpha: 0,
+            duration: dureeMs,
+            onComplete: () => overlay.destroy()
+        });
+
+        this.time.delayedCall(dureeMs, () => {
+            this.physics.world.timeScale = 1;
+        });
     }
 
     estParryActif() {
@@ -1091,28 +1274,51 @@ export class GameScene extends Phaser.Scene {
         const proj = new Projectile(this, params);
         // Collision avec plateformes (destruction)
         this.physics.add.collider(proj.sprite, this.platforms, () => proj.detruire(true));
-        // Overlap avec joueur (dégâts + destruction)
-        this.physics.add.overlap(this.player, proj.sprite, () => {
-            if (proj.detruit) return;
-            if (this.estParryActif()) {
-                this.parryActifJusqu = 0;
-                this.resonance.regagner(this.statsEffectives.parryBonusResonance);
-                this.afficherMessageFlottant('PARRY', '#ffd070');
-                this._jouerEffetParryReussi();
+
+        if (params.origine === 'joueur') {
+            // Phase 5b.2 — projectile tiré par un Geste du joueur. Touche les
+            // ennemis + boss (jamais le joueur). Slow-mo / parry n'intervient pas.
+            const onHitEnnemi = (_proj, ennemiSprite) => {
+                if (proj.detruit) return;
+                const ennemi = ennemiSprite._enemy;
+                if (!ennemi || ennemi.mort) return;
+                ennemi.recevoirDegats(proj.degats);
                 proj.detruire(true);
-                return;
+            };
+            // Crée un overlap dynamique avec chaque ennemi + boss
+            for (const e of this.enemies ?? []) {
+                if (e?.sprite && !e.sprite._enemy) e.sprite._enemy = e;
+                this.physics.add.overlap(proj.sprite, e.sprite, onHitEnnemi);
             }
-            const now = this.time.now;
-            if (now < this.invincibleJusqu) { proj.detruire(true); return; }
-            this.resonance.prendreDegats(proj.degats);
-            this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
-            this.flashJoueur(0xff6060);
-            // Effet additionnel à l'impact (ex: immobilisation web)
-            if (typeof proj.effetImpact === 'function') {
-                proj.effetImpact(this, this.player);
+            if (this.boss?.sprite) {
+                if (!this.boss.sprite._enemy) this.boss.sprite._enemy = this.boss;
+                this.physics.add.overlap(proj.sprite, this.boss.sprite, onHitEnnemi);
             }
-            proj.detruire(true);
-        });
+        } else {
+            // Projectile ennemi/boss : overlap avec joueur (dégâts + destruction)
+            this.physics.add.overlap(this.player, proj.sprite, () => {
+                if (proj.detruit) return;
+                if (this.estParryActif()) {
+                    this.parryActifJusqu = 0;
+                    this.resonance.regagner(this.statsEffectives.parryBonusResonance);
+                    this.afficherMessageFlottant('PARRY', '#ffd070');
+                    this._jouerEffetParryReussi();
+                    proj.detruire(true);
+                    return;
+                }
+                const now = this.time.now;
+                if (now < this.invincibleJusqu) { proj.detruire(true); return; }
+                this.resonance.prendreDegats(proj.degats);
+                this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
+                this.flashJoueur(0xff6060);
+                // Effet additionnel à l'impact (ex: immobilisation web)
+                if (typeof proj.effetImpact === 'function') {
+                    proj.effetImpact(this, this.player);
+                }
+                proj.detruire(true);
+            });
+        }
+
         this.projectiles.push(proj);
         return proj;
     }
@@ -1210,6 +1416,9 @@ export class GameScene extends Phaser.Scene {
      * (Phase 5b). Si le joueur le possède déjà (inventaire ou équipé), pas
      * de redrop. Cube cramoisi (doré pour Artefact étage 10) qui flotte vers
      * le joueur.
+     *
+     * Si l'inventaire est plein, le drop est marqué `pending` dans le registry
+     * et retenté à chaque entrée de la salle BOSS tant que non récupéré.
      */
     _dropBossVestige(boss) {
         const etage = boss.def.etage ?? this.etageNumero;
@@ -1251,10 +1460,41 @@ export class GameScene extends Phaser.Scene {
                     const couleurHex = this.coulHex(couleur);
                     this.afficherMessageFlottant(`✦ ${vestige.nom}`, couleurHex);
                 } else {
-                    this.afficherMessageFlottant('Inventaire plein', '#ff6060');
+                    // Phase 5b.2 — inventaire plein : on enregistre le Vestige
+                    // comme « en attente » pour cet étage. La salle BOSS tentera
+                    // automatiquement de l'ajouter au prochain passage (cf.
+                    // `_tenterRecupererVestigePending` appelée en fin de create()).
+                    this.registry.set(`vestige_pending_e${this.etageNumero}`, vestige.id);
+                    this.afficherMessageFlottant('Inventaire plein — reviens', '#ff8060');
                 }
             }
         });
+    }
+
+    /**
+     * Phase 5b.2 — Si un Vestige est en attente pour l'étage courant (drop
+     * manqué car inventaire plein), tenter de l'ajouter quand on entre dans
+     * la salle BOSS. Affiche un cube qui flotte vers le joueur si succès.
+     */
+    _tenterRecupererVestigePending() {
+        const cle = `vestige_pending_e${this.etageNumero}`;
+        const id = this.registry.get(cle);
+        if (!id) return;
+        if (this.inventaire.possedeVestige(id)) {
+            this.registry.remove(cle);
+            return;
+        }
+        if (this.inventaire.estPlein()) {
+            this.afficherMessageFlottant?.('Vestige en attente — inventaire plein', '#ff8060');
+            return;
+        }
+        const vestige = vestigePourEtage(this.etageNumero);
+        if (!vestige) return;
+        if (this.inventaire.ajouter(vestige.id)) {
+            this.registry.remove(cle);
+            const couleur = COULEURS_FAMILLE[vestige.famille] ?? COULEURS_FAMILLE.noir;
+            this.afficherMessageFlottant?.(`✦ ${vestige.nom}`, this.coulHex(couleur));
+        }
     }
 
     peutEtreDrop(ennemi) {

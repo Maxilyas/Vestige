@@ -2,7 +2,7 @@
 // S'abonne aux events du registry pour se redessiner à chaque changement.
 
 import { GAME_WIDTH } from '../config.js';
-import { RESONANCE_CLE, RESONANCE_MAX } from '../systems/ResonanceSystem.js';
+import { RESONANCE_CLE, RESONANCE_MAX, RESONANCE_MAX_CLE } from '../systems/ResonanceSystem.js';
 import { MONDE_CLE, MONDE_MIROIR } from '../systems/MondeSystem.js';
 import { EVT_EQUIP_CHANGE, EVT_VESTIGES_CHANGE, SLOTS, SLOTS_VESTIGE } from '../systems/InventaireSystem.js';
 import { EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
@@ -50,8 +50,10 @@ export class UIScene extends Phaser.Scene {
         this._appliquerOpaciteJauge();
 
         const handlerRes = (_p, valeur) => this.miseAJourResonance(valeur);
+        const handlerMax = () => this.miseAJourResonance(this.registry.get(RESONANCE_CLE) ?? 0);
         const handlerMonde = () => this._appliquerOpaciteJauge();
         this.registry.events.on(`changedata-${RESONANCE_CLE}`, handlerRes);
+        this.registry.events.on(`changedata-${RESONANCE_MAX_CLE}`, handlerMax);
         this.registry.events.on(`changedata-${MONDE_CLE}`, handlerMonde);
 
         // --- 3 slots équipés stylisés sous la jauge ---
@@ -126,6 +128,7 @@ export class UIScene extends Phaser.Scene {
 
         this.events.once('shutdown', () => {
             this.registry.events.off(`changedata-${RESONANCE_CLE}`, handlerRes);
+            this.registry.events.off(`changedata-${RESONANCE_MAX_CLE}`, handlerMax);
             this.registry.events.off(`changedata-${MONDE_CLE}`, handlerMonde);
             this.registry.events.off(EVT_EQUIP_CHANGE, handlerEquip);
             this.registry.events.off(EVT_VESTIGES_CHANGE, handlerVestiges);
@@ -296,8 +299,10 @@ export class UIScene extends Phaser.Scene {
     }
 
     miseAJourResonance(valeur) {
-        const ratio = Phaser.Math.Clamp(valeur / RESONANCE_MAX, 0, 1);
+        // Phase 5b.2 — max dynamique (Cœur Pierreux peut l'augmenter à 120)
+        const max = this.registry.get(RESONANCE_MAX_CLE) ?? RESONANCE_MAX;
+        const ratio = Phaser.Math.Clamp(valeur / max, 0, 1);
         this.barre.width = LARGEUR_BARRE * ratio;
-        this.texte.setText(`${Math.round(valeur)}%`);
+        this.texte.setText(`${Math.round(valeur)} / ${max}`);
     }
 }

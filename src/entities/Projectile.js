@@ -96,19 +96,33 @@ export class Projectile {
         if (this.detruit) return;
         const body = this.sprite.body;
 
-        // Homing : pivote légèrement vers le joueur
-        if (this.homing && player) {
-            const vx = body.velocity.x;
-            const vy = body.velocity.y;
-            const speed = Math.hypot(vx, vy) || 1;
-            const dx = player.x - this.sprite.x;
-            const dy = player.y - this.sprite.y;
-            const distP = Math.hypot(dx, dy) || 1;
-            const PIVOT = 0.045;  // facteur de mélange (0 = pas de homing, 1 = piste parfaitement)
-            const newVx = vx * (1 - PIVOT) + (dx / distP) * speed * PIVOT;
-            const newVy = vy * (1 - PIVOT) + (dy / distP) * speed * PIVOT;
-            const newSpeed = Math.hypot(newVx, newVy) || 1;
-            body.setVelocity((newVx / newSpeed) * speed, (newVy / newSpeed) * speed);
+        // Homing : pivote légèrement vers une cible. La cible peut être :
+        //   - `true` (legacy)             → suit le joueur passé en argument
+        //   - objet avec .x, .y (sprite)  → suit ce sprite tant qu'il existe
+        //   - objet inactif (ex: mort)    → désactive le homing pour ce tir
+        if (this.homing) {
+            let cibleX = null, cibleY = null;
+            if (this.homing === true && player) {
+                cibleX = player.x; cibleY = player.y;
+            } else if (typeof this.homing === 'object' && this.homing.active) {
+                cibleX = this.homing.x; cibleY = this.homing.y;
+            } else if (typeof this.homing === 'object') {
+                // Cible morte / détruite → on coupe le homing
+                this.homing = false;
+            }
+            if (cibleX !== null) {
+                const vx = body.velocity.x;
+                const vy = body.velocity.y;
+                const speed = Math.hypot(vx, vy) || 1;
+                const dx = cibleX - this.sprite.x;
+                const dy = cibleY - this.sprite.y;
+                const distP = Math.hypot(dx, dy) || 1;
+                const PIVOT = this.options.homingForce ?? 0.045;
+                const newVx = vx * (1 - PIVOT) + (dx / distP) * speed * PIVOT;
+                const newVy = vy * (1 - PIVOT) + (dy / distP) * speed * PIVOT;
+                const newSpeed = Math.hypot(newVx, newVy) || 1;
+                body.setVelocity((newVx / newSpeed) * speed, (newVy / newSpeed) * speed);
+            }
         }
 
         // Suivi du visuel + trail

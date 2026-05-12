@@ -29,6 +29,8 @@ export class InputSystem {
             attaquer: Phaser.Input.Keyboard.KeyCodes.X,
             parry: Phaser.Input.Keyboard.KeyCodes.C,
             sort: Phaser.Input.Keyboard.KeyCodes.Z,
+            // Phase 5b.2 — déclenche le Geste du Vestige équipé en slot Geste
+            geste: Phaser.Input.Keyboard.KeyCodes.V,
             // Provisoires (debug — ne seront pas portés sur mobile)
             degatTest: Phaser.Input.Keyboard.KeyCodes.K,
             healTest: Phaser.Input.Keyboard.KeyCodes.H
@@ -48,6 +50,7 @@ export class InputSystem {
             attaquer: false,
             parry: false,
             sort: false,
+            geste: false,
             descendreEdge: false,
             // Provisoires (debug)
             degatTest: false,
@@ -75,6 +78,7 @@ export class InputSystem {
         i.attaquer = Phaser.Input.Keyboard.JustDown(this.touches.attaquer);
         i.parry = Phaser.Input.Keyboard.JustDown(this.touches.parry);
         i.sort = Phaser.Input.Keyboard.JustDown(this.touches.sort);
+        i.geste = Phaser.Input.Keyboard.JustDown(this.touches.geste);
 
         // Edge sur descendre — utilisé pour déclencher le drop-through
         i.descendreEdge =

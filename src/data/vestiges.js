@@ -151,7 +151,7 @@ export const VESTIGES = {
         geste: {
             code: 'seve_hydre',
             cooldownMs: 2500,
-            params: { distance: 220, dureeMs: 220, invuMs: 400 }
+            params: { distance: 380, dureeMs: 240, invuMs: 500 }
         },
         combinable: true
     },
