@@ -98,15 +98,16 @@ npx live-server .
 | **3e** | ✅ | **Bestiaire Voile Inversé.** 6 archétypes : Anti-Bond (tire quand joueur saute), Anti-Parry (charger `parryImmune`), Mirage (phaser invisible <100px), Inverseur de Gravité (gravity-flipper, net=0 pesanteur), Trou de Mémoire (teleporter aléatoire), Reflux-Éclat (projectile applique vulnérabilité 1.5× 3s). Compromis : `parryImmune` via flag def consulté par `contactEnnemi`. |
 | **3f** | ✅ | **Bestiaire Cœur du Reflux.** 6 archétypes : Cœur Fragmenté (death-shards, 3 éclats post-mortem AOE), Brisure-Tisseuse (ground-fissure, tile fissure → explose 1.5s), Regard du Reflux (gaze, rayon laser tick -2/sec), Esprit Divisé (sister-link, 3 sœurs liées via groupId, mort en chaîne), Annihilateur (parry-lock dans aura), Cohérence-Éroder (drain-aura -1/sec). Extension `EnvironmentMutators.ajouterTileFissure`. |
 | **3g** | ✅ | **Rareté & polish.** Probas par étage activées (1-2 : 90/10/0/0 → 9-10 : 55/30/12/3) dans `RaritySystem`. Tirage seedé stable dans `WorldGen.genererSalle` (sous-RNG dédié). Boost Légendaire = -25 % cooldowns + comportementBoosted. FX auras (`render/entities/AuraRarete.js`) : halo doré pulsant 1.5 Hz (Élite), halo argenté + particules ascensionnelles (Rare), halo cramoisi massif + crépitement + screen-shake 220ms (Légendaire). Drops boostés par tier (sel + fragments) + item garanti T2/T3 sur Rare/Légendaire via `modificateursDrop`. Hook `dropSignature` câblé pour future intégration recettes. Enfants spawnés (sister-link, death-shards) forcés Commun pour éviter cumul d'auras. |
-| **4** | ⬜ | **Étages déterministes.** `data/etages.js` assigne (archétype, topographie, pool ennemis) fixes par (étage, salleId). Variance seedée résiduelle. Mémoire de carte entre runs. |
+| **4** | ✅ | **Étages déterministes.** `data/etages.js` pin (archétype, topographie, présence deadend) par (étage, salleId) — structure fixe d'un run à l'autre. Le pool ennemis et la rareté restent seedés (variance vivante au sein d'une structure stable). Mémoire de carte cumulative entre runs via localStorage (`CarteMemoire.js`). |
 | **5** | ⬜ | **Boss + clés d'étage + écran de victoire.** 10 boss câblés (1 par étage), drop Clé d'étage, étage 10 = Souverain du Reflux + Artefact = fin. **Mini-jeu terminable.** |
-| **5** | ⬜ | **Identité visuelle par paire d'étages.** Polish itératif biome par biome. |
+| **5'** | ⬜ | **Identité visuelle par paire d'étages.** Polish itératif biome par biome. |
 | **6** | ⬜ (long terme) | **Spells & combos d'équipement.** Items qui octroient un sort (touche Z), recettes re-forge combinant 2 items → nouvelle capacité. |
 
 ## Systèmes implémentés (récap pour reprise)
 
 ### Génération de monde
-- **Graphe d'étage (Phase A)** : 7 salles par étage en arbre — `A → B → C → D → BOSS` (chaîne main) + dead-ends verticaux `B-haut` / `D-haut` (coffre garanti). Portes N/S/E/O bidirectionnelles. État persistant `(etage, salleId)` dans le registry. Carte avec touche M (découverte à mesure).
+- **Graphe d'étage (Phase A)** : 5-7 salles par étage en arbre — `A → B → C → D → BOSS` (chaîne main) + 0 à 2 dead-ends verticaux `B-haut` / `D-haut` (coffre garanti). Présence des deadends pinnée par `data/etages.js` depuis Phase 4. Portes N/S/E/O bidirectionnelles. État persistant `(etage, salleId)` dans le registry. Carte avec touche M, cumulative entre runs (Phase 4, via `CarteMemoire.js` + localStorage).
+- **Étages déterministes (Phase 4)** : `data/etages.js` figé pour les 10 étages (archétype, topographie, présence deadend par salleId). Le pool ennemis + tier rareté restent seedés mais stables (sous-RNG par salle dans `WorldGen`). Permet d'apprendre les étages run après run sans tomber dans la stricte répétition.
 - **Topographies (Phase 2a)** : 5 pilotes dans `data/topographies.js` :
   - `arene_ouverte` (1600×720) : sanctuaire / hall / arene / crypte
   - `tour_verticale` (1280×1080) : sanctuaire / hall / puits / crypte
@@ -149,11 +150,13 @@ npx live-server .
 ## État actuel
 *À mettre à jour à la fin de chaque session.*
 
-- **Dernière étape franchie** : **Phase 3g — Rareté & polish**. `RaritySystem` activé : probas progressives par étage (1-2 : 90/10/0/0, 5-6 : 72/22/5/1, 9-10 : 55/30/12/3), tier seedé stable côté `WorldGen.genererSalle` via sous-RNG dédié (`seedEtage ^ 0x5A17B0B0 ^ hashStr(salleId)`) — un Légendaire est le même entre visites. Boost Légendaire = stats × selon table + -25 % sur tous les cooldowns connus (`delaiTir`, `delaiTelegraph`, `delaiCharge`, etc. avec plancher 100ms). Nouveau module `render/entities/AuraRarete.js` (halo blendMode ADD 3 cercles + pulse tween + particules ascensionnelles Rare/Légendaire + screen-shake 220ms Légendaire). Cleanup auto sur `enemy:dead`. `_dropEconomique` étendu : `modificateursDrop(tier)` ajoute sel + fragments + item garanti T2/T3 sur Rare/Légendaire. Hook `dropSignature` câblé (modulaire pour future intégration recettes). Fix latent : enfants spawnés (sister-link, death-shards) qui clonaient `def.rarete` du parent Légendaire sont forcés Commun dans `_instancierEnnemi` (sinon screen-shake × N).
+- **Dernière étape franchie** : **Phase 4 — Étages déterministes**. Nouveau fichier `data/etages.js` : table éditorialisée pour les 10 étages, chaque (étage, salleId) figé en couple (archétype, topographie). La présence/absence d'une entrée pour `'B-haut'` ou `'D-haut'` détermine si la branche deadend existe (plus de tirage 70 % aléatoire). Arc narratif progressif : 1-2 horizontal/initiation → 3-4 multi-étages → 5-6 verticalité/cascades → 7-8 labyrinthes/ponts brisés → 9-10 oppression/palais final. Refactor `EtageGen.genererEtage` : si `ETAGES[numero]` existe, ses pins remplacent le tirage `choisirArchetypeEtTopographie` ; fallback algorithmique conservé pour robustesse / dev. Salle A reste forcée sanctuaire/arene_ouverte (contrainte Cité Miroir). Sanity check console.warn si un pin ne supporte pas une porte nécessaire (catch typos dans `data/etages.js`). Nouveau système `CarteMemoire.js` (localStorage clé `vestige_carte_v1`, format `{etage: [salleIds]}`) : `marquerVisite` enregistre en persistant ; `genererEtage` pré-remplit `sallesVisitees` avec les salles déjà foulées dans des runs précédents (filtrées contre le graphe actuel). Robustesse : try/catch sur localStorage (privacy mode → fallback mémoire vive). Compat tier : `RaritySystem` reste seedé par (seedEtage, salleId) — un Légendaire reste prévisible une fois la salle découverte.
 
-- **Précédentes étapes** : **Phases 3d + 3e + 3f** Bestiaires Cristaux / Voile / Reflux (18 archétypes + `PerceptionSystem` + `CloneIllusionSystem` + tile fissure). **Phase 3c** Halls Cendrés (10 ennemis, `EnvironmentMutators` gele/mur_feu, Projectile.effetImpact). **Phase 3b** Ruines basses (6 archétypes + SpawnerSystem + PerceptionCloud + tile glissante). **Phase 3a** Fondations bestiaire (split data + registry comportements/visuels + RaritySystem standalone).
+- **Précédentes étapes** : **Phase 3g** Rareté & polish (probas par étage + auras + drops boostés). **Phases 3d + 3e + 3f** Bestiaires Cristaux / Voile / Reflux (18 archétypes + `PerceptionSystem` + `CloneIllusionSystem` + tile fissure). **Phase 3c** Halls Cendrés (10 ennemis, `EnvironmentMutators` gele/mur_feu, Projectile.effetImpact). **Phase 3b** Ruines basses (6 archétypes + SpawnerSystem + PerceptionCloud + tile glissante). **Phase 3a** Fondations bestiaire (split data + registry comportements/visuels + RaritySystem standalone).
 
 - **Historique compact** *(commits précédents — voir `git log` pour le détail)* :
+  - **Phase 2b** — 40 topographies (30 régulières + 10 arènes boss) + tirage uniforme par topo + `coffreForce`.
+  - **Phase 2a** — Refactor topographie ⊥ archétype, doctrine head-bonk documentée.
   - **Phase 1** — Simplification Miroir : drain retiré, Cité = hub pur, mort = retour Cité (heal complet, méta conservée), vortex retour = reset étage courant.
   - **Variété des salles** (3c159d9) — 18 layouts + obstacles + cascades. Layouts.js depuis supprimé en 2a, mais obstacles + cascades restent.
   - **Bestiaire A+B** (4358cde) — 20 ennemis + 10 boss + 5 biomes.
@@ -166,7 +169,7 @@ npx live-server .
   - **Étape 5** — basculement Présent ↔ Miroir (avant Phase 1 qui l'a simplifié).
   - **Étapes 2-4** — Phaser setup + génération de salles + Résonance + HUD.
 
-- **Prochain chantier** : **Phase 4 — Étages déterministes.** `data/etages.js` à créer : assigner (archétype, topographie, pool ennemis) fixes par `(étage, salleId)` pour rendre la progression apprenable (le run N+1 reconnaît la salle B-haut de l'étage 5). Variance seedée résiduelle pour la microgéométrie. Mémoire de carte entre runs. Vérifier compat avec le tirage de tier (qui dépend déjà du seed étage + salleId — donc stable, mais on pourra envisager de pinner les tiers boss/élite à des positions narratives).
+- **Prochain chantier** : **Phase 5 — Boss + clés d'étage + écran de victoire.** Câbler le drop d'une **Clé d'étage** par chaque boss (remplacer le gating actuel "porte E débloquée si boss mort" par "porte E débloquée si Clé d'étage en inventaire"). Cumuler les 10 clés = condition de victoire. Étage 10 = Souverain du Reflux, drop l'**Artefact** → écran de victoire (premier vrai *win state* du jeu). Le polish d'identité visuelle par paire d'étages (Phase 5') reste en parallèle, à itérer ensuite. À noter : la table `ETAGES` de Phase 4 est maintenant le bon endroit pour pinner des positions narratives (ex: tier Légendaire garanti sur un Élite spécifique) si on en a besoin pour la difficulté de fin de mini-jeu.
 
 ## Compromis MVP — dette technique / narrative documentée
 - **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce, pas d'Artefact. La Cité = juste un respawn point amélioré. La mécanique complète d'Absorption + Artefact + fenêtre de grâce (cf. [LORE.md §6](LORE.md)) reste **vision long terme post-mini-jeu**.
@@ -195,10 +198,10 @@ npx live-server .
 - Jump max ≈ 96 px vert. Jump horiz safe ≈ 130 px edge-to-edge (le legacy puits utilisait 144 px, jouable mais limite).
 
 ### Phase A — graphe d'étage
-- 7 salles : 5 main (A→BOSS) + 2 dead-ends verticaux possibles. La porte E de la salle BOSS gère la transition d'étage (sans voisin dans le graphe). Phase 4 du mini-jeu remplacera ce gating par une **Clé d'étage** dropée par le boss.
+- 7 salles max : 5 main (A→BOSS) + 0-2 dead-ends verticaux (présence pinnée par `data/etages.js` depuis Phase 4). La porte E de la salle BOSS gère la transition d'étage (sans voisin dans le graphe). Phase 5 du mini-jeu remplacera ce gating par une **Clé d'étage** dropée par le boss.
 
 ### Boss
-- Spawnent en salle BOSS en Présent si non tués (`enemySystem.estMort('normal', cleSalleEtage, 'boss')`). Phase A : boss FONCTIONNEL mais pas encore "objectif final" — Phase 4 ajoutera Clé d'étage + Artefact + écran victoire.
+- Spawnent en salle BOSS en Présent si non tués (`enemySystem.estMort('normal', cleSalleEtage, 'boss')`). Phase A : boss FONCTIONNEL mais pas encore "objectif final" — Phase 5 ajoutera Clé d'étage + Artefact + écran victoire.
 
 ### Préférences utilisateur retenues
 - **Plan + challenge avant code** sur les features non triviales. Proposer plan + 1-3 questions de design avant de coder. Pour les fixes triviaux ou corrections explicites, exécuter direct.

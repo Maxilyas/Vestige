@@ -1,6 +1,6 @@
 // EtageGen — génère le graphe d'un étage (Phase A).
 //
-// STRUCTURE D'UN ÉTAGE (7 salles)
+// STRUCTURE D'UN ÉTAGE (7 salles max)
 //
 //          col 0    col 1    col 2    col 3    col 4 (boss)
 // row -1            B'                 D'
@@ -8,7 +8,7 @@
 // row 0   A → → →   B → → →   C → → →   D → → →   BOSS
 //
 //   - Chaîne principale : A → B → C → D → BOSS, 5 salles connectées par E/O.
-//   - 2 dead-ends verticaux (B' et D') connectés par N à un node main.
+//   - 0-2 dead-ends verticaux (B' et D') connectés par N à un node main.
 //     Contiennent un coffre garanti — récompense pour explorer en hauteur.
 //
 // Les directions s'inversent automatiquement au retour : si A.portes.E = B.id,
@@ -16,11 +16,18 @@
 //
 // Phase 2a — Refactor (2026-05-12) : le couple (archétype, topographie)
 // remplace l'archétype seul. L'archétype = thème, la topographie = structure.
+//
+// Phase 4 — Étages déterministes (2026-05-12) : si `ETAGES[numero]` est défini
+// dans data/etages.js, ses pins (archétype, topographie, présence deadend)
+// remplacent le tirage aléatoire. La microgéométrie + pool ennemis + rareté
+// restent seedés (variance vivante au sein d'une structure stable).
 
 import { creerRng, genererSalle } from './WorldGen.js';
 import { ARCHETYPES, directionOpposee } from '../data/archetypes.js';
 import { TOPOGRAPHIES, topographiesPour, BOSS_ARENA_PAR_ETAGE } from '../data/topographies.js';
 import { biomePourEtage } from '../data/biomes.js';
+import { ETAGES, configSalle } from '../data/etages.js';
+import { sallesVisiteesPersistantes, marquerSalleVisiteePersistant } from './CarteMemoire.js';
 
 /**
  * Hash deux entiers en un seed reproductible.
@@ -107,14 +114,17 @@ export function genererEtage(numero, seedRun) {
     connecter('C',    'E', 'D');
     connecter('D',    'E', 'BOSS');
 
-    // Dead-ends verticaux : ~70 % de chance de garder chacun, seedé
-    const garderBranche = (_clef) => rng() < 0.7;
+    // Dead-ends verticaux : pinnés par data/etages.js si l'étage est éditorialisé,
+    // sinon fallback algorithmique (~70 % de chance chacun, seedé).
+    const pinEtage = ETAGES[numero];
     const branchesGardees = [];
-    if (garderBranche('B')) {
+    const garderBrancheEditorialisee = (id) =>
+        pinEtage ? (pinEtage.salles?.[id] !== undefined) : (rng() < 0.7);
+    if (garderBrancheEditorialisee('B-haut')) {
         connecter('B', 'N', 'B-haut');
         branchesGardees.push('B-haut');
     }
-    if (garderBranche('D')) {
+    if (garderBrancheEditorialisee('D-haut')) {
         connecter('D', 'N', 'D-haut');
         branchesGardees.push('D-haut');
     }
@@ -164,22 +174,40 @@ export function genererEtage(numero, seedRun) {
         }
 
         let archetype, topographie;
-        if (n.role === 'boss') {
-            // Boss : arène dédiée à l'étage (10 designs uniques, complexité
-            // progressive, thème suivant le biome). Fallback arene_ouverte si
-            // l'étage est hors-plage.
-            archetype = ARCHETYPES.arene;
-            topographie = BOSS_ARENA_PAR_ETAGE[numero] ?? TOPOGRAPHIES.arene_ouverte;
-        } else if (n.role === 'entree') {
-            // Entrée = Cité Marchande en Miroir. Sol plat large pour les 3 PNJ.
+        // Pin éditorialisé (Phase 4) — priorité absolue sauf pour la salle
+        // d'entrée qui DOIT rester sanctuaire/arene_ouverte (la Cité Miroir
+        // s'y déploie : 3 PNJ posés au sol, doit être plat et large).
+        const pin = configSalle(numero, n.id);
+
+        if (n.role === 'entree') {
+            // Entrée = Cité Marchande en Miroir. Forçage non négociable.
             archetype = ARCHETYPES.sanctuaire;
             topographie = TOPOGRAPHIES.arene_ouverte;
+        } else if (pin && ARCHETYPES[pin.archetype] && TOPOGRAPHIES[pin.topographie]) {
+            archetype = ARCHETYPES[pin.archetype];
+            topographie = TOPOGRAPHIES[pin.topographie];
+            // Sanity check dev : la topo doit supporter toutes les portes nécessaires.
+            // (Sauf pour la salle BOSS qui force E hors-graphe : c'est attendu.)
+            if (n.role !== 'boss') {
+                const portesMissing = portesNec.filter(d => !topographie.portesPossibles.includes(d));
+                if (portesMissing.length > 0) {
+                    console.warn(
+                        `[EtageGen] Pin invalide étage ${numero} salle ${n.id}: ` +
+                        `topographie '${pin.topographie}' ne supporte pas porte(s) ${portesMissing.join(',')}. ` +
+                        `Vérifier data/etages.js.`
+                    );
+                }
+            }
+        } else if (n.role === 'boss') {
+            // Fallback boss : arène dédiée à l'étage (10 designs uniques).
+            archetype = ARCHETYPES.arene;
+            topographie = BOSS_ARENA_PAR_ETAGE[numero] ?? TOPOGRAPHIES.arene_ouverte;
         } else if (n.role === 'deadend') {
-            // Dead-end vertical : Puits Descendant (entrée par le haut, coffre en bas)
+            // Fallback deadend : Puits Descendant classique.
             archetype = ARCHETYPES.puits;
             topographie = TOPOGRAPHIES.puits_descente;
         } else {
-            // Main : choix libre dans le pool du biome
+            // Fallback main : choix libre dans le pool du biome.
             ({ archetype, topographie } = choisirArchetypeEtTopographie(portesNec, biome, rng));
         }
 
@@ -218,6 +246,14 @@ export function genererEtage(numero, seedRun) {
         }
     }
 
+    // Mémoire de carte persistante (Phase 4) : on hydrate sallesVisitees avec
+    // toutes les salles que le joueur a déjà foulées à des runs précédents,
+    // filtrées pour ne garder que celles qui existent encore dans le graphe.
+    const visiteesInitiales = new Set(['A']);
+    for (const id of sallesVisiteesPersistantes(numero)) {
+        if (salles.has(id)) visiteesInitiales.add(id);
+    }
+
     return {
         numero,
         biome: biome.id,
@@ -225,7 +261,7 @@ export function genererEtage(numero, seedRun) {
         salles,                          // Map<id, salle>
         salleEntreeId: 'A',
         salleBossId: 'BOSS',
-        sallesVisitees: new Set(['A'])
+        sallesVisitees: visiteesInitiales
     };
 }
 
@@ -258,7 +294,8 @@ export function etageDepuisRegistry(data) {
     };
 }
 
-/** Marque une salle comme visitée et persiste. */
+/** Marque une salle comme visitée (état du run + mémoire entre runs). */
 export function marquerVisite(etage, salleId) {
     etage.sallesVisitees.add(salleId);
+    marquerSalleVisiteePersistant(etage.numero, salleId);
 }
