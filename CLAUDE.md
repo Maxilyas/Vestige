@@ -91,8 +91,12 @@ npx live-server .
 | **1** | ✅ | **Simplification Miroir + mort = retour Cité.** Drain Miroir retiré, Cité = hub pur, vortex retour reset étage, heal complet, méta-progression conservée. |
 | **2a** | ✅ | **Refactor topographie / archétype.** Découplage thème (archétype) ⊥ structure (topographie). 5 topographies pilotes. `Layouts.js` supprimé. Doctrine head-bonk documentée (plateformes empilées au même x avec 70 px vert → la plate du haut doit être one-way). |
 | **2b** | ✅ | **40 topographies + tirage uniforme par topo + boss arenas dédiées.** Catalogue passé de 5 à 30 topos régulières (10 horizontales + 10 verticales ajoutées). Tirage `EtageGen` revu : uniforme par topo (plus par archétype) pour éviter la dilution des spécialisées. 10 arènes boss uniques (1/étage, complexité progressive, thème biome). Mécanisme `coffreForce` pour coffres garantis sur secrets (ex: pont haut de `corridor_ressorts`). |
-| **3** | ⬜ | **Étages déterministes.** `data/etages.js` assigne (archétype, topographie, ennemis) fixes par (étage, salleId). Variance seedée résiduelle. Mémoire de carte entre runs. |
-| **4** | ⬜ | **Boss + clés d'étage + écran de victoire.** 10 boss câblés (1 par étage), drop Clé d'étage, étage 10 = Souverain du Reflux + Artefact = fin. **Mini-jeu terminable.** |
+| **3a** | ✅ | **Fondations bestiaire.** Split `data/enemies.js` par biome. Registry pattern pour `EnemyComportements/` (`_registry.js` séparé pour éviter circular imports). `RaritySystem` standalone (4 tiers Commun/Élite/Rare/Légendaire, probas désactivées jusqu'à 3g, hook signature-drop modulable). |
+| **3b** | ✅ | **Bestiaire Ruines basses + 3 mini-systèmes transversaux.** 6 archétypes innovants : Statue Éveillée (dormant), Racine Étouffante (anchor), Mousse Glissante (trail-tile), Tombe Éclatée (spawner), Vautour de Débris (diver), Champignon-Spore (cloud). Refactor `EnemyVisuel.js` en registry. Nouveaux systèmes : `SpawnerSystem`, `EnvironmentMutators` (tile glissante), `PerceptionCloud`. Event `enemy:spawn` relayé via Enemy.js. Pool biome `ruines_basses` pondéré (50/50 basics/innovants) via duplication d'entries. |
+| **3c-3f** | ⬜ | **Bestiaires Halls / Cristaux / Voile / Reflux.** 6 archétypes innovants par biome (24 au total). Mini-systèmes ajoutés ad hoc selon les mécaniques (PerceptionSystem complet pour vision blur / contrôles inversés / gravity flip à partir de 3d). |
+| **3g** | ⬜ | **Rareté & polish.** Activer probas Commun/Élite/Rare/Légendaire dans `RaritySystem`. FX auras (halo pulsant, screen-shake Légendaire). Tuning fréquences par biome. |
+| **4** | ⬜ | **Étages déterministes.** `data/etages.js` assigne (archétype, topographie, pool ennemis) fixes par (étage, salleId). Variance seedée résiduelle. Mémoire de carte entre runs. |
+| **5** | ⬜ | **Boss + clés d'étage + écran de victoire.** 10 boss câblés (1 par étage), drop Clé d'étage, étage 10 = Souverain du Reflux + Artefact = fin. **Mini-jeu terminable.** |
 | **5** | ⬜ | **Identité visuelle par paire d'étages.** Polish itératif biome par biome. |
 | **6** | ⬜ (long terme) | **Spells & combos d'équipement.** Items qui octroient un sort (touche Z), recettes re-forge combinant 2 items → nouvelle capacité. |
 
@@ -142,9 +146,9 @@ npx live-server .
 ## État actuel
 *À mettre à jour à la fin de chaque session.*
 
-- **Dernière étape franchie** : **Phase 2b — 40 topographies + tirage uniforme par topo + boss arenas dédiées**. Catalogue passé de 5 à 30 topos régulières + 10 boss arenas (1/étage). Nouveau tirage dans `EtageGen.choisirArchetypeEtTopographie` : uniforme parmi toutes les topos compatibles biome+portes (l'archétype est dérivé après). Pool par archétype rééquilibré (puits 2→6, pont 4→9, etc.). `BOSS_ARENA_PAR_ETAGE` mappe étage→arène dédiée avec progression de complexité et thème biome. Mécanisme `coffreForce` dans `WorldGen` pour coffres garantis sur zones secrètes (premier usage : pont haut de `corridor_ressorts`, accessible plus tard avec items boost vélocité).
+- **Dernière étape franchie** : **Phase 3b — Bestiaire Ruines basses + 3 mini-systèmes transversaux**. 10 ennemis désormais dans le biome 1-2 (4 basics + 6 innovants : Statue Éveillée, Racine Étouffante, Mousse Glissante, Tombe Éclatée, Vautour de Débris, Champignon-Spore). Nouveaux systèmes orthogonaux : `SpawnerSystem` (helpers + `defMini`), `EnvironmentMutators` (tile glissante avec auto-update), `PerceptionCloud` (nuages obscurcissants statiques). Refactor `EnemyVisuel.js` en registry (un fichier par archétype). Event `enemy:spawn` relayé via Enemy.js, géré par GameScene (idx synthétique + skip persistance pour `def.spawned`). Pool biome pondéré 50/50 par duplication d'entries.
 
-- **Précédente étape** : **Phase 2a — Refactor topographie / archétype**. Découplage thème ⊥ structure. Nouveau `data/topographies.js` (5 pilotes). Archétype réduit à id+nom+niveauxAssocies. `EtageGen` pick (archétype, topographie compatible+portes). `Layouts.js` supprimé. HUD étendu : `Étage X · Archétype (Topographie) · ENTRÉE`.
+- **Précédente étape** : **Phase 3a — Fondations bestiaire**. Split `data/enemies.js` en `data/enemies/{ruines,halls,cristaux,voile,reflux,index}.js`. Registry pour `EnemyComportements/` avec `_registry.js` séparé (résout circular imports). `RaritySystem.js` standalone (4 tiers, probas désactivées commun=100% jusqu'à Phase 3g, hook `enregistrerSignatureDrop` modulable pour drops uniques).
 
 - **Historique compact** *(commits précédents — voir `git log` pour le détail)* :
   - **Phase 1** — Simplification Miroir : drain retiré, Cité = hub pur, mort = retour Cité (heal complet, méta conservée), vortex retour = reset étage courant.
@@ -159,7 +163,7 @@ npx live-server .
   - **Étape 5** — basculement Présent ↔ Miroir (avant Phase 1 qui l'a simplifié).
   - **Étapes 2-4** — Phaser setup + génération de salles + Résonance + HUD.
 
-- **Prochain chantier** : **Phase 3 — Étages déterministes**. Créer `data/etages.js` qui assigne (archétype, topographie, pool ennemis) fixes par (étage, salleId), avec variance seedée résiduelle marginale. Mémoire de carte persistée entre runs (re-visiter un étage déjà connu). Désactive la part aléatoire de `EtageGen.choisirArchetypeEtTopographie` pour les salles main, tout en gardant la mécanique pour fallback / tests.
+- **Prochain chantier** : **Phase 3c — Bestiaire Halls Cendrés**. 6 archétypes innovants étages 3-4 (Chandelier Vivant lighting-mod, Brûleur Lent detonator, Cendre-Tisseuse web-spinner, Ardent Miroir reflector, Soupir Glacial anti-thème, Tisseur d'Embrasement wall-builder). Active `EnvironmentMutators` étendu (tiles `gelees`, `wall_fire`) + nouveau pattern Reflector côté projectiles. Toujours pas de PerceptionSystem complet (réservé Phase 3d Cristaux).
 
 ## Compromis MVP — dette technique / narrative documentée
 - **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce, pas d'Artefact. La Cité = juste un respawn point amélioré. La mécanique complète d'Absorption + Artefact + fenêtre de grâce (cf. [LORE.md §6](LORE.md)) reste **vision long terme post-mini-jeu**.

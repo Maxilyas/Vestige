@@ -25,7 +25,22 @@ export const BIOMES = {
             ambiance: 0x3a4a3a,
             accent: 0xc8a85a
         },
-        ennemisPool: ['gardien_pierre', 'spectre_cendre', 'belier_brise', 'oeil_temoin'],
+        // Pool pondéré : 4 basics × 3 copies + 6 innovants × 2 copies = 24 entries
+        // → ~50% basics, ~50% innovants. Courbe d'apprentissage douce (le
+        // joueur voit majoritairement les basics au début, puis croise les
+        // innovants régulièrement). Refactor en `{id, poids}` plus tard si besoin.
+        ennemisPool: [
+            'gardien_pierre', 'gardien_pierre', 'gardien_pierre',
+            'spectre_cendre', 'spectre_cendre', 'spectre_cendre',
+            'belier_brise',   'belier_brise',   'belier_brise',
+            'oeil_temoin',    'oeil_temoin',    'oeil_temoin',
+            'statue_eveillee',    'statue_eveillee',
+            'racine_etouffante',  'racine_etouffante',
+            'mousse_glissante',   'mousse_glissante',
+            'tombe_eclatee',      'tombe_eclatee',
+            'vautour_debris',     'vautour_debris',
+            'champignon_spore',   'champignon_spore'
+        ],
         densite: { min: 2, max: 4 }
     },
     halls_cendres: {

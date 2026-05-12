@@ -17,7 +17,7 @@ import { InventaireSystem } from '../systems/InventaireSystem.js';
 import { EnemySystem } from '../systems/EnemySystem.js';
 import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
 import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
-import { ENEMIES } from '../data/enemies.js';
+import { ENEMIES } from '../data/enemies/index.js';
 import { definitionBoss } from '../data/boss.js';
 import { ARCHETYPES, spawnDepuisPorte, directionOpposee } from '../data/archetypes.js';
 import { TOPOGRAPHIES } from '../data/topographies.js';
@@ -454,8 +454,13 @@ export class GameScene extends Phaser.Scene {
         }
 
         // --- Mort d'ennemi : drop éventuel + Sel + Fragment ---
+        // Les ennemis spawnés (def.spawned=true, ex: mini-spectres pondés par
+        // une Tombe Éclatée) ne sont PAS persistés — ils respawn à chaque
+        // ponte, donc inutile de les marquer morts pour de bon.
         const handlerEnemyDead = (ennemi) => {
-            this.enemySystem.marquerMort('normal', this.cleSalleEtage, ennemi.indexEnnemi);
+            if (!ennemi.def?.spawned) {
+                this.enemySystem.marquerMort('normal', this.cleSalleEtage, ennemi.indexEnnemi);
+            }
             this.peutEtreDrop(ennemi);
             this._dropEconomique(ennemi);
         };
@@ -862,6 +867,20 @@ export class GameScene extends Phaser.Scene {
         this.events.on('enemy:tir', onTir);
         this.events.on('boss:tir', onTir);
 
+        // Spawner — instancie un ennemi enfant à la position fournie (cf.
+        // SpawnerSystem). idx synthétique pour ne pas collisionner avec les
+        // ennemis indexés du graphe ; la def porte `spawned: true` qui
+        // bypass la persistance enemySystem.marquerMort plus bas.
+        const onSpawn = (parent, params) => {
+            const idx = `spawn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+            const child = this._instancierEnnemi(params.def, params.x, params.y, idx);
+            if (parent && child) {
+                if (!parent.enfants) parent.enfants = [];
+                parent.enfants.push(child);
+            }
+        };
+        this.events.on('enemy:spawn', onSpawn);
+
         // Boss Colosse : telegraph + impact AOE
         const onTelegraph = (boss) => this._jouerTelegraphSmash(boss);
         const onImpact = (boss) => this._appliquerSmash(boss);
@@ -898,6 +917,7 @@ export class GameScene extends Phaser.Scene {
         this.events.once('shutdown', () => {
             this.events.off('enemy:tir', onTir);
             this.events.off('boss:tir', onTir);
+            this.events.off('enemy:spawn', onSpawn);
             this.events.off('boss:smash:telegraph', onTelegraph);
             this.events.off('boss:smash:impact', onImpact);
             this.events.off('boss:phase', onPhase);

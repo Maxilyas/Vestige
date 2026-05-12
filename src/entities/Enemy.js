@@ -7,7 +7,7 @@
 //   - Tireur peut émettre `enemy:tir` que GameScene capte pour spawner un
 //     Projectile.
 
-import { COMPORTEMENTS } from '../systems/EnemyComportements.js';
+import { COMPORTEMENTS } from '../systems/EnemyComportements/index.js';
 import { creerVisuelEnnemi } from '../render/entities/EnemyVisuel.js';
 import { DEPTH, tracerCourbeQuadratique } from '../render/PainterlyRenderer.js';
 
@@ -54,6 +54,10 @@ export class Enemy {
         // Tir éventuel (Tireur)
         if (result?.tirer) {
             this.scene.events.emit('enemy:tir', this, result.tirer);
+        }
+        // Spawn éventuel (Spawner) — params { def, x, y }
+        if (result?.spawn) {
+            this.scene.events.emit('enemy:spawn', this, result.spawn);
         }
 
         // Le visuel suit la position du sprite physique
