@@ -1,21 +1,32 @@
 // Scène overlay — Table de Forge du Fondeur.
 //
-// Style "tableau gravé" cohérent avec le Carnet du Vestige :
-//   - Cadre pierre + double bordure dorée
-//   - 3 emplacements pour Fragments
-//   - 3 boutons d'ajout (cliquer un emblème pour ajouter au prochain emplacement libre)
-//   - Bouton FONDRE (consomme Fragments + Sel, révèle un item)
-//   - Phrase cryptique du Fondeur qui change selon les Fragments déposés
-//   - Aucune recette n'est jamais affichée — mystère préservé
+// Phase 6 — 3 onglets :
+//   1. FRAGMENTS  : forge legacy (1-2 fragments + Sel → item legacy T3)
+//   2. COMBINER   : combine 2 instances Phase 6 → 1 nouvelle (variance + risque Brisé)
+//   3. RE-RÉSONNER : reroll d'une instance avec Encre du Témoin + Sel
+//
+// Style "tableau gravé" cohérent avec le Carnet du Vestige.
 
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { InventaireSystem } from '../systems/InventaireSystem.js';
-import { EconomySystem, EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
+import { EconomySystem, EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE, EVT_ENCRE_CHANGE } from '../systems/EconomySystem.js';
 import { FondeurSystem } from '../systems/FondeurSystem.js';
+import { CraftingSystem, COUTS_COMBINAISON, RISQUE_BRISE, COUTS_REROLL } from '../systems/CraftingSystem.js';
 import { coutEnSel, phraseFondeur, PHRASE_INV_PLEIN } from '../data/recettes.js';
-import { ITEMS, COULEURS_FAMILLE } from '../data/items.js';
+import { ITEMS, COULEURS_FAMILLE, getItemOuVestige } from '../data/items.js';
 import { peindreEmblemeFamille } from '../render/ui/EmblemeFamille.js';
 import { COULEURS_INVENTAIRE, poserCadreInventaire, poserBoutonFermer } from '../render/ui/CadreInventaire.js';
+import { creerSlot } from '../render/ui/SlotInventaire.js';
+import { estInstance, tierPourScore, couleurPourScore } from '../systems/ScoreSystem.js';
+import { STATS } from '../data/stats.js';
+import { TEMPLATES } from '../data/templatesItems.js';
+
+const ONGLETS = ['fragments', 'combiner', 'reroll'];
+const LABEL_ONGLET = {
+    fragments: 'FRAGMENTS',
+    combiner: 'COMBINER',
+    reroll: 'RE-RÉSONNER'
+};
 
 export class FondeurScene extends Phaser.Scene {
     constructor() {
@@ -23,7 +34,6 @@ export class FondeurScene extends Phaser.Scene {
     }
 
     init(data) {
-        // PRNG pour tirer le résultat (passé depuis GameScene pour reproductibilité)
         this.rngForge = data?.rng ?? Math.random;
     }
 
@@ -31,561 +41,645 @@ export class FondeurScene extends Phaser.Scene {
         this.economy = new EconomySystem(this.registry);
         this.inventaire = new InventaireSystem(this.registry);
         this.fondeur = new FondeurSystem(this.economy, this.inventaire);
+        this.crafting = new CraftingSystem(this.economy, this.inventaire);
 
-        // Slots de la table : tableau de famille (string) ou null
+        // État commun
+        this.ongletActif = 'fragments';
+        // Onglet Fragments — résultat est une INSTANCE Phase 6
         this.slots = [null, null, null];
-        this.itemResultat = null;
+        this.instanceResultat = null;
+        // Onglet Combiner
+        this.uidA = null;
+        this.uidB = null;
+        this.combinerResultat = null;
+        // Onglet Reroll
+        this.uidReroll = null;
+        this.lockedStat = null;
+        this.rerollResultat = null;
 
-        // --- Cadre stylisé ---
+        // Cadre stylisé
         const cadre = poserCadreInventaire(this, GAME_WIDTH, GAME_HEIGHT);
-        // Réécrit le titre du cadre
         cadre.titre.setText('TABLE DE FORGE');
-
-        // Bouton fermer
         poserBoutonFermer(this, GAME_WIDTH - 50, 50, () => this.fermer());
 
-        // --- Phrase du Fondeur ---
+        // Phrase du Fondeur (haute)
         this.phraseTexte = this.add.text(GAME_WIDTH / 2, 78, '"' + phraseFondeur([]) + '"', {
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            color: '#c8a85a',
-            fontStyle: 'italic',
-            stroke: '#000',
-            strokeThickness: 2
-        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(310);
+            fontFamily: 'monospace', fontSize: '12px', color: '#c8a85a',
+            fontStyle: 'italic', stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5, 0).setDepth(310);
 
-        // --- Zone des emplacements (3 carrés au centre) ---
-        this._dessinerEmplacements();
+        // Barre d'onglets sous la phrase
+        this._dessinerOnglets();
 
-        // --- Boutons d'ajout (3 emblèmes Blanc/Bleu/Noir) ---
-        this._dessinerBoutonsAjout();
+        // Zone principale (réservée à l'onglet actif)
+        this.zoneCont = this.add.container(0, 0).setDepth(310);
+        this._dessinerContenuOnglet();
 
-        // --- Coût + boutons FONDRE / FERMER ---
-        this._dessinerActions();
-
-        // --- Zone résultat ---
-        this._dessinerResultat();
-
-        // --- Bande ressources en bas ---
+        // Bande ressources fixe en bas
         this._dessinerBandeRessources();
 
-        // --- Touches ---
+        // Touches
         this.input.keyboard.on('keydown-ESC', () => this.fermer());
+        this.input.keyboard.on('keydown-ONE', () => this._changerOnglet('fragments'));
+        this.input.keyboard.on('keydown-TWO', () => this._changerOnglet('combiner'));
+        this.input.keyboard.on('keydown-THREE', () => this._changerOnglet('reroll'));
 
-        // Refresh global au changement de Sel/Fragments (autres sources)
         const handlerEco = () => this._refreshTout();
         this.registry.events.on(EVT_SEL_CHANGE, handlerEco);
         this.registry.events.on(EVT_FRAGMENTS_CHANGE, handlerEco);
+        this.registry.events.on(EVT_ENCRE_CHANGE, handlerEco);
         this.events.once('shutdown', () => {
             this.registry.events.off(EVT_SEL_CHANGE, handlerEco);
             this.registry.events.off(EVT_FRAGMENTS_CHANGE, handlerEco);
+            this.registry.events.off(EVT_ENCRE_CHANGE, handlerEco);
         });
     }
 
     fermer() {
-        // Reset les touches pour éviter les surdéclenchements
         const codes = Phaser.Input.Keyboard.KeyCodes;
         const keys = this.input.keyboard.keys;
-        [codes.ESC].forEach(c => keys[c]?.reset());
+        [codes.ESC, codes.ONE, codes.TWO, codes.THREE].forEach(c => keys[c]?.reset());
         this.scene.resume('GameScene');
         this.scene.stop();
     }
 
     // ============================================================
-    // EMPLACEMENTS DE FORGE
+    // ONGLETS
     // ============================================================
-    _dessinerEmplacements() {
-        if (this.contEmplacements) this.contEmplacements.destroy();
-        this.contEmplacements = this.add.container(0, 0).setDepth(310).setScrollFactor(0);
+    _dessinerOnglets() {
+        if (this.contOnglets) this.contOnglets.destroy();
+        this.contOnglets = this.add.container(0, 0).setDepth(310);
 
+        const yOnglets = 108;
+        const espace = 16;
+        const largOnglet = 140;
+        const xDebut = GAME_WIDTH / 2 - (3 * largOnglet + 2 * espace) / 2;
+
+        for (let i = 0; i < ONGLETS.length; i++) {
+            const id = ONGLETS[i];
+            const x = xDebut + i * (largOnglet + espace);
+            const actif = this.ongletActif === id;
+
+            const fond = this.add.graphics();
+            fond.fillStyle(actif ? 0x2a1810 : 0x14100a, 1);
+            fond.fillRect(x, yOnglets, largOnglet, 28);
+            fond.lineStyle(actif ? 2 : 1, actif ? COULEURS_INVENTAIRE.orClair : COULEURS_INVENTAIRE.or, actif ? 1 : 0.6);
+            fond.strokeRect(x, yOnglets, largOnglet, 28);
+            this.contOnglets.add(fond);
+
+            const txt = this.add.text(x + largOnglet / 2, yOnglets + 14, LABEL_ONGLET[id], {
+                fontFamily: 'monospace', fontSize: '12px',
+                color: actif ? '#ffd070' : '#a8a8b8',
+                fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5);
+            this.contOnglets.add(txt);
+
+            const hit = this.add.rectangle(x + largOnglet / 2, yOnglets + 14, largOnglet, 28, 0xffffff, 0)
+                .setInteractive({ useHandCursor: true });
+            hit.on('pointerdown', () => this._changerOnglet(id));
+            this.contOnglets.add(hit);
+        }
+
+        // Hint touches 1/2/3 sous les onglets
+        const hint = this.add.text(GAME_WIDTH / 2, yOnglets + 38, '— 1 / 2 / 3 pour changer d\'onglet —', {
+            fontFamily: 'monospace', fontSize: '9px', color: '#6a6a7a'
+        }).setOrigin(0.5);
+        this.contOnglets.add(hint);
+    }
+
+    _changerOnglet(id) {
+        if (this.ongletActif === id) return;
+        this.ongletActif = id;
+        // Reset état spécifique
+        this.instanceResultat = null;
+        this.combinerResultat = null;
+        this.rerollResultat = null;
+        this._dessinerOnglets();
+        this._dessinerContenuOnglet();
+    }
+
+    _dessinerContenuOnglet() {
+        this.zoneCont.removeAll(true);
+        if (this.ongletActif === 'fragments') this._renderOngletFragments();
+        else if (this.ongletActif === 'combiner') this._renderOngletCombiner();
+        else if (this.ongletActif === 'reroll') this._renderOngletReroll();
+    }
+
+    // ============================================================
+    // ONGLET 1 — FRAGMENTS (forge legacy)
+    // ============================================================
+    _renderOngletFragments() {
         const cx = GAME_WIDTH / 2;
-        const y = 130;
-        const taille = 56;
-        const espace = 20;
+        const y0 = 170;
 
+        // 3 emplacements
+        const taille = 52;
+        const espace = 16;
         for (let i = 0; i < 3; i++) {
             const x = cx + (i - 1) * (taille + espace);
-
-            // Cadre du slot
             const cadre = this.add.graphics();
             cadre.fillStyle(0x080604, 1);
-            cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
+            cadre.fillRect(x - taille / 2, y0 - taille / 2, taille, taille);
             cadre.lineStyle(2, COULEURS_INVENTAIRE.or, 0.85);
-            cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
-            cadre.lineStyle(1, COULEURS_INVENTAIRE.orClair, 0.5);
-            cadre.strokeRect(x - taille / 2 + 3, y - taille / 2 + 3, taille - 6, taille - 6);
-            this.contEmplacements.add(cadre);
-
-            // Si rempli : emblème de la famille au centre
+            cadre.strokeRect(x - taille / 2, y0 - taille / 2, taille, taille);
+            this.zoneCont.add(cadre);
             const fam = this.slots[i];
-            if (fam) {
-                const emb = peindreEmblemeFamille(this, x, y, fam, 28);
-                this.contEmplacements.add(emb);
-            }
-
-            // Hitbox cliquable (pour retirer)
-            const hit = this.add.rectangle(x, y, taille, taille, 0xffffff, 0)
+            if (fam) this.zoneCont.add(peindreEmblemeFamille(this, x, y0, fam, 26));
+            const hit = this.add.rectangle(x, y0, taille, taille, 0xffffff, 0)
                 .setInteractive({ useHandCursor: true });
-            hit.on('pointerdown', () => this._retirerSlot(i));
-            this.contEmplacements.add(hit);
+            hit.on('pointerdown', () => { this.slots[i] = null; this._dessinerContenuOnglet(); });
+            this.zoneCont.add(hit);
         }
+        this.zoneCont.add(this.add.text(cx, y0 + taille / 2 + 8, 'FRAGMENTS', {
+            fontFamily: 'monospace', fontSize: '9px', color: '#8a8a9a', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
 
-        // Label sous les emplacements
-        const lbl = this.add.text(cx, y + taille / 2 + 10, 'FRAGMENTS', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a',
-            fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
-        this.contEmplacements.add(lbl);
-    }
-
-    // ============================================================
-    // BOUTONS D'AJOUT (emblèmes des 3 familles)
-    // ============================================================
-    _dessinerBoutonsAjout() {
-        if (this.contBoutonsAjout) this.contBoutonsAjout.destroy();
-        this.contBoutonsAjout = this.add.container(0, 0).setDepth(310).setScrollFactor(0);
-
-        const cx = GAME_WIDTH / 2;
-        const y = 235;
-        const taille = 44;
-        const espace = 16;
+        // Boutons ajout (3 familles)
+        const y1 = y0 + 78;
+        const tailleBtn = 42;
         const familles = ['blanc', 'bleu', 'noir'];
-
-        // Label clairement au-dessus des boutons (40 px d'écart)
-        const lbl = this.add.text(cx, y - 40, '— AJOUTER UN FRAGMENT —', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a',
-            fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
-        this.contBoutonsAjout.add(lbl);
-
         for (let i = 0; i < familles.length; i++) {
             const fam = familles[i];
-            const x = cx + (i - 1) * (taille + espace);
-            const dispo = this.economy.getFragment(fam);
-
+            const x = cx + (i - 1) * (tailleBtn + 14);
+            const dispo = this._fragDispo(fam);
+            const interactif = dispo > 0 && this.slots.some(s => s === null);
             const cadre = this.add.graphics();
-            const interactif = dispo > 0;
-            const couleurBord = interactif ? COULEURS_INVENTAIRE.or : 0x4a4a5a;
             cadre.fillStyle(0x080604, 1);
-            cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
-            cadre.lineStyle(1, couleurBord, interactif ? 0.85 : 0.4);
-            cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
-            this.contBoutonsAjout.add(cadre);
-
-            const emb = peindreEmblemeFamille(this, x, y - 4, fam, 22);
+            cadre.fillRect(x - tailleBtn / 2, y1 - tailleBtn / 2, tailleBtn, tailleBtn);
+            cadre.lineStyle(1, interactif ? COULEURS_INVENTAIRE.or : 0x4a4a5a, interactif ? 0.85 : 0.4);
+            cadre.strokeRect(x - tailleBtn / 2, y1 - tailleBtn / 2, tailleBtn, tailleBtn);
+            this.zoneCont.add(cadre);
+            const emb = peindreEmblemeFamille(this, x, y1 - 4, fam, 22);
             if (!interactif) emb.setAlpha(0.35);
-            this.contBoutonsAjout.add(emb);
-
-            // Compteur de Fragments dispo
-            const compteur = this.add.text(x, y + taille / 2 - 7, `${dispo}`, {
+            this.zoneCont.add(emb);
+            this.zoneCont.add(this.add.text(x, y1 + tailleBtn / 2 - 6, String(dispo), {
                 fontFamily: 'monospace', fontSize: '11px',
-                color: interactif ? '#e8e4d8' : '#5a5a6a',
-                fontStyle: 'bold'
-            }).setOrigin(0.5);
-            this.contBoutonsAjout.add(compteur);
-
+                color: interactif ? '#e8e4d8' : '#5a5a6a', fontStyle: 'bold'
+            }).setOrigin(0.5));
             if (interactif) {
-                const hit = this.add.rectangle(x, y, taille, taille, 0xffffff, 0)
+                const hit = this.add.rectangle(x, y1, tailleBtn, tailleBtn, 0xffffff, 0)
                     .setInteractive({ useHandCursor: true });
-                hit.on('pointerdown', () => this._ajouterSlot(fam));
-                hit.on('pointerover', () => {
-                    cadre.clear();
-                    cadre.fillStyle(0x14100a, 1);
-                    cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
-                    cadre.lineStyle(2, COULEURS_INVENTAIRE.orClair, 1);
-                    cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
+                hit.on('pointerdown', () => {
+                    const idx = this.slots.findIndex(s => s === null);
+                    if (idx >= 0) { this.slots[idx] = fam; this._dessinerContenuOnglet(); }
                 });
-                hit.on('pointerout', () => {
-                    cadre.clear();
-                    cadre.fillStyle(0x080604, 1);
-                    cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
-                    cadre.lineStyle(1, COULEURS_INVENTAIRE.or, 0.85);
-                    cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
-                });
-                this.contBoutonsAjout.add(hit);
+                this.zoneCont.add(hit);
             }
         }
-    }
 
-    // ============================================================
-    // ACTIONS (coût + bouton FONDRE)
-    // ============================================================
-    _dessinerActions() {
-        if (this.contActions) this.contActions.destroy();
-        this.contActions = this.add.container(0, 0).setDepth(310).setScrollFactor(0);
-
-        const cx = GAME_WIDTH / 2;
-        const yCout = 290;
-        const yBoutons = 332; // bien séparé du coût (42 px)
+        // Coût + bouton FONDRE
+        const y2 = y1 + 60;
         const nbFrag = this.slots.filter(s => s !== null).length;
         const cout = coutEnSel(nbFrag);
         const sel = this.economy.getSel();
         const peutPayer = sel >= cout;
         const invPlein = this.inventaire.estPlein();
         const peutForger = nbFrag > 0 && peutPayer && !invPlein;
-
-        // Coût (en haut, séparé)
         const couleurCout = peutPayer ? '#ffd070' : '#ff6060';
-        const txtCout = this.add.text(cx, yCout, `Coût : ${cout} Sel`, {
-            fontFamily: 'monospace', fontSize: '13px',
-            color: couleurCout, fontStyle: 'bold',
-            stroke: '#000', strokeThickness: 2
-        }).setOrigin(0.5, 0);
-        this.contActions.add(txtCout);
+        this.zoneCont.add(this.add.text(cx, y2, `Coût : ${cout} Sel`, {
+            fontFamily: 'monospace', fontSize: '13px', color: couleurCout,
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5, 0));
+        this._ajouterBouton(this.zoneCont, cx, y2 + 28, 'FONDRE', peutForger, () => {
+            const fragments = this.slots.filter(s => s !== null);
+            const res = this.fondeur.forger(fragments, this.rngForge);
+            if (!res.success) {
+                this.phraseTexte.setText('"' + (res.raison === 'inventaire_plein' ? PHRASE_INV_PLEIN : 'Le foyer refuse.') + '"');
+                this.phraseTexte.setColor('#ff6060');
+                return;
+            }
+            this.instanceResultat = res.instance;
+            this.slots = [null, null, null];
+            this._dessinerContenuOnglet();
+        });
 
-        // Boutons FONDRE / FERMER (clairement séparés du coût)
-        this._ajouterBoutonContexte(this.contActions, cx - 70, yBoutons, 'FONDRE', peutForger,
-            () => this._tenterForger(),
-            invPlein ? 'inv' : (!peutPayer ? 'sel' : 'normal'));
-        this._ajouterBouton(this.contActions, cx + 70, yBoutons, 'FERMER', () => this.fermer());
-    }
-
-    // ============================================================
-    // ZONE RÉSULTAT
-    // ============================================================
-    _dessinerResultat() {
-        if (this.contResultat) this.contResultat.destroy();
-        this.contResultat = this.add.container(0, 0).setDepth(310).setScrollFactor(0);
-
-        const cx = GAME_WIDTH / 2;
-        const y = 380;
-
-        const lbl = this.add.text(cx, y, '— RÉSULTAT —', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a',
-            fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
-        this.contResultat.add(lbl);
-
-        const tailleZone = 60;
-        const yZone = y + 18;
-
-        const cadre = this.add.graphics();
-        cadre.fillStyle(0x080604, 1);
-        cadre.fillRect(cx - tailleZone / 2, yZone, tailleZone, tailleZone);
-        cadre.lineStyle(1, COULEURS_INVENTAIRE.or, 0.7);
-        cadre.strokeRect(cx - tailleZone / 2, yZone, tailleZone, tailleZone);
-        this.contResultat.add(cadre);
-
-        if (this.itemResultat) {
-            const item = ITEMS[this.itemResultat];
-            const familleColor = COULEURS_FAMILLE[item.famille];
-            // Halo additif
+        // Résultat — Phase 6 : instance forgée (losange coloré par score)
+        const y3 = y2 + 76;
+        this.zoneCont.add(this.add.text(cx, y3, '— RÉSULTAT —', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
+        if (this.instanceResultat) {
+            const inst = this.instanceResultat;
+            const tpl = TEMPLATES[inst.templateId];
+            const couleur = couleurPourScore(inst.score);
+            const css = '#' + couleur.toString(16).padStart(6, '0');
+            const yRes = y3 + 26;
             const halo = this.add.graphics();
             halo.setBlendMode(Phaser.BlendModes.ADD);
-            halo.fillStyle(familleColor, 0.5);
-            halo.fillCircle(cx, yZone + tailleZone / 2, 28);
-            this.contResultat.add(halo);
-
-            // Emblème
-            const emb = peindreEmblemeFamille(this, cx, yZone + tailleZone / 2, item.famille, 32);
-            this.contResultat.add(emb);
-
-            // Étoile rouge si Tier 3
-            if (item.tier === 3) {
-                const eto = this.add.graphics();
-                eto.fillStyle(0xff6060, 1);
-                const dx = cx + tailleZone / 2 - 7;
-                const dy = yZone + 7;
-                eto.beginPath();
-                for (let i = 0; i < 10; i++) {
-                    const ang = (i * Math.PI) / 5 - Math.PI / 2;
-                    const r = (i % 2 === 0) ? 5 : 2;
-                    const ex = dx + Math.cos(ang) * r;
-                    const ey = dy + Math.sin(ang) * r;
-                    if (i === 0) eto.moveTo(ex, ey); else eto.lineTo(ex, ey);
-                }
-                eto.closePath();
-                eto.fillPath();
-                this.contResultat.add(eto);
-            }
-
-            // Nom (à droite du cadre)
-            let nomTexte = item.nom;
-            if (item.tier === 3) nomTexte += ' ★';
-            const nom = this.add.text(cx + tailleZone / 2 + 14, yZone + tailleZone / 2, nomTexte, {
-                fontFamily: 'monospace', fontSize: '13px',
-                color: '#' + familleColor.toString(16).padStart(6, '0'),
+            halo.fillStyle(couleur, 0.6);
+            halo.fillCircle(cx, yRes, 28);
+            this.zoneCont.add(halo);
+            // Losange Phase 6
+            const losange = this.add.graphics();
+            losange.fillStyle(couleur, 1);
+            const r = 18;
+            losange.beginPath();
+            losange.moveTo(cx, yRes - r);
+            losange.lineTo(cx + r, yRes);
+            losange.lineTo(cx, yRes + r);
+            losange.lineTo(cx - r, yRes);
+            losange.closePath();
+            losange.fillPath();
+            this.zoneCont.add(losange);
+            // Score chiffré dans le losange
+            this.zoneCont.add(this.add.text(cx, yRes, String(inst.score), {
+                fontFamily: 'monospace', fontSize: '13px', color: '#000', fontStyle: 'bold'
+            }).setOrigin(0.5));
+            // Nom + tier sous le losange
+            const nom = `${tpl ? tpl.nom : 'Forgé'} • ${tierPourScore(inst.score).nomLong}`;
+            this.zoneCont.add(this.add.text(cx, yRes + r + 8, nom, {
+                fontFamily: 'monospace', fontSize: '12px', color: css,
                 fontStyle: 'bold', stroke: '#000', strokeThickness: 3
-            }).setOrigin(0, 0.5);
-            this.contResultat.add(nom);
-
-            // Texte "Ajouté à l'inventaire."
-            const ajout = this.add.text(cx, yZone + tailleZone + 6, 'Ajouté à l\'inventaire.', {
-                fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a',
-                fontStyle: 'italic'
-            }).setOrigin(0.5, 0);
-            this.contResultat.add(ajout);
-        } else {
-            const txt = this.add.text(cx, yZone + tailleZone / 2, '?', {
-                fontFamily: 'monospace', fontSize: '24px', color: '#3a3a4a',
-                fontStyle: 'bold'
-            }).setOrigin(0.5);
-            this.contResultat.add(txt);
+            }).setOrigin(0.5, 0));
         }
     }
 
     // ============================================================
-    // BANDE RESSOURCES (en bas)
+    // ONGLET 2 — COMBINER (2 instances → 1 nouvelle)
+    // ============================================================
+    _renderOngletCombiner() {
+        const cx = GAME_WIDTH / 2;
+        const y0 = 180;
+
+        // Texte explicatif
+        this.zoneCont.add(this.add.text(cx, y0 - 18, 'Combine deux objets forgés en un seul.', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#a8a8b8', fontStyle: 'italic'
+        }).setOrigin(0.5, 0));
+
+        // 2 slots : A + B
+        const tailleSlot = 56;
+        const xA = cx - 90;
+        const xB = cx + 90;
+        this._dessinerSlotCombiner(xA, y0, this.uidA, 'A', (uid) => { this.uidA = uid; this._dessinerContenuOnglet(); });
+        this._dessinerSlotCombiner(xB, y0, this.uidB, 'B', (uid) => { this.uidB = uid; this._dessinerContenuOnglet(); });
+
+        // Signe + central
+        this.zoneCont.add(this.add.text(cx, y0, '+', {
+            fontFamily: 'monospace', fontSize: '28px', color: '#c8a85a', fontStyle: 'bold'
+        }).setOrigin(0.5));
+
+        // Preview
+        const preview = this.uidA && this.uidB
+            ? this.crafting.previewCombinaison(this.uidA, this.uidB)
+            : null;
+        const yPrev = y0 + 80;
+        if (preview) {
+            const couleur = couleurPourScore(preview.scoreBase);
+            const css = '#' + couleur.toString(16).padStart(6, '0');
+            this.zoneCont.add(this.add.text(cx, yPrev, `Résultat probable :`, {
+                fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a'
+            }).setOrigin(0.5, 0));
+            this.zoneCont.add(this.add.text(cx, yPrev + 14, `${preview.template.nom} • ${preview.tier.nomLong}`, {
+                fontFamily: 'monospace', fontSize: '12px', color: css, fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5, 0));
+            this.zoneCont.add(this.add.text(cx, yPrev + 32, `Score base ${preview.scoreBase} ± 15`, {
+                fontFamily: 'monospace', fontSize: '10px', color: '#a8a8b8'
+            }).setOrigin(0.5, 0));
+            // Coût + risque
+            const peutPayer = this.economy.getSel() >= preview.cout;
+            this.zoneCont.add(this.add.text(cx, yPrev + 50, `Coût : ${preview.cout} Sel`, {
+                fontFamily: 'monospace', fontSize: '11px',
+                color: peutPayer ? '#ffd070' : '#ff6060', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5, 0));
+            if (preview.risque > 0) {
+                this.zoneCont.add(this.add.text(cx, yPrev + 66, `Risque de Brisé : ${Math.round(preview.risque * 100)}%`, {
+                    fontFamily: 'monospace', fontSize: '10px', color: '#ff8060'
+                }).setOrigin(0.5, 0));
+            }
+        } else {
+            this.zoneCont.add(this.add.text(cx, yPrev, 'Sélectionne deux objets forgés à combiner.', {
+                fontFamily: 'monospace', fontSize: '11px', color: '#6a6a7a', fontStyle: 'italic'
+            }).setOrigin(0.5, 0));
+        }
+
+        // Bouton COMBINER
+        const yBtn = yPrev + 96;
+        const peutCombiner = preview && this.economy.getSel() >= preview.cout && !this.inventaire.estPlein();
+        this._ajouterBouton(this.zoneCont, cx, yBtn, 'COMBINER', peutCombiner, () => {
+            const res = this.crafting.combiner(this.uidA, this.uidB, this.rngForge);
+            if (!res.success) {
+                this.phraseTexte.setText('"' + (res.raison === 'inventaire_plein' ? PHRASE_INV_PLEIN : 'Les Vestiges refusent.') + '"');
+                this.phraseTexte.setColor('#ff6060');
+                return;
+            }
+            this.combinerResultat = res;
+            this.uidA = null;
+            this.uidB = null;
+            this._dessinerContenuOnglet();
+        });
+
+        // Résultat
+        if (this.combinerResultat) {
+            const yRes = yBtn + 38;
+            const inst = this.combinerResultat.instance;
+            const brise = this.combinerResultat.brise;
+            const couleur = brise ? 0x5a5a6a : couleurPourScore(inst.score);
+            const css = '#' + couleur.toString(16).padStart(6, '0');
+            const tpl = TEMPLATES[inst.templateId];
+            const titre = brise ? 'BRISÉ' : tierPourScore(inst.score).nomLong;
+            this.zoneCont.add(this.add.text(cx, yRes, '— RÉSULTAT —', {
+                fontFamily: 'monospace', fontSize: '9px', color: '#c8a85a', fontStyle: 'bold'
+            }).setOrigin(0.5, 0));
+            this.zoneCont.add(this.add.text(cx, yRes + 14, `${inst.score}  ★  ${tpl ? tpl.nom : '???'}  •  ${titre}`, {
+                fontFamily: 'monospace', fontSize: '13px', color: css, fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3
+            }).setOrigin(0.5, 0));
+        }
+    }
+
+    _dessinerSlotCombiner(x, y, uid, label, onPick) {
+        const inst = uid ? this._trouverInstance(uid) : null;
+        const taille = 56;
+        const cadre = this.add.graphics();
+        cadre.fillStyle(0x080604, 1);
+        cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
+        const couleurBord = inst ? couleurPourScore(inst.score) : COULEURS_INVENTAIRE.or;
+        cadre.lineStyle(2, couleurBord, 0.9);
+        cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
+        this.zoneCont.add(cadre);
+
+        if (inst) {
+            // Losange coloré centre
+            const g = this.add.graphics();
+            g.fillStyle(couleurBord, 0.95);
+            const r = 16;
+            g.beginPath();
+            g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y);
+            g.closePath(); g.fillPath();
+            this.zoneCont.add(g);
+            this.zoneCont.add(this.add.text(x, y, String(inst.score), {
+                fontFamily: 'monospace', fontSize: '11px', color: '#000', fontStyle: 'bold'
+            }).setOrigin(0.5));
+        } else {
+            this.zoneCont.add(this.add.text(x, y, '?', {
+                fontFamily: 'monospace', fontSize: '24px', color: '#3a3a4a', fontStyle: 'bold'
+            }).setOrigin(0.5));
+        }
+
+        this.zoneCont.add(this.add.text(x, y + taille / 2 + 6, `OBJET ${label}`, {
+            fontFamily: 'monospace', fontSize: '9px', color: '#8a8a9a', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
+
+        // Bouton "Choisir" sous le slot
+        this._ajouterBouton(this.zoneCont, x, y + taille / 2 + 26, inst ? 'CHANGER' : 'CHOISIR', true, () => {
+            this._ouvrirSelectionInstance((selUid) => onPick(selUid), inst ? inst.uid : null);
+        }, 84, 22, 11);
+    }
+
+    // ============================================================
+    // ONGLET 3 — RE-RÉSONNER (reroll)
+    // ============================================================
+    _renderOngletReroll() {
+        const cx = GAME_WIDTH / 2;
+        const y0 = 180;
+
+        this.zoneCont.add(this.add.text(cx, y0 - 18, 'Reroll un objet forgé (verrouille une stat si tu veux).', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#a8a8b8', fontStyle: 'italic'
+        }).setOrigin(0.5, 0));
+
+        const inst = this.uidReroll ? this._trouverInstance(this.uidReroll) : null;
+
+        // Slot principal
+        this._dessinerSlotCombiner(cx, y0, this.uidReroll, 'CIBLE', (uid) => {
+            this.uidReroll = uid;
+            this.lockedStat = null;
+            this._dessinerContenuOnglet();
+        });
+
+        if (inst) {
+            // Liste des stats (cliquables pour verrouiller)
+            const yStats = y0 + 70;
+            this.zoneCont.add(this.add.text(cx, yStats, 'VERROUILLER UNE STAT :', {
+                fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a', fontStyle: 'bold'
+            }).setOrigin(0.5, 0));
+
+            for (let i = 0; i < inst.affixesPrim.length; i++) {
+                const aff = inst.affixesPrim[i];
+                const def = STATS[aff.statId];
+                const verrouille = this.lockedStat === aff.statId;
+                const y = yStats + 20 + i * 18;
+                const txt = `${verrouille ? '🔒 ' : '   '}${def?.label ?? aff.statId} (${aff.delta > 0 ? '+' : ''}${aff.delta})`;
+                const t = this.add.text(cx, y, txt, {
+                    fontFamily: 'monospace', fontSize: '11px',
+                    color: verrouille ? '#ffd070' : '#a8a8b8',
+                    fontStyle: verrouille ? 'bold' : 'normal'
+                }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+                t.on('pointerdown', () => {
+                    this.lockedStat = (this.lockedStat === aff.statId) ? null : aff.statId;
+                    this._dessinerContenuOnglet();
+                });
+                this.zoneCont.add(t);
+            }
+
+            // Coût
+            const tier = tierPourScore(inst.score);
+            const cout = COUTS_REROLL[tier.id] ?? 50;
+            const peutPayer = this.economy.getSel() >= cout;
+            const aEncre = this.economy.getEncre() >= 1;
+            const yCout = yStats + 24 + inst.affixesPrim.length * 18;
+            this.zoneCont.add(this.add.text(cx, yCout, `Coût : ${cout} Sel + 1 Encre du Témoin`, {
+                fontFamily: 'monospace', fontSize: '11px',
+                color: (peutPayer && aEncre) ? '#ffd070' : '#ff6060',
+                fontStyle: 'bold'
+            }).setOrigin(0.5, 0));
+
+            // Bouton
+            const yBtn = yCout + 26;
+            const peutReroll = peutPayer && aEncre;
+            this._ajouterBouton(this.zoneCont, cx, yBtn, 'RÉSONNER', peutReroll, () => {
+                const res = this.crafting.rerollItem(this.uidReroll, this.lockedStat, this.rngForge);
+                if (!res.success) {
+                    this.phraseTexte.setText('"L\'écho refuse."');
+                    this.phraseTexte.setColor('#ff6060');
+                    return;
+                }
+                this.rerollResultat = res.instance;
+                this._dessinerContenuOnglet();
+            });
+        }
+
+        if (this.rerollResultat) {
+            const inst = this.rerollResultat;
+            const yRes = 480;
+            const couleur = couleurPourScore(inst.score);
+            const css = '#' + couleur.toString(16).padStart(6, '0');
+            this.zoneCont.add(this.add.text(cx, yRes, '— NOUVEAU SCORE —', {
+                fontFamily: 'monospace', fontSize: '9px', color: '#c8a85a', fontStyle: 'bold'
+            }).setOrigin(0.5, 0));
+            this.zoneCont.add(this.add.text(cx, yRes + 14, `${inst.score}  •  ${tierPourScore(inst.score).nomLong}`, {
+                fontFamily: 'monospace', fontSize: '13px', color: css, fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3
+            }).setOrigin(0.5, 0));
+        }
+    }
+
+    // ============================================================
+    // PICKER D'INSTANCES (modale légère)
+    // ============================================================
+    _ouvrirSelectionInstance(onPick, excludeUid = null) {
+        // Récupère toutes les instances Phase 6 disponibles
+        const inv = this.inventaire.getInventaire();
+        const instances = inv.filter(e => estInstance(e) && e.uid !== excludeUid);
+        if (instances.length === 0) {
+            this.phraseTexte.setText('"Aucun Vestige forgé dans ton inventaire."');
+            this.phraseTexte.setColor('#ff6060');
+            return;
+        }
+
+        // Overlay modal
+        const overlay = this.add.container(0, 0).setDepth(400);
+        const bg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6);
+        bg.setInteractive();
+        overlay.add(bg);
+
+        const cadre = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 520, 380, 0x14100a);
+        cadre.setStrokeStyle(2, COULEURS_INVENTAIRE.or);
+        overlay.add(cadre);
+
+        overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 170, 'CHOISIR UN VESTIGE FORGÉ', {
+            fontFamily: 'monospace', fontSize: '12px', color: '#ffd070', fontStyle: 'bold'
+        }).setOrigin(0.5));
+
+        // Grille 6 colonnes × 5 lignes max
+        const cols = 6;
+        const taille = 56;
+        const espace = 8;
+        const x0 = GAME_WIDTH / 2 - (cols * (taille + espace) - espace) / 2 + taille / 2;
+        const y0 = GAME_HEIGHT / 2 - 130;
+
+        const max = Math.min(instances.length, 30);
+        for (let i = 0; i < max; i++) {
+            const inst = instances[i];
+            const c = i % cols;
+            const r = Math.floor(i / cols);
+            const cx = x0 + c * (taille + espace);
+            const cy = y0 + r * (taille + espace);
+            const s = creerSlot(this, cx, cy, {
+                taille,
+                itemId: inst, // SlotInventaire sait gérer une instance
+                onClick: () => {
+                    overlay.destroy();
+                    onPick(inst.uid);
+                }
+            });
+            overlay.add(s.container);
+        }
+
+        // Bouton Fermer
+        this._ajouterBouton(overlay, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 160, 'ANNULER', true, () => overlay.destroy(), 120, 28, 12);
+        bg.on('pointerdown', () => overlay.destroy());
+    }
+
+    _trouverInstance(uid) {
+        const inv = this.inventaire.getInventaire();
+        for (const e of inv) {
+            if (estInstance(e) && e.uid === uid) return e;
+        }
+        const eq = this.inventaire.getEquipement();
+        for (const slot of ['tete', 'corps', 'accessoire']) {
+            const e = eq[slot];
+            if (estInstance(e) && e.uid === uid) return e;
+        }
+        return null;
+    }
+
+    // ============================================================
+    // BANDE RESSOURCES
     // ============================================================
     _dessinerBandeRessources() {
         if (this.contRessources) this.contRessources.destroy();
-        this.contRessources = this.add.container(0, 0).setDepth(310).setScrollFactor(0);
+        this.contRessources = this.add.container(0, 0).setDepth(310);
 
         const cx = GAME_WIDTH / 2;
-        // Bande remontée pour ne pas chevaucher la bordure du cadre
         const y = GAME_HEIGHT - 55;
 
         const liseré = this.add.graphics();
         liseré.lineStyle(1, COULEURS_INVENTAIRE.or, 0.5);
         liseré.beginPath();
-        liseré.moveTo(cx - 220, y - 8);
-        liseré.lineTo(cx + 220, y - 8);
+        liseré.moveTo(cx - 260, y - 8);
+        liseré.lineTo(cx + 260, y - 8);
         liseré.strokePath();
         this.contRessources.add(liseré);
 
-        const espace = 105;
-        const xDebut = cx - (4 * espace) / 2;
-
-        // Sel
-        const xSel = xDebut + espace / 2;
-        const cristal = this.add.graphics({ x: xSel - 22, y: y + 6 });
-        cristal.fillStyle(0xffd070, 1);
-        cristal.beginPath();
-        cristal.moveTo(0, -6); cristal.lineTo(5, 0); cristal.lineTo(0, 6); cristal.lineTo(-5, 0);
-        cristal.closePath(); cristal.fillPath();
-        cristal.fillStyle(0xffffff, 0.7);
-        cristal.fillCircle(-2, -2, 1.5);
-        this.contRessources.add(cristal);
-        this.contRessources.add(this.add.text(xSel - 12, y, 'SEL', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a', fontStyle: 'bold'
-        }));
-        this.contRessources.add(this.add.text(xSel + 22, y - 2, `${this.economy.getSel()}`, {
-            fontFamily: 'monospace', fontSize: '14px', color: '#ffd070',
-            fontStyle: 'bold', stroke: '#000', strokeThickness: 3
-        }));
-
-        // 3 Fragments
-        const familles = ['blanc', 'bleu', 'noir'];
-        const labels = { blanc: 'BLANC', bleu: 'BLEU', noir: 'NOIR' };
-        for (let k = 0; k < familles.length; k++) {
-            const fam = familles[k];
-            const xF = xDebut + espace * (k + 1) + espace / 2;
-            this.contRessources.add(peindreEmblemeFamille(this, xF - 22, y + 6, fam, 14));
-            this.contRessources.add(this.add.text(xF - 12, y, labels[fam], {
-                fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a', fontStyle: 'bold'
-            }));
-            this.contRessources.add(this.add.text(xF + 22, y - 2, `${this.economy.getFragment(fam)}`, {
-                fontFamily: 'monospace', fontSize: '14px', color: '#e8e4d8',
-                fontStyle: 'bold', stroke: '#000', strokeThickness: 3
-            }));
-        }
-    }
-
-    // ============================================================
-    // ACTIONS UTILISATEUR
-    // ============================================================
-    _ajouterSlot(famille) {
-        // Trouve le prochain emplacement libre
-        const idx = this.slots.findIndex(s => s === null);
-        if (idx === -1) return; // tous remplis
-        if (this.economy.getFragment(famille) <= 0) return; // pas dispo (sécurité)
-
-        // On RÉSERVE pas le Fragment ici — on le décompte VISUELLEMENT mais le retrait
-        // réel se fait à la forge. Pour cohérence, on fait un système de "réserve" :
-        // on diminue les Fragments disponibles via getFragmentsDispo() qui soustrait
-        // ce qui est posé sur la table.
-        this.slots[idx] = famille;
-        this._refreshTout();
-    }
-
-    _retirerSlot(idx) {
-        if (this.slots[idx] === null) return;
-        this.slots[idx] = null;
-        this.itemResultat = null; // efface le résultat précédent
-        this._refreshTout();
-    }
-
-    _tenterForger() {
-        const fragments = this.slots.filter(s => s !== null);
-        const res = this.fondeur.forger(fragments, this.rngForge);
-        if (!res.success) {
-            // Affichage discret du motif d'échec dans la phrase
-            if (res.raison === 'inventaire_plein') {
-                this.phraseTexte.setText('"' + PHRASE_INV_PLEIN + '"');
-                this.phraseTexte.setColor('#ff6060');
+        // 5 blocs : Sel, Encre, Frag×3
+        const blocs = [
+            { type: 'sel', label: 'SEL', valeur: this.economy.getSel(), couleur: '#ffd070' },
+            { type: 'encre', label: 'ENCRE', valeur: this.economy.getEncre(), couleur: '#a0a0c8' },
+            { type: 'frag', fam: 'blanc', label: 'BLANC', valeur: this.economy.getFragment('blanc') },
+            { type: 'frag', fam: 'bleu', label: 'BLEU', valeur: this.economy.getFragment('bleu') },
+            { type: 'frag', fam: 'noir', label: 'NOIR', valeur: this.economy.getFragment('noir') }
+        ];
+        const espace = 100;
+        const xDebut = cx - (blocs.length - 1) / 2 * espace;
+        for (let i = 0; i < blocs.length; i++) {
+            const b = blocs[i];
+            const x = xDebut + i * espace;
+            if (b.type === 'frag') {
+                this.contRessources.add(peindreEmblemeFamille(this, x - 22, y + 6, b.fam, 13));
+            } else {
+                const g = this.add.graphics({ x: x - 22, y: y + 6 });
+                g.fillStyle(b.type === 'encre' ? 0xa0a0c8 : 0xffd070, 1);
+                g.beginPath();
+                g.moveTo(0, -6); g.lineTo(5, 0); g.lineTo(0, 6); g.lineTo(-5, 0);
+                g.closePath(); g.fillPath();
+                this.contRessources.add(g);
             }
-            return;
+            this.contRessources.add(this.add.text(x - 12, y, b.label, {
+                fontFamily: 'monospace', fontSize: '9px', color: '#8a8a9a', fontStyle: 'bold'
+            }));
+            this.contRessources.add(this.add.text(x + 26, y - 2, String(b.valeur), {
+                fontFamily: 'monospace', fontSize: '13px',
+                color: b.couleur ?? '#e8e4d8', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3
+            }));
         }
-        // Succès : on stocke le résultat, on vide la table
-        this.itemResultat = res.itemId;
-        this.slots = [null, null, null];
-
-        // Petit feedback visuel : flash sur la zone résultat
-        this._refreshTout();
     }
 
-    /**
-     * Disponibilité réelle d'un Fragment = stock - posé sur la table.
-     */
+    _refreshTout() {
+        this._dessinerContenuOnglet();
+        this._dessinerBandeRessources();
+    }
+
     _fragDispo(famille) {
         const stock = this.economy.getFragment(famille);
         const surTable = this.slots.filter(s => s === famille).length;
         return stock - surTable;
     }
 
-    _refreshTout() {
-        // Met à jour la phrase
-        const fragments = this.slots.filter(s => s !== null);
-        if (this.inventaire.estPlein() && fragments.length > 0) {
-            this.phraseTexte.setText('"' + PHRASE_INV_PLEIN + '"');
-            this.phraseTexte.setColor('#ff6060');
-        } else {
-            this.phraseTexte.setText('"' + phraseFondeur(fragments) + '"');
-            this.phraseTexte.setColor('#c8a85a');
-        }
-
-        this._dessinerEmplacements();
-        this._dessinerBoutonsAjoutAvecDispo();
-        this._dessinerActions();
-        this._dessinerResultat();
-        this._dessinerBandeRessources();
-    }
-
-    /**
-     * Variante de _dessinerBoutonsAjout qui utilise la dispo "réelle"
-     * (stock moins ce qui est sur la table) pour griser les boutons.
-     */
-    _dessinerBoutonsAjoutAvecDispo() {
-        if (this.contBoutonsAjout) this.contBoutonsAjout.destroy();
-        this.contBoutonsAjout = this.add.container(0, 0).setDepth(310).setScrollFactor(0);
-
-        const cx = GAME_WIDTH / 2;
-        const y = 235;
-        const taille = 44;
-        const espace = 16;
-        const familles = ['blanc', 'bleu', 'noir'];
-
-        // Label clairement au-dessus des boutons (40 px d'écart)
-        const lbl = this.add.text(cx, y - 40, '— AJOUTER UN FRAGMENT —', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a',
-            fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
-        this.contBoutonsAjout.add(lbl);
-
-        const tousPleins = this.slots.every(s => s !== null);
-
-        for (let i = 0; i < familles.length; i++) {
-            const fam = familles[i];
-            const x = cx + (i - 1) * (taille + espace);
-            const dispoReelle = this._fragDispo(fam);
-            const interactif = dispoReelle > 0 && !tousPleins;
-            const couleurBord = interactif ? COULEURS_INVENTAIRE.or : 0x4a4a5a;
-
-            const cadre = this.add.graphics();
-            cadre.fillStyle(0x080604, 1);
-            cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
-            cadre.lineStyle(1, couleurBord, interactif ? 0.85 : 0.4);
-            cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
-            this.contBoutonsAjout.add(cadre);
-
-            const emb = peindreEmblemeFamille(this, x, y - 4, fam, 22);
-            if (!interactif) emb.setAlpha(0.35);
-            this.contBoutonsAjout.add(emb);
-
-            const compteur = this.add.text(x, y + taille / 2 - 7, `${dispoReelle}`, {
-                fontFamily: 'monospace', fontSize: '11px',
-                color: interactif ? '#e8e4d8' : '#5a5a6a',
-                fontStyle: 'bold'
-            }).setOrigin(0.5);
-            this.contBoutonsAjout.add(compteur);
-
-            if (interactif) {
-                const hit = this.add.rectangle(x, y, taille, taille, 0xffffff, 0)
-                    .setInteractive({ useHandCursor: true });
-                hit.on('pointerdown', () => this._ajouterSlot(fam));
-                hit.on('pointerover', () => {
-                    cadre.clear();
-                    cadre.fillStyle(0x14100a, 1);
-                    cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
-                    cadre.lineStyle(2, COULEURS_INVENTAIRE.orClair, 1);
-                    cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
-                });
-                hit.on('pointerout', () => {
-                    cadre.clear();
-                    cadre.fillStyle(0x080604, 1);
-                    cadre.fillRect(x - taille / 2, y - taille / 2, taille, taille);
-                    cadre.lineStyle(1, COULEURS_INVENTAIRE.or, 0.85);
-                    cadre.strokeRect(x - taille / 2, y - taille / 2, taille, taille);
-                });
-                this.contBoutonsAjout.add(hit);
-            }
-        }
-    }
-
     // ============================================================
-    // BOUTONS STYLISÉS
+    // BOUTON STYLISÉ
     // ============================================================
-    _ajouterBouton(parent, x, y, label, onClick) {
-        this._ajouterBoutonContexte(parent, x, y, label, true, onClick, 'normal');
-    }
-
-    _ajouterBoutonContexte(parent, x, y, label, actif, onClick, contexte = 'normal') {
-        const w = 120, h = 30;
+    _ajouterBouton(parent, x, y, label, actif, onClick, w = 130, h = 28, fontSize = 13) {
         const cx = x - w / 2;
-
-        const couleurBord = actif ? COULEURS_INVENTAIRE.or : 0x4a4a5a;
-        const couleurBordHover = COULEURS_INVENTAIRE.orClair;
-        const couleurFond = 0x14100a;
-        const couleurFondHover = 0x2a1810;
+        const couleurFond = actif ? 0x14100a : 0x0a0805;
+        const couleurFondHover = actif ? 0x2a1810 : 0x0a0805;
+        const couleurBord = actif ? COULEURS_INVENTAIRE.or : 0x3a3a4a;
         const couleurTexte = actif ? '#ffd070' : '#5a5a6a';
 
         const fond = this.add.graphics();
-        const dessinerFond = (hover) => {
+        const dessiner = (hover) => {
             fond.clear();
             fond.fillStyle(hover ? couleurFondHover : couleurFond, 1);
             fond.fillRect(cx, y - h / 2, w, h);
-            fond.lineStyle(1.5, hover ? couleurBordHover : couleurBord, 1);
+            fond.lineStyle(1.5, hover ? COULEURS_INVENTAIRE.orClair : couleurBord, 1);
             fond.strokeRect(cx, y - h / 2, w, h);
-            // Petits coins
-            fond.lineStyle(1, couleurBordHover, hover ? 0.8 : 0.5);
-            const c = 4;
-            fond.beginPath();
-            fond.moveTo(cx, y - h / 2 + c); fond.lineTo(cx, y - h / 2); fond.lineTo(cx + c, y - h / 2);
-            fond.moveTo(cx + w - c, y - h / 2); fond.lineTo(cx + w, y - h / 2); fond.lineTo(cx + w, y - h / 2 + c);
-            fond.moveTo(cx, y + h / 2 - c); fond.lineTo(cx, y + h / 2); fond.lineTo(cx + c, y + h / 2);
-            fond.moveTo(cx + w - c, y + h / 2); fond.lineTo(cx + w, y + h / 2); fond.lineTo(cx + w, y + h / 2 - c);
-            fond.strokePath();
         };
-        dessinerFond(false);
+        dessiner(false);
         parent.add(fond);
-
-        const txt = this.add.text(x, y, label, {
-            fontFamily: 'monospace', fontSize: '13px',
+        parent.add(this.add.text(x, y, label, {
+            fontFamily: 'monospace', fontSize: `${fontSize}px`,
             color: couleurTexte, fontStyle: 'bold',
             stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5);
-        parent.add(txt);
-
+        }).setOrigin(0.5));
         if (actif) {
-            const hit = this.add.rectangle(x, y, w, h, 0xffffff, 0)
-                .setInteractive({ useHandCursor: true });
-            hit.on('pointerover', () => dessinerFond(true));
-            hit.on('pointerout', () => dessinerFond(false));
+            const hit = this.add.rectangle(x, y, w, h, 0xffffff, 0).setInteractive({ useHandCursor: true });
+            hit.on('pointerover', () => dessiner(true));
+            hit.on('pointerout', () => dessiner(false));
             hit.on('pointerdown', onClick);
             parent.add(hit);
-        } else {
-            // Indication visuelle de la raison (Sel / Inventaire plein)
-            if (contexte === 'sel') {
-                const sub = this.add.text(x, y + h / 2 + 6, '(Sel insuffisant)', {
-                    fontFamily: 'monospace', fontSize: '9px', color: '#ff6060'
-                }).setOrigin(0.5, 0);
-                parent.add(sub);
-            } else if (contexte === 'inv') {
-                const sub = this.add.text(x, y + h / 2 + 6, '(Inventaire plein)', {
-                    fontFamily: 'monospace', fontSize: '9px', color: '#ff6060'
-                }).setOrigin(0.5, 0);
-                parent.add(sub);
-            }
         }
     }
 }
+

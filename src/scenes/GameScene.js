@@ -16,6 +16,13 @@ import { InputSystem } from '../systems/InputSystem.js';
 import { InventaireSystem } from '../systems/InventaireSystem.js';
 import { EnemySystem } from '../systems/EnemySystem.js';
 import { tirerItem, tirerConsommable, calculerStats } from '../systems/LootSystem.js';
+import { GardeSystem } from '../systems/GardeSystem.js';
+import { RevelationSystem } from '../systems/RevelationSystem.js';
+import { calculerStatsForge, bonusResonanceMax, flagsExotiquesActifs } from '../systems/SystemeEffets.js';
+import { tenterSort } from '../systems/SortSystem.js';
+import { AuraItem } from '../render/entities/AuraItem.js';
+import { estInstance } from '../systems/ScoreSystem.js';
+import { TEMPLATES } from '../data/templatesItems.js';
 import {
     defAvecRarete, modificateursDrop, dropSignature, TIERS
 } from '../systems/RaritySystem.js';
@@ -150,6 +157,18 @@ export class GameScene extends Phaser.Scene {
         this.enemySystem = new EnemySystem(this.registry);
         this.economy = new EconomySystem(this.registry);
         this.inputSystem = new InputSystem(this);
+        // Phase 6 — Garde + Revelation
+        this.garde = new GardeSystem(this.registry);
+        this.revelation = new RevelationSystem(this.registry, this.inventaire);
+
+        // Phase 6 — Wrapper Garde devant prendreDegats : la Garde absorbe en
+        // priorité. Le reste va à la Résonance.
+        const _prendreDegatsAvantGarde = this.resonance.prendreDegats;
+        this.resonance.prendreDegats = (montant) => {
+            if (montant <= 0) return _prendreDegatsAvantGarde(montant);
+            const reste = this.garde.absorber(montant, this.time.now);
+            if (reste > 0) _prendreDegatsAvantGarde(reste);
+        };
 
         // --- Seed du run (random à la première salle, persistée ensuite) ---
         if (this.registry.get(CLE_SEED_RUN) === undefined) {
@@ -214,7 +233,34 @@ export class GameScene extends Phaser.Scene {
                 this.inventaire.getEquipement(),
                 this.inventaire.getVestiges()
             );
-            // Rebornir la Résonance si max change (Cœur Pierreux : +20)
+            // Phase 6 — stats forge (Garde, vitesse attaque, hauteur saut, etc.)
+            const forge = calculerStatsForge(this.inventaire.getEquipement());
+            this.statsForge = forge.effectifs;
+            this.flagsExo = flagsExotiquesActifs(this.inventaire.getEquipement());
+            // Applique armure / vitesse attaque / parry / saut au statsEffectives legacy
+            const armurePct = (forge.effectifs.armure ?? 0) / 100;
+            this.armurePct = armurePct;
+            if (forge.effectifs.attaqueVitesse) {
+                const cdRid = (forge.effectifs.attaqueVitesse / 100);
+                this.statsEffectives.attaqueCooldown = Math.max(80,
+                    STATS_BASE.attaqueCooldown * (1 - cdRid));
+            }
+            if (forge.effectifs.parryFenetre) {
+                this.statsEffectives.parryFenetre = STATS_BASE.parryFenetre + forge.effectifs.parryFenetre;
+            }
+            if (forge.effectifs.sautHauteur) {
+                this.statsEffectives.jumpVelocity =
+                    (this.statsEffectives.jumpVelocity ?? PLAYER.JUMP_VELOCITY) *
+                    (1 + forge.effectifs.sautHauteur / 100);
+            }
+            if (forge.effectifs.attaqueDegats) {
+                this.statsEffectives.attaqueDegats =
+                    (this.statsEffectives.attaqueDegats ?? STATS_BASE.attaqueDegats) +
+                    forge.effectifs.attaqueDegats;
+            }
+            // Met à jour la Garde
+            this.garde.appliquerStats(forge.effectifs);
+            // Rebornir la Résonance si max change (Cœur Pierreux : +20 + bonus exo)
             this._recomputerResonanceMax?.();
             // Phase 5b.2 — flag révélation totale (Œil Saigné) consulté par
             // IdentificationSystem.effetsEffectifs.
@@ -333,6 +379,8 @@ export class GameScene extends Phaser.Scene {
         // Rectangle physique invisible (porte la collision arcade)
         this.player = this.add.rectangle(spawn.x, spawn.y, PLAYER.WIDTH, PLAYER.HEIGHT, PLAYER.COLOR, 0);
         this.player.setAlpha(0);
+        // Phase 6 — Mémorise le point d'entrée (sort tp_entree y retourne)
+        this._posEntreeSalle = { x: spawn.x, y: spawn.y };
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.physics.add.collider(this.player, this.platforms);
@@ -522,6 +570,29 @@ export class GameScene extends Phaser.Scene {
             }
             this.peutEtreDrop(ennemi);
             this._dropEconomique(ennemi);
+            // Phase 6 — procs exotiques sur kill
+            if (this.flagsExo?.proc_soin_kill) {
+                this.resonance.regagner(this.flagsExo.proc_soin_kill.params.gain ?? 2);
+            }
+            if (this.flagsExo?.proc_garde_kill) {
+                this.garde?.restaurer(this.flagsExo.proc_garde_kill.params.gain ?? 4);
+            }
+            if (this.flagsExo?.proc_aoe_kill && ennemi.sprite) {
+                const portee = this.flagsExo.proc_aoe_kill.params.portee ?? 80;
+                const dmg = this.flagsExo.proc_aoe_kill.params.degats ?? 2;
+                const cx = ennemi.sprite.x, cy = ennemi.sprite.y;
+                for (const e of this.enemies) {
+                    if (e === ennemi || e.mort || !e.sprite?.active) continue;
+                    if (Phaser.Math.Distance.Between(cx, cy, e.sprite.x, e.sprite.y) <= portee) {
+                        e.recevoirDegats(dmg);
+                    }
+                }
+                const g = this.add.graphics().setDepth(80);
+                g.setBlendMode(Phaser.BlendModes.ADD);
+                g.fillStyle(0xffaa40, 0.5);
+                g.fillCircle(cx, cy, portee);
+                this.tweens.add({ targets: g, alpha: 0, scale: 1.3, duration: 280, onComplete: () => g.destroy() });
+            }
         };
         this.events.on('enemy:dead', handlerEnemyDead);
         this.events.once('shutdown', () => this.events.off('enemy:dead', handlerEnemyDead));
@@ -611,6 +682,12 @@ export class GameScene extends Phaser.Scene {
         if (i.sauter && !immobilise) {
             if (auSol) {
                 body.setVelocityY(-this.statsEffectives.jumpVelocity);
+                // Phase 6 — auto-révélation par usage (saut)
+                this.revelation?.incrementer('sauts');
+                // Proc exotique "Pas du Vestige" : +1 Résonance à chaque saut
+                if (this.flagsExo?.proc_saut_resonance) {
+                    this.resonance.regagner(this.flagsExo.proc_saut_resonance.params.gain ?? 1);
+                }
             } else if (this.sautsRestants > 0 && aDoubleSaut) {
                 body.setVelocityY(-this.statsEffectives.jumpVelocity * 0.92);
                 this.sautsRestants--;
@@ -630,6 +707,11 @@ export class GameScene extends Phaser.Scene {
         if (i.parry) this.tenterParry();
         if (i.geste) this._tenterGeste?.();
         // i.sort : hook réservé, pas d'effet en étape 7
+
+        // Phase 6 — Sorts 1/2/3 (tête/corps/accessoire)
+        if (i.sort1) tenterSort(this, 0);
+        if (i.sort2) tenterSort(this, 1);
+        if (i.sort3) tenterSort(this, 2);
 
         // --- Interactions / inventaire / carte ---
         if (i.interagir) this.essayerInteragir();
@@ -666,6 +748,14 @@ export class GameScene extends Phaser.Scene {
                 vy: this.player.body.velocity.y
             });
         }
+
+        // --- Phase 6 — Garde tick + Aura visuelle ---
+        const dtMs = this.game.loop.delta || 16;
+        this.garde?.tick(dtMs, this.time.now);
+        if (!this._auraItem && this.player) {
+            this._auraItem = new AuraItem(this, this.player);
+        }
+        this._auraItem?.update(this.inventaire.getEquipement(), this.time.now);
     }
 
     // ============================================================
@@ -747,9 +837,18 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Test des ennemis dans la zone — on note si on a touché pour le hit feedback
-        const degats = this.statsEffectives.attaqueDegats;
+        let degats = this.statsEffectives.attaqueDegats;
+        // Phase 6 — signatures : Serment du Vide (à 0 Garde, +35%)
+        if (this.flagsExo?.sig_serment_vide && this.garde?.getValeur() === 0) {
+            degats *= (1 + (this.flagsExo.sig_serment_vide.params.bonusPct ?? 0.35));
+        }
+        // Phase 6 — signature Serment du Dernier Souffle (sous 20 PV, +100%)
+        if (this.flagsExo?.sig_dernier_souffle && this.resonance.getValeur() <= (this.flagsExo.sig_dernier_souffle.params.seuilPv ?? 20)) {
+            degats *= (1 + (this.flagsExo.sig_dernier_souffle.params.bonusPct ?? 1.0));
+        }
         const halfH = PLAYER.HEIGHT / 2 + 4;
         let aTouche = false;
+        let dernierToucheRef = null;
         for (const e of this.enemies) {
             if (e.mort || !e.sprite.active) continue;
             const dx = Math.abs(e.sprite.x - hx);
@@ -757,8 +856,21 @@ export class GameScene extends Phaser.Scene {
             if (dx < portee / 2 + e.def.largeur / 2 && dy < halfH + e.def.hauteur / 2) {
                 e.recevoirDegats(degats);
                 aTouche = true;
+                dernierToucheRef = e.sprite;
+                // Phase 6 — proc double attaque (12 % chance second hit)
+                if (this.flagsExo?.proc_double_attaque && Math.random() < (this.flagsExo.proc_double_attaque.params.chance ?? 0.12)) {
+                    this.time.delayedCall(80, () => {
+                        if (!e.mort && e.sprite.active) e.recevoirDegats(degats);
+                    });
+                }
+                // Phase 6 — vol de Résonance
+                if (this.flagsExo?.proc_vol_resonance) {
+                    this.resonance.regagner(this.flagsExo.proc_vol_resonance.params.gain ?? 0.5);
+                }
             }
         }
+        if (dernierToucheRef) this._dernierEnnemiTouche = dernierToucheRef;
+        if (aTouche) this.revelation?.incrementer('hits');
 
         // === HIT FEEDBACK — c'est ici que ça devient jouissif ===
         if (aTouche) {
@@ -875,7 +987,9 @@ export class GameScene extends Phaser.Scene {
      */
     _recomputerResonanceMax() {
         const bonus = this.statsEffectives?.resonanceMax ?? 0;
-        this.resonance?.setMaxEffectif(100 + bonus);
+        // Phase 6 — bonus exotique mod_resonance_max
+        const bonusExo = bonusResonanceMax(this.inventaire.getEquipement());
+        this.resonance?.setMaxEffectif(100 + bonus + bonusExo);
     }
 
     /**
@@ -1050,14 +1164,36 @@ export class GameScene extends Phaser.Scene {
             this._jouerEffetParryReussi();
             // L'ennemi est repoussé visuellement par le parry (squash inverse)
             ennemi.jouerAttaqueContact(this, this.player);
+            // Phase 6 — révélation par usage + procs parry
+            this.revelation?.incrementer('parries');
+            if (this.flagsExo?.proc_gel_parry && Math.random() < (this.flagsExo.proc_gel_parry.params.chance ?? 0.15)) {
+                ennemi._geleJusqu = this.time.now + (this.flagsExo.proc_gel_parry.params.duree ?? 1200);
+                ennemi.sprite?.body?.setVelocity(0, 0);
+            }
+            if (this.flagsExo?.proc_parry_aoe) {
+                const portee = this.flagsExo.proc_parry_aoe.params.portee ?? 100;
+                const dmg = this.flagsExo.proc_parry_aoe.params.degats ?? 4;
+                for (const e of this.enemies) {
+                    if (e.mort || !e.sprite?.active) continue;
+                    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, e.sprite.x, e.sprite.y) <= portee) {
+                        e.recevoirDegats(dmg);
+                    }
+                }
+            }
             return;
         }
 
         // Animation d'attaque ennemi (lunge / pulse + flash + particules d'impact)
         ennemi.jouerAttaqueContact(this, this.player);
 
-        // Dégâts + invincibilité
-        this.resonance.prendreDegats(ennemi.def.degatsContact);
+        // Dégâts + invincibilité — Phase 6 : armure (réduction %), invu sort
+        if ((this._invuJusqu ?? 0) > now || (this._invisibleJusqu ?? 0) > now) return;
+        let degatsRecu = ennemi.def.degatsContact;
+        const armurePct = this.armurePct ?? 0;
+        const reductionBuff = this._buffArmurePct ?? 0;
+        const reductionTotale = Math.min(0.85, armurePct + reductionBuff);
+        degatsRecu = Math.max(1, degatsRecu * (1 - reductionTotale));
+        this.resonance.prendreDegats(degatsRecu);
         this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
         this.flashJoueur(0xff6060);
     }
@@ -1119,24 +1255,23 @@ export class GameScene extends Phaser.Scene {
      * dans l'inventaire avec un message coloré par tier.
      */
     _dropItemTierMin(tierMin, tierEnnemi) {
-        // Quelques essais pour trouver un item du tier minimal requis. Si on
-        // épuise les tries, on accepte n'importe quel item (filet de sécurité).
-        let item = null;
-        for (let i = 0; i < 8; i++) {
-            const candidat = tirerItem('normal', this.rngLoot);
-            if (candidat && (candidat.tier ?? 1) >= tierMin) {
-                item = candidat;
-                break;
-            }
-        }
-        if (!item) item = tirerItem('normal', this.rngLoot);
-        if (!item) return;
-        if (!this.inventaire.ajouter(item.id)) {
+        // Phase 6 — tous les drops sont des instances forgées. Le `tierMin`
+        // legacy est traduit en bonus de scoreBase :
+        //   tier 2 → scoreBase ~55, tier 3 → scoreBase ~70.
+        const estLegendaire = tierEnnemi === TIERS.LEGENDAIRE;
+        const scoreBase = estLegendaire ? 80 : (tierMin >= 3 ? 70 : 55);
+        const instance = tirerItem('normal', this.rngLoot, {
+            etage: this.etageNumero ?? 1,
+            contexte: estLegendaire ? 'boss' : 'sol',
+            scoreBase
+        });
+        if (!instance) return;
+        if (!this.inventaire.ajouter(instance)) {
             this.afficherMessageFlottant("Inventaire plein", '#ff6060');
             return;
         }
-        const couleurMsg = tierEnnemi === TIERS.LEGENDAIRE ? '#ff8090' : '#d8d8e8';
-        this.afficherMessageFlottant(`Butin : ${item.nom}`, couleurMsg);
+        const couleurMsg = estLegendaire ? '#ff8090' : '#d8d8e8';
+        this.afficherMessageFlottant(`Butin : ${instance.score}★ forgé`, couleurMsg);
     }
 
     /**
@@ -1176,6 +1311,20 @@ export class GameScene extends Phaser.Scene {
             defFinale = { ...def, rarete: TIERS.COMMUN };
         } else {
             defFinale = def;
+        }
+
+        // Phase 6 — buff statique par étage : +8 % PV et +5 % dégâts par étage
+        // (cumulatif). Léger pour rester négociable même avec un loadout faible,
+        // mais sensible quand on push vers le boss étage 10.
+        const etage = this.etageNumero ?? 1;
+        if (etage > 1 && !defFinale.spawned) {
+            const facteurPv = 1 + (etage - 1) * 0.08;
+            const facteurDmg = 1 + (etage - 1) * 0.05;
+            defFinale = {
+                ...defFinale,
+                hp: Math.ceil((defFinale.hp ?? 1) * facteurPv),
+                degatsContact: Math.ceil((defFinale.degatsContact ?? 1) * facteurDmg)
+            };
         }
         const ennemi = new Enemy(this, defFinale, x, y, idx);
         ennemi.sprite.setDepth(DEPTH.ENTITES);
@@ -1528,24 +1677,28 @@ export class GameScene extends Phaser.Scene {
         const proba = this.climaxDropDu ? 1 : ennemi.def.probaDrop;
         if (this.rngLoot() >= proba) return;
 
-        // Climax : drop garanti, et on force Bleu ou Noir
-        let item;
+        // Phase 6 — toujours une instance forgée. Climax = score boost vers Bleu/Noir.
+        let instance;
         if (this.climaxDropDu) {
             const familles = ['bleu', 'noir'];
             const famille = familles[Math.floor(this.rngLoot() * 2)];
-            const pool = Object.values(ITEMS).filter(it => it.famille === famille);
-            item = pool[Math.floor(this.rngLoot() * pool.length)];
-            this.climaxDropDu = false; // une seule fois par salle
+            instance = tirerItem('normal', this.rngLoot, {
+                etage: this.etageNumero ?? 1,
+                contexte: 'sol', scoreBase: 65
+            });
+            // Force la famille climax si possible (le tirage l'a déjà variable,
+            // ici on accepte la famille produite — climax = juste score boost).
+            this.climaxDropDu = false;
         } else {
-            item = tirerItem('normal', this.rngLoot);
+            instance = tirerItem('normal', this.rngLoot, { etage: this.etageNumero ?? 1 });
         }
-        if (!item) return;
+        if (!instance) return;
 
-        // Petit visuel "ramassage automatique" : un cube qui flotte vers le joueur
+        const famille = this._familleInstance(instance);
+        const couleurFam = COULEURS_FAMILLE[famille] ?? 0xc8a85a;
+
         const cube = this.add.rectangle(
-            ennemi.sprite.x, ennemi.sprite.y,
-            14, 14,
-            COULEURS_FAMILLE[item.famille]
+            ennemi.sprite.x, ennemi.sprite.y, 14, 14, couleurFam
         );
         this.tweens.add({
             targets: cube,
@@ -1555,13 +1708,21 @@ export class GameScene extends Phaser.Scene {
             duration: 400,
             onComplete: () => {
                 cube.destroy();
-                if (this.inventaire.ajouter(item.id)) {
-                    this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(COULEURS_FAMILLE[item.famille]));
+                if (this.inventaire.ajouter(instance)) {
+                    this.afficherMessageFlottant(
+                        `Ramassé : ${instance.score}★ forgé`,
+                        this.coulHex(couleurFam)
+                    );
                 } else {
                     this.afficherMessageFlottant("Inventaire plein", '#ff6060');
                 }
             }
         });
+    }
+
+    // Phase 6 — résout la famille d'une instance via son template
+    _familleInstance(instance) {
+        return TEMPLATES[instance.templateId]?.famille ?? 'blanc';
     }
 
     // ============================================================
@@ -1663,15 +1824,17 @@ export class GameScene extends Phaser.Scene {
                 this.afficherMessageFlottant(`Fragment ${famille}`, this.coulHex(couleur));
             });
         } else {
-            const item = tirerItem(monde, this.rngLoot);
-            if (!item) return;
-            if (!this.inventaire.ajouter(item.id)) {
+            // Phase 6 — coffres droppent toujours une instance forgée.
+            const instance = tirerItem(monde, this.rngLoot, { etage: this.etageNumero ?? 1 });
+            if (!instance) return;
+            if (!this.inventaire.ajouter(instance)) {
                 this.afficherMessageFlottant("Inventaire plein", '#ff6060');
                 return;
             }
-            const couleur = COULEURS_FAMILLE[item.famille];
-            jouerOuvertureCoffre(this, visuel, item.famille, cible, () => {
-                this.afficherMessageFlottant(`Ramassé : ${item.nom}`, this.coulHex(couleur));
+            const famille = this._familleInstance(instance);
+            const couleur = COULEURS_FAMILLE[famille] ?? 0xc8a85a;
+            jouerOuvertureCoffre(this, visuel, famille, cible, () => {
+                this.afficherMessageFlottant(`Ramassé : ${instance.score}★ forgé`, this.coulHex(couleur));
             });
         }
 

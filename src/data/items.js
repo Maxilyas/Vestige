@@ -1,6 +1,7 @@
 // Catalogue des items et consommables de Vestige.
 // Import des Vestiges pour le résolveur universel (cf. getItemOuVestige).
 import { VESTIGES } from './vestiges.js';
+import { TEMPLATES } from './templatesItems.js';
 
 //
 // CHAQUE OBJET A 3 NIVEAUX DE RÉVÉLATION (tier) — voir LORE / Doctrine :
@@ -289,12 +290,60 @@ export const COULEURS_FAMILLE = {
 
 /**
  * Résolveur universel : renvoie un item du catalogue (ITEMS) OU un Vestige
- * (VESTIGES) selon l'id. Utilisé partout où on a juste un id en main.
+ * (VESTIGES) selon l'id. Phase 6 : accepte aussi une INSTANCE forgée (objet
+ * avec _instance: true) et renvoie un def normalisé compatible avec l'UI.
  */
-export function getItemOuVestige(id) {
-    return ITEMS[id] ?? VESTIGES[id] ?? null;
+export function getItemOuVestige(idOuInstance) {
+    if (idOuInstance === null || idOuInstance === undefined) return null;
+    if (typeof idOuInstance === 'object' && idOuInstance._instance === true) {
+        return defDepuisInstance(idOuInstance);
+    }
+    return ITEMS[idOuInstance] ?? VESTIGES[idOuInstance] ?? null;
 }
 
-export function estVestigeId(id) {
-    return VESTIGES[id] !== undefined;
+export function estVestigeId(idOuInstance) {
+    if (typeof idOuInstance === 'object') return false;
+    return VESTIGES[idOuInstance] !== undefined;
+}
+
+// ============================================================
+// Phase 6 — résolution d'instance en def affichable
+// ============================================================
+// Convertit une instance d'item forgé en def "shape compatible" avec ITEMS
+// (id, nom, slot, famille, tier, description, effets). Les champs Phase 6
+// supplémentaires (score, affixesPrim, etc.) sont ajoutés à plat pour que
+// l'UI puisse les exploiter sans alourdir le legacy.
+function defDepuisInstance(instance) {
+    const tpl = TEMPLATES[instance.templateId];
+    if (!tpl) return null;
+    // Tier "legacy équivalent" mappé sur le score (juste pour cohabitation
+    // d'affichage). Le vrai tier Phase 6 vient de tierPourScore (ScoreSystem).
+    let tierLegacy = 2;
+    if (instance.score >= 85) tierLegacy = 3;
+    else if (instance.score >= 50) tierLegacy = 2;
+    else tierLegacy = 1;
+
+    return {
+        id: instance.uid,
+        instance,
+        templateId: tpl.id,
+        nom: tpl.nom,
+        slot: tpl.slot,
+        famille: tpl.famille,
+        tier: tierLegacy,
+        score: instance.score,
+        description: `${tpl.nom} — forgé.`,
+        categorie: 'forge',
+        affixesPrim: instance.affixesPrim,
+        affixesExo: instance.affixesExo,
+        sortId: instance.sortId,
+        signatureId: instance.signatureId,
+        // Liste effets pour compatibilité IdentificationSystem (révélation
+        // pilotée par instance.revele.prim) — chaque effet primaire = un eff.
+        effets: instance.affixesPrim.map((a, i) => ({
+            cible: a.statId, // statId Phase 6 direct (les noms diffèrent du legacy)
+            delta: a.delta,
+            visible: instance.revele.prim.includes(i)
+        }))
+    };
 }

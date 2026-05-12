@@ -1,7 +1,17 @@
-// FondeurSystem — logique pure de la forge. Aucun visuel.
-// Vérifie les conditions, tire le résultat, consomme les ressources.
+// FondeurSystem — forge basique à partir de Fragments. Phase 6 : produit une
+// INSTANCE forgée (au lieu d'un itemId legacy).
+//
+// Le score de base dépend du nombre de fragments + des familles utilisées :
+//   - 1 fragment   → scoreBase 38 (Commun bas)
+//   - 2 fragments  → scoreBase 52 (Étoilé bas)
+//   - 3 fragments  → scoreBase 65 (Spectral)
+//   - Bonus de +5 par fragment de Bleu/Noir (familles rares)
+//
+// La famille de l'instance dérive de la famille MAJORITAIRE des fragments.
+// Le slot est tiré aléatoirement (un fragment ne porte pas de slot intrinsèque).
 
-import { tirerResultat, coutEnSel } from '../data/recettes.js';
+import { coutEnSel } from '../data/recettes.js';
+import { genererInstance } from './ItemForge.js';
 
 export class FondeurSystem {
     constructor(economy, inventaire) {
@@ -13,7 +23,7 @@ export class FondeurSystem {
      * Tente de forger. Atomique : si une condition échoue, rien n'est consommé.
      * @param {string[]} fragments  ex ['blanc', 'bleu']
      * @param {() => number} rng    PRNG pour tirer le résultat
-     * @returns {{ success: boolean, itemId?: string, raison?: string }}
+     * @returns {{ success: boolean, instance?: Object, raison?: string }}
      */
     forger(fragments, rng) {
         if (!fragments || fragments.length === 0) {
@@ -26,7 +36,6 @@ export class FondeurSystem {
             return { success: false, raison: 'inventaire_plein' };
         }
 
-        // Compte les fragments demandés par famille (lot atomique)
         const lot = { blanc: 0, bleu: 0, noir: 0 };
         for (const f of fragments) {
             if (lot[f] === undefined) {
@@ -40,23 +49,32 @@ export class FondeurSystem {
             return { success: false, raison: 'sel_insuffisant' };
         }
 
-        // Tire le résultat AVANT de consommer (pour ne rien perdre si la recette
-        // n'est pas définie — mais en pratique toutes nos clés sont couvertes)
-        const itemId = tirerResultat(fragments, rng);
-        if (!itemId) {
-            return { success: false, raison: 'recette_inconnue' };
-        }
+        // ─── Phase 6 : produit une INSTANCE forgée ─────────────────
+        const scoreBaseParNb = { 1: 38, 2: 52, 3: 65 };
+        let scoreBase = scoreBaseParNb[fragments.length] ?? 50;
+        // Bonus pour fragments rares
+        scoreBase += (lot.bleu ?? 0) * 5;
+        scoreBase += (lot.noir ?? 0) * 5;
 
-        // Consomme atomiquement les Fragments puis le Sel
+        // Famille majoritaire (fallback : première du lot)
+        const familleMajeure = Object.keys(lot)
+            .filter(f => lot[f] > 0)
+            .sort((a, b) => lot[b] - lot[a])[0] ?? 'blanc';
+
+        // Consomme atomiquement
         if (!this.economy.retirerLot(lot)) {
             return { success: false, raison: 'fragments_manquants' };
         }
         this.economy.retirerSel(cout);
 
-        // Ajoute l'item à l'inventaire (déjà vérifié non plein, mais double-check)
-        if (!this.inventaire.ajouter(itemId)) {
-            // Cas de course : on a consommé les ressources et l'inventaire est plein.
-            // On rend les Fragments + Sel pour ne pas léser le joueur.
+        const instance = genererInstance({
+            famille: familleMajeure,
+            contexte: 'forge',
+            scoreBase,
+            rng
+        });
+
+        if (!this.inventaire.ajouter(instance)) {
             for (const fam of ['blanc', 'bleu', 'noir']) {
                 if (lot[fam]) this.economy.ajouterFragment(fam, lot[fam]);
             }
@@ -64,6 +82,6 @@ export class FondeurSystem {
             return { success: false, raison: 'inventaire_plein' };
         }
 
-        return { success: true, itemId };
+        return { success: true, instance };
     }
 }

@@ -10,6 +10,10 @@ import { sceauObtenu, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { creerSlot } from '../render/ui/SlotInventaire.js';
 import { peindreEmblemeFamille } from '../render/ui/EmblemeFamille.js';
 import { peindreSceau, SCEAU_DIAMETRE } from '../render/ui/Sceau.js';
+import { poserBarreGarde } from '../render/ui/BarreGarde.js';
+import { poserSlotSort } from '../render/ui/SlotSort.js';
+import { getSort } from '../data/sorts.js';
+import { estInstance } from '../systems/ScoreSystem.js';
 
 const ECART_SCEAU = 6;
 
@@ -48,6 +52,37 @@ export class UIScene extends Phaser.Scene {
 
         this.miseAJourResonance(this.registry.get(RESONANCE_CLE) ?? RESONANCE_MAX);
         this._appliquerOpaciteJauge();
+
+        // --- Barre Garde Phase 6 — collée AU-DESSUS de la Résonance ---
+        // (cachée tant qu'aucun item Phase 6 n'octroie de Garde)
+        this.barreGarde = poserBarreGarde(this, x, y - 24, LARGEUR_BARRE);
+
+        // --- 3 slots SORTS Phase 6 — à GAUCHE de la Résonance ---
+        // 3 × 32 px + 2 × 6 espace = 108 px largeur. Posés juste à gauche
+        // de la jauge avec 14 px d'écart.
+        const tailleSort = 32;
+        const espaceSort = 6;
+        const largeurSorts = 3 * tailleSort + 2 * espaceSort;
+        const xSorts = x - largeurSorts - 14;
+        this.slotsSort = [];
+        for (let s = 0; s < 3; s++) {
+            const sx = xSorts + s * (tailleSort + espaceSort) + tailleSort / 2;
+            const sy = y + tailleSort / 2;
+            this.slotsSort.push(poserSlotSort(this, sx, sy, s + 1));
+        }
+        // Petit label "SORTS"
+        this.add.text(xSorts, y - 14, 'SORTS', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a'
+        });
+
+        // Tick d'actualisation des cooldowns sorts (10 Hz est suffisant pour
+        // l'œil — overlay radial recalculé)
+        this._sortRefreshEvt = this.time.addEvent({
+            delay: 100,
+            loop: true,
+            callback: () => this._refreshSorts()
+        });
+        this._refreshSorts();
 
         const handlerRes = (_p, valeur) => this.miseAJourResonance(valeur);
         const handlerMax = () => this.miseAJourResonance(this.registry.get(RESONANCE_CLE) ?? 0);
@@ -295,6 +330,28 @@ export class UIScene extends Phaser.Scene {
         const f = this.registry.get('fragments') ?? { blanc: 0, bleu: 0, noir: 0 };
         for (const fam of ['blanc', 'bleu', 'noir']) {
             this.compteursFragments?.[fam]?.setText(`${f[fam] ?? 0}`);
+        }
+    }
+
+    _refreshSorts() {
+        if (!this.slotsSort) return;
+        const equipement = this.registry.get('equipement') ?? {};
+        const gs = this.scene.get('GameScene');
+        const cdMap = gs?._sortCdJusqu ?? {};
+        const now = gs?.time?.now ?? 0;
+        const slots = ['tete', 'corps', 'accessoire'];
+        for (let i = 0; i < 3; i++) {
+            const entry = equipement[slots[i]];
+            const inst = estInstance(entry) ? entry : null;
+            let cdRestant = 0;
+            let cdTotal = 0;
+            if (inst?.sortId) {
+                const sortDef = getSort(inst.sortId);
+                cdTotal = sortDef?.cooldownMs ?? 0;
+                const cdJusqu = cdMap[slots[i]] ?? 0;
+                cdRestant = Math.max(0, cdJusqu - now);
+            }
+            this.slotsSort[i].refresh(entry, cdRestant, cdTotal);
         }
     }
 

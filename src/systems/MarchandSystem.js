@@ -1,59 +1,63 @@
-// MarchandSystem — logique pure du Marchand (la Glaneuse).
+// MarchandSystem — logique pure du Marchand (la Glaneuse). Phase 6 : opère sur
+// les INSTANCES forgées (pas de legacy).
 //
 // Trois actions atomiques :
-//   - acheter(itemId)            : retire le Sel, ajoute l'item à l'inventaire
-//   - vendre(indexInventaire)    : retire l'item de l'inventaire, ajoute du Sel
-//   - fragmenter(indexInventaire): retire l'item, ajoute des Fragments de la
-//                                  famille (qté = tier ; T3 ★ a 10 % chance de
-//                                  donner 1 Fragment Noir bonus en plus)
+//   - acheter(indexVitrine)         : retire le Sel, ajoute l'instance à l'inventaire
+//   - vendre(indexInventaire)       : retire l'instance, ajoute du Sel
+//   - fragmenter(indexInventaire)   : retire l'instance, rend des Fragments
+//                                     (qté proportionnelle au score, famille du template)
 //
-// Aucune logique visuelle ici. La vitrine est générée par genererVitrine()
-// avec un PRNG seedé sur (run_seed + indexSalle), passé depuis GameScene.
+// Le prix d'achat et de rachat est calculé depuis le SCORE de l'instance.
+// La vitrine est générée par genererVitrine() avec un PRNG seedé.
 
-import { ITEMS, COULEURS_FAMILLE } from '../data/items.js';
 import { tirerItem } from './LootSystem.js';
+import { estInstance, tierPourScore } from './ScoreSystem.js';
+import { TEMPLATES } from '../data/templatesItems.js';
 
-// Prix d'achat en Sel selon le tier d'un item
-export const PRIX_ACHAT = { 1: 8, 2: 20, 3: 50 };
-
-// Le rachat est une fraction du prix d'achat (la Glaneuse vit de la marge)
-export const COEF_RACHAT = 0.30;
-
-// Quantité de Fragments rendus selon le tier
-export const FRAG_PAR_TIER = { 1: 1, 2: 2, 3: 3 };
-
-// Probabilité d'un Fragment Noir bonus à la fragmentation d'un Tier 3
-export const PROBA_BONUS_NOIR_T3 = 0.10;
-
-// Taille de la vitrine
 export const TAILLE_VITRINE = 4;
+export const COEF_RACHAT = 0.30;
+export const PROBA_BONUS_NOIR = 0.10; // chance d'un Fragment Noir bonus en fragmentation (>=70)
 
 /**
- * Génère une vitrine seedée. Tirée selon les proba Miroir (puisque la Glaneuse
- * spawn en Miroir). Le résultat est une liste d'itemIds (peuvent contenir des
- * doublons — c'est cohérent : un même objet peut traîner deux fois sur le tapis).
+ * Prix d'achat en Sel selon le score d'une instance (courbe douce, plus chère
+ * sur les hauts scores). 15-700 Sel.
+ */
+export function prixAchat(instance) {
+    if (!estInstance(instance)) return 0;
+    const s = instance.score;
+    // Quadratique modéré : score 30 → 18, 50 → 40, 70 → 90, 85 → 175, 95 → 350, 100 → 700
+    return Math.max(8, Math.round(8 + Math.pow(s / 10, 2.4)));
+}
+
+export function prixRachat(instance) {
+    return Math.max(1, Math.floor(prixAchat(instance) * COEF_RACHAT));
+}
+
+/**
+ * Fragments rendus à la fragmentation : 1-4 selon le score.
+ */
+export function fragmentsRendus(instance) {
+    if (!estInstance(instance)) return 0;
+    const s = instance.score;
+    if (s >= 85) return 4;
+    if (s >= 70) return 3;
+    if (s >= 50) return 2;
+    return 1;
+}
+
+/**
+ * Génère une vitrine de N instances seedées. Les scores sont skewed pour avoir
+ * un mix : 1 brisé/commun, 2 étoilés/spectraux, 1 rare spectral+.
  */
 export function genererVitrine(rng, taille = TAILLE_VITRINE) {
-    const items = [];
+    const instances = [];
+    const profilsScore = [40, 55, 65, 75]; // 4 paliers de base
     for (let i = 0; i < taille; i++) {
-        const item = tirerItem('miroir', rng);
-        if (item) items.push(item.id);
+        const sBase = profilsScore[i % profilsScore.length] + Math.round((rng() - 0.5) * 12);
+        const inst = tirerItem('miroir', rng, { contexte: 'forge', scoreBase: sBase });
+        if (inst) instances.push(inst);
     }
-    return items;
-}
-
-export function prixAchat(item) {
-    if (!item) return 0;
-    return PRIX_ACHAT[item.tier] ?? 0;
-}
-
-export function prixRachat(item) {
-    return Math.max(1, Math.floor(prixAchat(item) * COEF_RACHAT));
-}
-
-export function fragmentsRendus(item) {
-    if (!item) return 0;
-    return FRAG_PAR_TIER[item.tier] ?? 0;
+    return instances;
 }
 
 export class MarchandSystem {
@@ -63,68 +67,53 @@ export class MarchandSystem {
     }
 
     /**
-     * Achat d'un item de la vitrine. Atomique.
-     * @returns {{ success, raison?, itemId? }}
+     * Achat d'une instance de la vitrine (par référence directe).
+     * Retire l'instance de la vitrine côté caller (la scene gère son état).
      */
-    acheter(itemId) {
-        const item = ITEMS[itemId];
-        if (!item) return { success: false, raison: 'item_inconnu' };
+    acheter(instance) {
+        if (!estInstance(instance)) return { success: false, raison: 'instance_invalide' };
         if (this.inventaire.estPlein()) return { success: false, raison: 'inventaire_plein' };
-
-        const cout = prixAchat(item);
+        const cout = prixAchat(instance);
         if (!this.economy.peutPayer(cout)) return { success: false, raison: 'sel_insuffisant' };
 
-        if (!this.inventaire.ajouter(itemId)) {
-            return { success: false, raison: 'inventaire_plein' };
-        }
+        if (!this.inventaire.ajouter(instance)) return { success: false, raison: 'inventaire_plein' };
         if (!this.economy.retirerSel(cout)) {
-            // Cas de course : on rembobine l'inventaire
             const inv = this.inventaire.getInventaire();
             this.inventaire.retirerIndex(inv.length - 1);
             return { success: false, raison: 'sel_insuffisant' };
         }
-        return { success: true, itemId };
+        return { success: true, instance };
     }
 
-    /**
-     * Rachat : la Glaneuse rachète un item de l'inventaire.
-     */
+    /** Rachat d'une instance de l'inventaire. */
     vendre(indexInventaire) {
         const inv = this.inventaire.getInventaire();
         if (indexInventaire < 0 || indexInventaire >= inv.length) {
             return { success: false, raison: 'index_invalide' };
         }
-        const itemId = inv[indexInventaire];
-        const item = ITEMS[itemId];
-        if (!item) return { success: false, raison: 'item_inconnu' };
+        const inst = inv[indexInventaire];
+        if (!estInstance(inst)) return { success: false, raison: 'pas_une_instance' };
 
-        const gain = prixRachat(item);
+        const gain = prixRachat(inst);
         const retire = this.inventaire.retirerIndex(indexInventaire);
         if (!retire) return { success: false, raison: 'retrait_echec' };
         this.economy.ajouterSel(gain);
-        return { success: true, itemId, gain };
+        return { success: true, instance: inst, gain };
     }
 
-    /**
-     * Fragmentation : retire l'item, rend des Fragments.
-     * Tier 3 : 10 % chance d'un Fragment Noir bonus (Reflux), peu importe la
-     * famille d'origine. Petit easter egg lore.
-     */
+    /** Fragmente une instance → Fragments famille du template. */
     fragmenter(indexInventaire, rng) {
         const inv = this.inventaire.getInventaire();
         if (indexInventaire < 0 || indexInventaire >= inv.length) {
             return { success: false, raison: 'index_invalide' };
         }
-        const itemId = inv[indexInventaire];
-        const item = ITEMS[itemId];
-        if (!item) return { success: false, raison: 'item_inconnu' };
+        const inst = inv[indexInventaire];
+        if (!estInstance(inst)) return { success: false, raison: 'pas_une_instance' };
 
-        const qte = fragmentsRendus(item);
-        const famille = item.famille;
-
-        // Bonus Reflux ?
+        const qte = fragmentsRendus(inst);
+        const famille = TEMPLATES[inst.templateId]?.famille ?? 'blanc';
         const r = (rng ?? Math.random)();
-        const bonusNoir = (item.tier === 3) && (r < PROBA_BONUS_NOIR_T3);
+        const bonusNoir = inst.score >= 70 && r < PROBA_BONUS_NOIR;
 
         const retire = this.inventaire.retirerIndex(indexInventaire);
         if (!retire) return { success: false, raison: 'retrait_echec' };
@@ -134,7 +123,7 @@ export class MarchandSystem {
 
         return {
             success: true,
-            itemId,
+            instance: inst,
             famille,
             quantite: qte,
             bonusNoir

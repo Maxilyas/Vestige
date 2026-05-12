@@ -16,12 +16,12 @@ import { creerSlot } from '../render/ui/SlotInventaire.js';
 import { creerPanneauDetail } from '../render/ui/PanneauDetail.js';
 import { peindreEmblemeFamille } from '../render/ui/EmblemeFamille.js';
 
-// Layout
-const TAILLE_SLOT_INV = 36;
+// Layout — Phase 6 : grille agrandie à 10 × 6 = 60 slots pour le farm crafting
+const TAILLE_SLOT_INV = 32;
 const TAILLE_SLOT_EQUIP = 50;
-const ESPACE_SLOT = 6;
-const COLS = 8;
-const ROWS = 5;
+const ESPACE_SLOT = 5;
+const COLS = 10;
+const ROWS = 6;
 
 const LABELS_SLOT = { tete: 'TÊTE', corps: 'CORPS', accessoire: 'ACC.' };
 const LABELS_VESTIGE = { geste: 'GESTE (V)', maitrise1: 'MAÎTRISE I', maitrise2: 'MAÎTRISE II' };
@@ -54,8 +54,9 @@ export class InventaireScene extends Phaser.Scene {
         this._dessinerVestiges();
 
         // --- Section grille inventaire (à gauche), juste sous les deux colonnes ---
+        // Phase 6 — la grille passe à 10×6 = 60 slots (320 + 45 = 365 px de large)
         const xGrilleDebut = 60;
-        const yGrilleDebut = 270;
+        const yGrilleDebut = 255;
         this._dessinerGrille(xGrilleDebut, yGrilleDebut);
 
         // --- Compteur N/40 (juste au-dessus de la grille) ---
@@ -277,11 +278,12 @@ export class InventaireScene extends Phaser.Scene {
                 equipe: true,
                 label: LABELS_SLOT[slot],
                 onClick: () => {
-                    const id = this.inventaire.getEquipement()[slot];
-                    if (!id) {
+                    const entree = this.inventaire.getEquipement()[slot];
+                    if (!entree) {
                         this.panneau.afficherTexte('Slot vide.');
                     } else {
-                        const it = ITEMS[id];
+                        // Phase 6 — entrée peut être instance OU string legacy
+                        const it = getItemOuVestige(entree);
                         this.panneau.afficherItem(it, { equipe: true, slot }, {
                             onDesequiper: () => {
                                 if (this.inventaire.desequiper(slot)) {

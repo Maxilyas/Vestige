@@ -3,9 +3,14 @@
 // Ce système est PUR (pas d'état interne). Il prend l'équipement courant et
 // retourne des stats effectives. Les bornes de baisse passive et autres tunings
 // sont gérés ailleurs (MondeSystem, GameScene) qui interrogent ces stats.
+//
+// Phase 6 : cohabitation legacy items (strings) + instances forgées (objets).
+// Les calculs additionnent les deux séries de bonus.
 
-import { ITEMS, CONSOMMABLES, itemsParFamille } from '../data/items.js';
+import { CONSOMMABLES } from '../data/items.js';
 import { VESTIGES } from '../data/vestiges.js';
+import { genererInstance } from './ItemForge.js';
+import { estInstance } from './ScoreSystem.js';
 
 // Probabilités des familles selon le monde où le coffre est trouvé
 export const PROBA_FAMILLE = {
@@ -14,11 +19,22 @@ export const PROBA_FAMILLE = {
 };
 
 /**
- * Tire un item aléatoire selon le monde où le coffre est ouvert.
+ * Tire un item Phase 6 — TOUJOURS une instance forgée.
+ * Le système legacy a été retiré (les data/items.js servent encore aux Vestiges,
+ * mais ne sont plus jamais dropés ni intégrés dans les inventaires).
+ *
+ * Le score est skewed selon le contexte :
+ *   'sol'   — coffre / drop ennemi : mean ~35, queue jusqu'à 95
+ *   'boss'  — drop boss : mean ~75, jackpot 95+ à 10 %
+ *   'forge' — forge fragments / combinaison : variance autour de scoreBase
+ *
  * @param {string} monde 'normal' ou 'miroir'
- * @param {() => number} rng PRNG seedé (renvoie un float [0, 1[)
+ * @param {() => number} rng PRNG seedé
+ * @param {Object} opts { etage, forceInstance, contexte, scoreBase, slot }
+ * @returns {Object|null} instance Phase 6
  */
-export function tirerItem(monde, rng) {
+export function tirerItem(monde, rng, opts = {}) {
+    const { etage = 1, contexte = 'sol', scoreBase = 50, slot = null } = opts;
     const probas = PROBA_FAMILLE[monde] ?? PROBA_FAMILLE.normal;
     const r = rng();
     let famille;
@@ -26,9 +42,11 @@ export function tirerItem(monde, rng) {
     else if (r < probas.blanc + probas.bleu) famille = 'bleu';
     else famille = 'noir';
 
-    const items = itemsParFamille(famille);
-    if (items.length === 0) return null;
-    return items[Math.floor(rng() * items.length)];
+    // Bonus de score selon étage — +2 par étage au-delà du premier (skew vers le haut)
+    const boostEtage = Math.max(0, (etage - 1) * 2);
+    const baseAjustee = scoreBase + boostEtage;
+
+    return genererInstance({ famille, slot, contexte, scoreBase: baseAjustee, rng });
 }
 
 /**
@@ -41,27 +59,22 @@ export function tirerConsommable(rng) {
 
 /**
  * Calcule les stats effectives à partir des stats de base et de l'équipement
- * + des Vestiges équipés (Phase 5b).
- * @param {Object} statsBase   { speed, jumpVelocity, passiveMiroir, passivePresent, bonusRetour, ... }
- * @param {Object} equipement  { tete, corps, accessoire } (itemIds ou null)
+ * + des Vestiges équipés (Phase 5b) + des affixes Phase 6.
+ *
+ * @param {Object} statsBase   { speed, jumpVelocity, passiveMiroir, ... }
+ * @param {Object} equipement  { tete, corps, accessoire } (itemIds OU instances)
  * @param {Object} [vestiges]  { geste, maitrise1, maitrise2 } (vestigeIds ou null)
  * @returns {Object} stats effectives (mêmes clés que statsBase + nouvelles)
  */
 export function calculerStats(statsBase, equipement, vestiges = null) {
     const stats = { ...statsBase };
 
-    // Items équipement classique
-    for (const slot of ['tete', 'corps', 'accessoire']) {
-        const id = equipement[slot];
-        if (!id) continue;
-        const item = ITEMS[id];
-        if (!item) continue;
-        for (const eff of item.effets) {
-            stats[eff.cible] = (stats[eff.cible] ?? 0) + eff.delta;
-        }
-    }
+    // Phase 6 — uniquement les instances forgées. Les stats Phase 6 spécifiques
+    // (armure, gardeMax, etc.) sont calculées séparément par SystemeEffets.
+    // Ici on ne s'occupe que des stats legacy (speed, attaqueDegats, etc.)
+    // pour rester compatible avec le reste du gameplay GameScene.
 
-    // Vestiges (Phase 5b) — empilent leurs effets additivement
+    // Vestiges — empilent leurs effets additivement (inchangé)
     if (vestiges) {
         for (const slot of ['geste', 'maitrise1', 'maitrise2']) {
             const id = vestiges[slot];

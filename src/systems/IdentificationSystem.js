@@ -49,8 +49,21 @@ export class IdentificationSystem {
      */
     effetsEffectifs(item) {
         if (!item || !item.effets) return [];
-        const reveles = this.getEffetsReveles(item.id);
         const revelationTotale = this.registry.get('vestige_revelation_totale') === true;
+
+        // Phase 6 — Si l'item est une INSTANCE forgée (categorie='forge'), la
+        // révélation est portée DIRECTEMENT par l'instance (instance.revele.prim).
+        // On lit `eff.visible` tel quel depuis le def (déjà calculé par
+        // defDepuisInstance dans data/items.js). Le tier "legacy" mappé ici
+        // n'est plus pertinent — on respecte la révélation par usage.
+        if (item.categorie === 'forge') {
+            return item.effets.map((e) => ({
+                ...e,
+                visible: revelationTotale || e.visible === true
+            }));
+        }
+
+        const reveles = this.getEffetsReveles(item.id);
         return item.effets.map((e, i) => {
             if (revelationTotale) return { ...e, visible: true };
             // Tier 1 : tous visibles

@@ -15,7 +15,8 @@
 
 import { VESTIGES } from '../data/vestiges.js';
 
-export const CAPACITE_INVENTAIRE = 40;
+// Phase 6 — étendu pour accueillir le farm crafting (Phase 5b = 40, Phase 6 = 60)
+export const CAPACITE_INVENTAIRE = 60;
 
 export const SLOTS = ['tete', 'corps', 'accessoire'];
 
@@ -39,6 +40,24 @@ export class InventaireSystem {
 
         if (this.registry.get(CLE_INVENTAIRE) === undefined) {
             this.registry.set(CLE_INVENTAIRE, []);
+        }
+        // Phase 6 — nettoie l'inventaire des entrées invalides (undefined/null/
+        // objets sans _instance). Indispensable après le retrait du legacy :
+        // un run en cours peut contenir des items legacy non reconnus → on les
+        // évacue silencieusement plutôt que de laisser des cases fantômes.
+        else {
+            const inv = this.registry.get(CLE_INVENTAIRE);
+            if (Array.isArray(inv)) {
+                const propre = inv.filter(e => {
+                    if (e === null || e === undefined) return false;
+                    if (typeof e === 'string') return true;
+                    if (typeof e === 'object' && e._instance === true) return true;
+                    return false; // objets bizarres / items legacy entiers
+                });
+                if (propre.length !== inv.length) {
+                    this.registry.set(CLE_INVENTAIRE, propre);
+                }
+            }
         }
         if (this.registry.get(CLE_EQUIPEMENT) === undefined) {
             this.registry.set(CLE_EQUIPEMENT, { tete: null, corps: null, accessoire: null });
@@ -95,22 +114,35 @@ export class InventaireSystem {
     /**
      * Équipe l'item à l'index donné (issu de l'inventaire). L'ancien item
      * du slot revient dans l'inventaire à la place. Retourne true si OK.
+     *
+     * Phase 6 — l'entrée inventaire à `index` peut être une INSTANCE forgée
+     * (objet) au lieu d'un itemId legacy. On stocke l'entrée brute dans le
+     * slot équipement (instance ou string), pas itemDef.id.
      */
     equiperDepuisInventaire(index, itemDef) {
         if (!itemDef || !SLOTS.includes(itemDef.slot)) return false;
         const inv = [...this.getInventaire()];
         if (index < 0 || index >= inv.length) return false;
 
+        // Vérifie que l'entrée à index correspond bien à itemDef. Pour une
+        // instance, on compare le uid; pour un legacy, on compare l'id.
+        const entryInv = inv[index];
+        const entryEstInstance = entryInv !== null && typeof entryInv === 'object' && entryInv._instance;
+        if (entryEstInstance) {
+            if (entryInv.uid !== itemDef.id) return false;
+        } else if (entryInv !== itemDef.id) {
+            return false;
+        }
+
         const equip = { ...this.getEquipement() };
         const slot = itemDef.slot;
-        const ancienId = equip[slot];
+        const ancien = equip[slot];
 
-        // L'item équipé sort de l'inventaire à son index, l'ancien y prend sa place
-        // (s'il y avait quelque chose), sinon le slot d'inventaire est juste retiré.
         inv.splice(index, 1);
-        equip[slot] = itemDef.id;
-        if (ancienId) {
-            inv.splice(index, 0, ancienId);
+        // Stocke l'entrée brute dans le slot (instance OU string)
+        equip[slot] = entryInv;
+        if (ancien !== null && ancien !== undefined) {
+            inv.splice(index, 0, ancien);
         }
 
         this.registry.set(CLE_INVENTAIRE, inv);

@@ -7,6 +7,7 @@
 import { peindreEmblemeFamille } from './EmblemeFamille.js';
 import { COULEURS_INVENTAIRE } from './CadreInventaire.js';
 import { COULEURS_FAMILLE, getItemOuVestige } from '../../data/items.js';
+import { estInstance, couleurPourScore, tierPourScore } from '../../systems/ScoreSystem.js';
 
 /**
  * Crée un slot complet à la position (x, y).
@@ -81,8 +82,14 @@ export function creerSlot(scene, x, y, options = {}) {
         halo.clear();
         couches.removeAll(true);
 
-        const item = courantItemId ? getItemOuVestige(courantItemId) : null;
+        // Phase 6 — l'entrée peut être une INSTANCE ou un itemId string.
+        // getItemOuVestige sait gérer les deux et renvoie un def normalisé.
+        const entry = courantItemId;
+        const estPhase6 = estInstance(entry);
+        const item = entry ? getItemOuVestige(entry) : null;
         const familleColor = item ? COULEURS_FAMILLE[item.famille] : null;
+        // Phase 6 — couleur du bord/halo basée sur le score
+        const couleurScore = estPhase6 ? couleurPourScore(entry.score) : null;
 
         // Fond légèrement teinté de la couleur de famille si plein
         if (item) {
@@ -92,11 +99,12 @@ export function creerSlot(scene, x, y, options = {}) {
             couches.add(tinted);
         }
 
-        // Bordure
-        const couleurBord = hover
-            ? COULEURS_INVENTAIRE.orClair
-            : (equipe ? COULEURS_INVENTAIRE.or : (item ? 0x6a6a7a : 0x3a3a3a));
-        const epaisseur = equipe ? 2 : 1;
+        // Bordure — Phase 6 : couleur de score override pour les instances
+        let couleurBord;
+        if (hover) couleurBord = COULEURS_INVENTAIRE.orClair;
+        else if (estPhase6) couleurBord = couleurScore;
+        else couleurBord = equipe ? COULEURS_INVENTAIRE.or : (item ? 0x6a6a7a : 0x3a3a3a);
+        const epaisseur = (equipe || estPhase6) ? 2 : 1;
         bord.lineStyle(epaisseur, couleurBord, 1);
         bord.strokeRect(-taille / 2, -taille / 2, taille, taille);
 
@@ -171,6 +179,30 @@ export function creerSlot(scene, x, y, options = {}) {
                     marker.fillPath();
                 }
                 couches.add(marker);
+            }
+
+            // Phase 6 — badge score chiffré (haut-droit) pour les instances
+            if (estPhase6) {
+                const badge = scene.add.text(
+                    taille / 2 - 2,
+                    -taille / 2 + 2,
+                    String(entry.score),
+                    {
+                        fontFamily: 'monospace',
+                        fontSize: '9px',
+                        color: '#' + couleurScore.toString(16).padStart(6, '0'),
+                        fontStyle: 'bold',
+                        stroke: '#000',
+                        strokeThickness: 3
+                    }
+                ).setOrigin(1, 0);
+                couches.add(badge);
+
+                // Halo doux derrière l'emblème pour les hauts scores
+                if (entry.score >= 70) {
+                    halo.fillStyle(couleurScore, 0.18 + Math.min(0.3, (entry.score - 70) / 200));
+                    halo.fillCircle(0, 0, taille * 0.52);
+                }
             }
 
             // Étoile rouge pour Tier III
