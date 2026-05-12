@@ -154,6 +154,11 @@ export class GameScene extends Phaser.Scene {
         // --- Seed du run (random à la première salle, persistée ensuite) ---
         if (this.registry.get(CLE_SEED_RUN) === undefined) {
             this.registry.set(CLE_SEED_RUN, Math.floor(Math.random() * 0xFFFFFFFF));
+            // Phase 5c.1 — marque qu'un run est actif (le bouton "Continuer"
+            // du MenuScene s'en sert ; cleared à la victoire dans FinScene
+            // et au démarrage d'une "Nouvelle partie").
+            try { localStorage.setItem('vestige_run_actif_v1', 'true'); }
+            catch (_e) { /* privacy → no-op */ }
         }
         const seedRun = this.registry.get(CLE_SEED_RUN);
 

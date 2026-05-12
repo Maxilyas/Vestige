@@ -66,6 +66,11 @@ export class FinScene extends Phaser.Scene {
             if (this.scene.isActive(k)) this.scene.stop(k);
         }
 
+        // Phase 5c.1 — le run est terminé, on clear le marker "run actif" pour
+        // que le bouton "Continuer" du MenuScene soit grisé au prochain boot.
+        try { localStorage.removeItem('vestige_run_actif_v1'); }
+        catch (_e) { /* privacy → no-op */ }
+
         // --- Fond noir profond ---
         this.add.rectangle(
             GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x080610, 1
@@ -302,31 +307,10 @@ export class FinScene extends Phaser.Scene {
     }
 
     _quitter() {
-        // Le menu démarrage n'existe pas encore (Phase 5c.1) — on affiche un
-        // adieu poétique sur fond noir, le joueur peut fermer l'onglet ou
-        // recharger la page.
-        this._fadeNoir(() => {
-            this.add.text(
-                GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10,
-                'Le Vestige se retire.',
-                {
-                    fontFamily: 'Georgia, serif',
-                    fontSize: '18px',
-                    color: C_OR_CSS,
-                    fontStyle: 'italic'
-                }
-            ).setOrigin(0.5).setDepth(100);
-            this.add.text(
-                GAME_WIDTH / 2, GAME_HEIGHT / 2 + 24,
-                '— Recharge la page pour le rappeler —',
-                {
-                    fontFamily: 'Georgia, serif',
-                    fontSize: '12px',
-                    color: C_SUBTLE_CSS,
-                    fontStyle: 'italic'
-                }
-            ).setOrigin(0.5).setDepth(100);
-        });
+        // Retour au menu de démarrage (Phase 5c.1). Le marker run_actif a déjà
+        // été cleared en début de create(), donc "Continuer" sera grisé et le
+        // joueur verra la variante post-fin du sous-titre.
+        this._fadeNoir(() => this.scene.start('MenuScene'));
     }
 
     _fadeNoir(onComplete) {
