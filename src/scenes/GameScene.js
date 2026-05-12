@@ -114,6 +114,14 @@ export class GameScene extends Phaser.Scene {
     create() {
         // --- Systèmes ---
         this.resonance = new ResonanceSystem(this.registry);
+        // Wrapper "vulnérabilité" : projectile Reflux-Éclat applique flag
+        // `_vulnerabiliteJusqu` au joueur → tout dgts reçu pendant la durée
+        // est multiplié par 1.5. Monkey-patch unique sur l'instance Resonance.
+        const _origPrendreDegats = this.resonance.prendreDegats.bind(this.resonance);
+        this.resonance.prendreDegats = (montant) => {
+            const vuln = (this.player?._vulnerabiliteJusqu ?? 0) > this.time.now;
+            return _origPrendreDegats(vuln ? Math.round(montant * 1.5) : montant);
+        };
         this.monde = new MondeSystem(this.registry);
         this.inventaire = new InventaireSystem(this.registry);
         this.enemySystem = new EnemySystem(this.registry);
@@ -478,16 +486,33 @@ export class GameScene extends Phaser.Scene {
         const body = this.player.body;
         const auSol = body.blocked.down || body.touching.down;
         const speed = this.statsEffectives.speed;
+        const now = this.time.now;
         // Effet d'immobilisation (ex: web-spinner Cendre-Tisseuse). Bloque
         // déplacement + saut mais autorise attaque / parry / interaction.
-        const immobilise = (this.player._immobiliseJusqu ?? 0) > this.time.now;
+        const immobilise = (this.player._immobiliseJusqu ?? 0) > now;
         // Effet glissant (Mousse / Soupir Glacial) — friction réduite quand
         // aucune input directionnelle n'est pressée.
-        const surGlissant = (this.player._tileEffectGlissant ?? 0) > this.time.now;
+        const surGlissant = (this.player._tileEffectGlissant ?? 0) > now;
+        // Contrôles inversés (Polariseur) — swap gauche/droite
+        const controleInverse = (this.player._controleInverseJusqu ?? 0) > now;
+        const iGauche = controleInverse ? i.droite : i.gauche;
+        const iDroite = controleInverse ? i.gauche : i.droite;
+        // Gravité inversée (Inverseur de Gravité) — net = 0 (pesanteur nulle,
+        // flottement) plutôt qu'une vraie force ascendante. Évite que le joueur
+        // soit catapulté à grande vitesse hors du monde.
+        const graviteInv = (this.player._graviteInverseJusqu ?? 0) > now;
+        if (graviteInv && !this.player._graviteInverseeAppliquee) {
+            const gWorld = this.physics.world.gravity.y;
+            body.gravity.y = -gWorld;        // net = 0
+            this.player._graviteInverseeAppliquee = true;
+        } else if (!graviteInv && this.player._graviteInverseeAppliquee) {
+            body.gravity.y = 0;
+            this.player._graviteInverseeAppliquee = false;
+        }
 
         if (immobilise) {
             body.setVelocityX(0);
-        } else if (i.gauche && !i.droite) {
+        } else if (iGauche && !iDroite) {
             // Sur tile glissante, l'accélération est aussi sluggish
             if (surGlissant) {
                 body.setVelocityX(body.velocity.x * 0.92 + (-speed) * 0.08);
@@ -495,7 +520,7 @@ export class GameScene extends Phaser.Scene {
                 body.setVelocityX(-speed);
             }
             this.lastDirection = -1;
-        } else if (i.droite && !i.gauche) {
+        } else if (iDroite && !iGauche) {
             if (surGlissant) {
                 body.setVelocityX(body.velocity.x * 0.92 + speed * 0.08);
             } else {
@@ -569,6 +594,8 @@ export class GameScene extends Phaser.Scene {
         const now = this.time.now;
         if (now < this.cooldownAttaqueFin) return;
         this.cooldownAttaqueFin = now + Math.max(100, this.statsEffectives.attaqueCooldown);
+        // Track le dernier moment d'attaque (lu par Reflet-Double 3d)
+        this.lastAttaqueAt = now;
 
         const portee = this.statsEffectives.attaquePortee;
         const dir = this.lastDirection;
@@ -704,6 +731,11 @@ export class GameScene extends Phaser.Scene {
     tenterParry() {
         const now = this.time.now;
         if (now < this.cooldownParryFin) return;
+        // Lock parry par Annihilateur (Phase 3f) — touche C désactivée temporairement
+        if ((this.player._parryLockJusqu ?? 0) > now) {
+            this.afficherMessageFlottant?.('PARRY VERROUILLÉ', '#a040c0');
+            return;
+        }
         const fenetre = this.statsEffectives.parryFenetre;
         this.cooldownParryFin = now + this.statsEffectives.parryCooldown;
         this.parryActifJusqu = now + fenetre;
@@ -805,7 +837,8 @@ export class GameScene extends Phaser.Scene {
         if (now < this.invincibleJusqu) return;
 
         // Parry actif : on annule les dégâts + bonus Résonance + effet expansif doré
-        if (this.estParryActif()) {
+        // EXCEPTION : les Anti-Parry (Voile, Phase 3e) ne sont pas parryables.
+        if (this.estParryActif() && !ennemi.def?.parryImmune) {
             this.parryActifJusqu = 0;
             this.resonance.regagner(this.statsEffectives.parryBonusResonance);
             this.afficherMessageFlottant('PARRY', '#ffd070');
@@ -945,11 +978,23 @@ export class GameScene extends Phaser.Scene {
         };
         this.events.on('mutator:mur_feu:hit', onMurFeuHit);
 
+        // Fissure (Brisure-Tisseuse) — explosion AOE -8 si player overlap
+        const onFissureExplode = (_player) => {
+            const now = this.time.now;
+            if (now < this.invincibleJusqu) return;
+            this.resonance.prendreDegats(8);
+            this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
+            this.flashJoueur(0xff4060);
+            this.afficherMessageFlottant('-8', '#ff4060');
+        };
+        this.events.on('mutator:fissure:explode', onFissureExplode);
+
         this.events.once('shutdown', () => {
             this.events.off('enemy:tir', onTir);
             this.events.off('boss:tir', onTir);
             this.events.off('enemy:spawn', onSpawn);
             this.events.off('mutator:mur_feu:hit', onMurFeuHit);
+            this.events.off('mutator:fissure:explode', onFissureExplode);
             this.events.off('boss:smash:telegraph', onTelegraph);
             this.events.off('boss:smash:impact', onImpact);
             this.events.off('boss:phase', onPhase);

@@ -167,6 +167,74 @@ export function ajouterMurFeu(scene, x, y, w, h, duration = 4000) {
     return tile;
 }
 
+/**
+ * Tile fissure — Brisure-Tisseuse (Phase 3f). Crée une fissure au sol qui
+ * s'élargit visuellement pendant `dureeAvantExplosion` ms, puis EXPLOSE
+ * en AOE locale. Si le joueur overlap au moment de l'explosion → emit
+ * `mutator:fissure:explode` → handler GameScene applique dgts.
+ */
+export function ajouterTileFissure(scene, x, y, w, h, dureeAvantExplosion = 1500) {
+    ensureSystem(scene);
+    const visual = scene.add.graphics();
+    visual.setDepth(DEPTH.SOL ?? DEPTH.ENTITES - 2);
+    // Tracé initial (fissure fine)
+    const dessinerFissure = (progres) => {
+        visual.clear();
+        const cx = x + w / 2, cy = y + h / 2;
+        const segs = 4;
+        visual.lineStyle(2 + progres * 3, 0xa02050, 0.7 + progres * 0.3);
+        for (let i = 0; i < segs; i++) {
+            const angle = (i / segs) * Math.PI * 2 + progres * 0.5;
+            const r = (w / 2) * (0.3 + progres * 0.7);
+            visual.beginPath();
+            visual.moveTo(cx, cy);
+            visual.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r * 0.5);
+            visual.strokePath();
+        }
+        // Halo rouge qui grandit
+        visual.fillStyle(0x600810, 0.3 * progres);
+        visual.fillEllipse(cx, cy, w * 0.8 * (0.4 + progres), h * 0.8 * (0.4 + progres));
+    };
+    let progres = 0;
+    dessinerFissure(0);
+
+    const tween = scene.tweens.addCounter({
+        from: 0, to: 1,
+        duration: dureeAvantExplosion,
+        onUpdate: (t) => { progres = t.getValue(); dessinerFissure(progres); }
+    });
+
+    // À l'expiration : explosion + check overlap player
+    scene.time.delayedCall(dureeAvantExplosion, () => {
+        if (!visual.active) return;
+        const player = scene.player;
+        if (player) {
+            const px = player.x, py = player.y;
+            const phw = player.width / 2, phh = player.height / 2;
+            const dx = !(px + phw < x || px - phw > x + w);
+            const dy = !(py + phh < y || py - phh > y + h);
+            if (dx && dy) {
+                scene.events.emit('mutator:fissure:explode', player);
+            }
+        }
+        // FX éclat
+        const burst = scene.add.graphics();
+        burst.setDepth(DEPTH.EFFETS ?? 60);
+        burst.setBlendMode(Phaser.BlendModes.ADD);
+        burst.fillStyle(0xff4060, 0.7);
+        burst.fillCircle(x + w / 2, y + h / 2, w * 0.6);
+        scene.tweens.add({
+            targets: burst,
+            scale: { from: 0.5, to: 1.6 }, alpha: { from: 1, to: 0 },
+            duration: 280, ease: 'Cubic.Out',
+            onComplete: () => burst.destroy()
+        });
+        visual.destroy();
+    });
+
+    return visual;
+}
+
 /** Le joueur est-il actuellement sur une tile glissante ? */
 export function estSurGlissant(player, scene) {
     if (!player) return false;

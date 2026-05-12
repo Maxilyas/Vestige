@@ -35,5 +35,26 @@ import './web-spinner.js';
 import './reflector.js';
 import './frost-trailer.js';
 import './wall-builder.js';
+// Phase 3d — archétypes innovants (Cristaux Glacés)
+import './vision-distorter.js';
+import './floor-froster.js';
+import './mirror-clone.js';
+import './mirror-being.js';
+import './orbital.js';
+import './control-inverter.js';
+// Phase 3e — archétypes innovants (Voile Inversé)
+import './reactive-shooter.js';
+import './unstoppable-charger.js';
+import './phaser.js';
+import './gravity-flipper.js';
+import './teleporter.js';
+import './vulnerability-shooter.js';
+// Phase 3f — archétypes innovants (Cœur du Reflux)
+import './death-shards.js';
+import './ground-fissure.js';
+import './gaze.js';
+import './sister-link.js';
+import './parry-lock.js';
+import './drain-aura.js';
 
 export { COMPORTEMENTS, registerComportement, getComportement } from './_registry.js';

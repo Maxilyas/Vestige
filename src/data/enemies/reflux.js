@@ -1,14 +1,9 @@
 // Ennemis du biome Cœur du Reflux (étages 9-10).
 //
-// Roster actuel (4 archétypes basic) :
-//   - Veilleur du Reflux (veilleur)
-//   - Cri du Reflux (traqueur)
-//   - Tonnerre du Reflux (chargeur)
-//   - Œil du Reflux (tireur)
-//
-// Phase 3f ajoutera 6 archétypes innovants : Cœur Fragmenté, Brisure-Tisseuse,
-// Œil du Reflux (gaze), Esprit Divisé, Annihilateur, Reflux-Éclat Majeur,
-// Cohérence-Éroder.
+// Roster (10 ennemis) :
+//   BASIC (4) — Veilleur du Reflux, Cri du Reflux, Tonnerre du Reflux, Œil du Reflux
+//   INNOVANTS (6, Phase 3f) — Cœur Fragmenté, Brisure-Tisseuse, Regard du Reflux,
+//   Esprit Divisé, Annihilateur, Cohérence-Éroder.
 
 export const ENEMIES_REFLUX = {
     veilleur_reflux: {
@@ -74,5 +69,74 @@ export const ENEMIES_REFLUX = {
         palette: { corps: 0x3a0a0a, iris: 0xff4040, pupille: 0x100000, halo: 0xff8080 },
         accessoire: 'couronne_yeux',
         probaDrop: 0.4
+    },
+
+    // ═════════════════════════════════════════════════════════════════════
+    // ARCHÉTYPES INNOVANTS — Phase 3f
+    // ═════════════════════════════════════════════════════════════════════
+
+    coeur_fragmente: {
+        id: 'coeur_fragmente', nom: 'Cœur Fragmenté',
+        archetype: 'death-shards',
+        etages: [9, 10], familleFragment: 'noir',
+        largeur: 30, hauteur: 30,
+        hp: 5, degatsContact: 12, vitesse: 100,
+        gravite: false,
+        rayonDetection: 300,
+        rayonExplosion: 70, degatsEclat: 10, dureeEclat: 2000,
+        palette: { corps: 0x4a0a1a, accent: 0xff3040 },
+        accessoire: 'aucun', probaDrop: 0.42
+    },
+    brisure_tisseuse: {
+        id: 'brisure_tisseuse', nom: 'Brisure-Tisseuse',
+        archetype: 'ground-fissure',
+        etages: [9, 10], familleFragment: 'noir',
+        largeur: 32, hauteur: 26,
+        hp: 4, degatsContact: 10, vitesse: 0, gravite: true,
+        rayonAction: 400, frequenceFissure: 3000,
+        fissureLargeur: 70, fissureHauteur: 12, dureeAvantExplosion: 1500,
+        palette: { corps: 0x3a0a14, accent: 0xa02040 },
+        accessoire: 'aucun', probaDrop: 0.4
+    },
+    regard_reflux: {
+        id: 'regard_reflux', nom: 'Regard du Reflux',
+        archetype: 'gaze',
+        etages: [9, 10], familleFragment: 'noir',
+        largeur: 36, hauteur: 36,
+        hp: 5, degatsContact: 8, vitesse: 0, gravite: false,
+        rayonRegard: 360, intervalleDrain: 1000, degatsDrain: 2,
+        palette: { corps: 0x3a0a14, accent: 0xff4040 },
+        accessoire: 'aucun', probaDrop: 0.42
+    },
+    esprit_divise: {
+        id: 'esprit_divise', nom: 'Esprit Divisé',
+        archetype: 'sister-link',
+        etages: [9, 10], familleFragment: 'noir',
+        largeur: 28, hauteur: 32,
+        hp: 3, degatsContact: 10, vitesse: 95,
+        gravite: false,
+        rayonDetection: 300,
+        palette: { corps: 0x4a1a3a, accent: 0xff4040 },
+        accessoire: 'aucun', probaDrop: 0.4
+    },
+    annihilateur: {
+        id: 'annihilateur', nom: 'Annihilateur',
+        archetype: 'parry-lock',
+        etages: [9, 10], familleFragment: 'noir',
+        largeur: 28, hauteur: 44,
+        hp: 5, degatsContact: 10, vitesse: 0, gravite: true,
+        rayonAura: 220,
+        palette: { corps: 0x1a0a14, accent: 0xff4040 },
+        accessoire: 'aucun', probaDrop: 0.42
+    },
+    coherence_eroder: {
+        id: 'coherence_eroder', nom: 'Cohérence-Éroder',
+        archetype: 'drain-aura',
+        etages: [9, 10], familleFragment: 'noir',
+        largeur: 30, hauteur: 36,
+        hp: 4, degatsContact: 8, vitesse: 0, gravite: true,
+        rayonAura: 180, intervalleDrain: 1000, degatsDrain: 1,
+        palette: { corps: 0x2a0a1a, accent: 0xa02040 },
+        accessoire: 'aucun', probaDrop: 0.42
     }
 };

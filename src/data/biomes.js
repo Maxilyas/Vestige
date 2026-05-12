@@ -80,7 +80,18 @@ export const BIOMES = {
             ambiance: 0x3a5a8a,
             accent: 0xa0d0ff
         },
-        ennemisPool: ['idole_fissuree', 'ombre_murmure', 'coureur_cendre', 'cracheur_pale'],
+        ennemisPool: [
+            'idole_fissuree',  'idole_fissuree',  'idole_fissuree',
+            'ombre_murmure',   'ombre_murmure',   'ombre_murmure',
+            'coureur_cendre',  'coureur_cendre',  'coureur_cendre',
+            'cracheur_pale',   'cracheur_pale',   'cracheur_pale',
+            'cristal_prisme',         'cristal_prisme',
+            'givre_tisseur',          'givre_tisseur',
+            'eclat_multiplicateur',   'eclat_multiplicateur',
+            'reflet_double',          'reflet_double',
+            'anneau_glace',           'anneau_glace',
+            'polariseur',             'polariseur'
+        ],
         densite: { min: 4, max: 6 }
     },
     voile_inverse: {
@@ -94,7 +105,18 @@ export const BIOMES = {
             ambiance: 0x4a2a6a,
             accent: 0xc080ff
         },
-        ennemisPool: ['colosse_voile', 'larme_tisseuse', 'rage_du_voile', 'voix_lointaine'],
+        ennemisPool: [
+            'colosse_voile',  'colosse_voile',  'colosse_voile',
+            'larme_tisseuse', 'larme_tisseuse', 'larme_tisseuse',
+            'rage_du_voile',  'rage_du_voile',  'rage_du_voile',
+            'voix_lointaine', 'voix_lointaine', 'voix_lointaine',
+            'anti_bond',          'anti_bond',
+            'anti_parry',         'anti_parry',
+            'mirage',             'mirage',
+            'inverseur_gravite',  'inverseur_gravite',
+            'trou_memoire',       'trou_memoire',
+            'reflux_eclat',       'reflux_eclat'
+        ],
         densite: { min: 5, max: 8 }
     },
     coeur_reflux: {
@@ -108,7 +130,18 @@ export const BIOMES = {
             ambiance: 0x3a0a1a,
             accent: 0xff4040
         },
-        ennemisPool: ['veilleur_reflux', 'cri_du_reflux', 'tonnerre_reflux', 'oeil_du_reflux'],
+        ennemisPool: [
+            'veilleur_reflux',  'veilleur_reflux',  'veilleur_reflux',
+            'cri_du_reflux',    'cri_du_reflux',    'cri_du_reflux',
+            'tonnerre_reflux',  'tonnerre_reflux',  'tonnerre_reflux',
+            'oeil_du_reflux',   'oeil_du_reflux',   'oeil_du_reflux',
+            'coeur_fragmente',    'coeur_fragmente',
+            'brisure_tisseuse',   'brisure_tisseuse',
+            'regard_reflux',      'regard_reflux',
+            'esprit_divise',      'esprit_divise',
+            'annihilateur',       'annihilateur',
+            'coherence_eroder',   'coherence_eroder'
+        ],
         densite: { min: 7, max: 12 }
     }
 };
