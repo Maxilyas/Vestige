@@ -90,7 +90,7 @@ npx live-server .
 |---|---|---|
 | **1** | ✅ | **Simplification Miroir + mort = retour Cité.** Drain Miroir retiré, Cité = hub pur, vortex retour reset étage, heal complet, méta-progression conservée. |
 | **2a** | ✅ | **Refactor topographie / archétype.** Découplage thème (archétype) ⊥ structure (topographie). 5 topographies pilotes. `Layouts.js` supprimé. Doctrine head-bonk documentée (plateformes empilées au même x avec 70 px vert → la plate du haut doit être one-way). |
-| **2b** | ⬜ | **Compléter à 18-20 topographies.** `labyrinthe_murs`, `pont_brise`, `gouffre_lateral`, `corridor_pieges`, `cascade_plateformes`, `salle_pieux_plafond`, `arene_boss` dédiée, etc. |
+| **2b** | ✅ | **40 topographies + tirage uniforme par topo + boss arenas dédiées.** Catalogue passé de 5 à 30 topos régulières (10 horizontales + 10 verticales ajoutées). Tirage `EtageGen` revu : uniforme par topo (plus par archétype) pour éviter la dilution des spécialisées. 10 arènes boss uniques (1/étage, complexité progressive, thème biome). Mécanisme `coffreForce` pour coffres garantis sur secrets (ex: pont haut de `corridor_ressorts`). |
 | **3** | ⬜ | **Étages déterministes.** `data/etages.js` assigne (archétype, topographie, ennemis) fixes par (étage, salleId). Variance seedée résiduelle. Mémoire de carte entre runs. |
 | **4** | ⬜ | **Boss + clés d'étage + écran de victoire.** 10 boss câblés (1 par étage), drop Clé d'étage, étage 10 = Souverain du Reflux + Artefact = fin. **Mini-jeu terminable.** |
 | **5** | ⬜ | **Identité visuelle par paire d'étages.** Polish itératif biome par biome. |
@@ -142,11 +142,12 @@ npx live-server .
 ## État actuel
 *À mettre à jour à la fin de chaque session.*
 
-- **Dernière étape franchie** : **Phase 2a — Refactor topographie / archétype**. Découplage thème ⊥ structure. Nouveau `data/topographies.js` (5 pilotes). Archétype réduit à id+nom+niveauxAssocies. `EtageGen` pick (archétype, topographie compatible+portes). `Layouts.js` supprimé. HUD étendu : `Étage X · Archétype (Topographie) · ENTRÉE`. Bugs reachability corrigés (head-bonk : plateformes hautes empilées doivent être one-way). Ennemis ne spawn plus sur plateformes one-way.
+- **Dernière étape franchie** : **Phase 2b — 40 topographies + tirage uniforme par topo + boss arenas dédiées**. Catalogue passé de 5 à 30 topos régulières + 10 boss arenas (1/étage). Nouveau tirage dans `EtageGen.choisirArchetypeEtTopographie` : uniforme parmi toutes les topos compatibles biome+portes (l'archétype est dérivé après). Pool par archétype rééquilibré (puits 2→6, pont 4→9, etc.). `BOSS_ARENA_PAR_ETAGE` mappe étage→arène dédiée avec progression de complexité et thème biome. Mécanisme `coffreForce` dans `WorldGen` pour coffres garantis sur zones secrètes (premier usage : pont haut de `corridor_ressorts`, accessible plus tard avec items boost vélocité).
 
-- **Précédente étape** : **Phase 1 — Simplification Miroir**. Drain retiré, Cité = hub pur, mort = retour Cité (heal complet, méta conservée), vortex retour = reset étage courant. Pas de vortex volontaire en Présent. `MondeSystem` simplifié. `InventaireSystem.resetEtage()` + `EnemySystem.resetEtage()` filtrent par `:e<numero>:`.
+- **Précédente étape** : **Phase 2a — Refactor topographie / archétype**. Découplage thème ⊥ structure. Nouveau `data/topographies.js` (5 pilotes). Archétype réduit à id+nom+niveauxAssocies. `EtageGen` pick (archétype, topographie compatible+portes). `Layouts.js` supprimé. HUD étendu : `Étage X · Archétype (Topographie) · ENTRÉE`.
 
 - **Historique compact** *(commits précédents — voir `git log` pour le détail)* :
+  - **Phase 1** — Simplification Miroir : drain retiré, Cité = hub pur, mort = retour Cité (heal complet, méta conservée), vortex retour = reset étage courant.
   - **Variété des salles** (3c159d9) — 18 layouts + obstacles + cascades. Layouts.js depuis supprimé en 2a, mais obstacles + cascades restent.
   - **Bestiaire A+B** (4358cde) — 20 ennemis + 10 boss + 5 biomes.
   - **Étape 9d'** — Cité marchande (3 PNJ rassemblés en salle A Miroir).
@@ -158,7 +159,7 @@ npx live-server .
   - **Étape 5** — basculement Présent ↔ Miroir (avant Phase 1 qui l'a simplifié).
   - **Étapes 2-4** — Phaser setup + génération de salles + Résonance + HUD.
 
-- **Prochain chantier** : **Phase 2b — Compléter à 18-20 topographies**. Architecture posée, maintenant remplir : `labyrinthe_murs`, `pont_brise`, `gouffre_lateral`, `corridor_pieges` (gauntlet pieux), `cascade_plateformes`, `salle_pieux_plafond`, `arene_estrade`, `pont_double`, `arene_boss` dédiée.
+- **Prochain chantier** : **Phase 3 — Étages déterministes**. Créer `data/etages.js` qui assigne (archétype, topographie, pool ennemis) fixes par (étage, salleId), avec variance seedée résiduelle marginale. Mémoire de carte persistée entre runs (re-visiter un étage déjà connu). Désactive la part aléatoire de `EtageGen.choisirArchetypeEtTopographie` pour les salles main, tout en gardant la mécanique pour fallback / tests.
 
 ## Compromis MVP — dette technique / narrative documentée
 - **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce, pas d'Artefact. La Cité = juste un respawn point amélioré. La mécanique complète d'Absorption + Artefact + fenêtre de grâce (cf. [LORE.md §6](LORE.md)) reste **vision long terme post-mini-jeu**.

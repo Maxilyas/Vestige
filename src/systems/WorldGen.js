@@ -133,9 +133,18 @@ export function genererSalle({
         largeur: VORTEX_DIMS.largeur, hauteur: VORTEX_DIMS.hauteur
     };
 
-    // 3. Coffre — pas dans boss room ni à l'entrée
+    // 3. Coffre — pas dans boss room ni à l'entrée.
+    // Une topographie peut forcer un coffre à une position précise (récompense
+    // pour atteindre une zone secrète) via `result.coffreForce`. Sinon, tirage
+    // probabiliste sur plateforme flottante.
     let coffre = null;
-    if (!estBoss && !estEntree && rng() < PROBA_COFFRE) {
+    if (!estBoss && !estEntree && result.coffreForce) {
+        coffre = {
+            x: result.coffreForce.x,
+            y: result.coffreForce.y,
+            largeur: 28, hauteur: 24
+        };
+    } else if (!estBoss && !estEntree && rng() < PROBA_COFFRE) {
         const candidatsCoffre = plateformesFlottantes
             .map(p => ({ x: p.x, y: p.y - p.hauteur / 2 - 16 }))
             .filter(c =>

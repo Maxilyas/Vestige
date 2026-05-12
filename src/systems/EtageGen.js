@@ -19,7 +19,7 @@
 
 import { creerRng, genererSalle } from './WorldGen.js';
 import { ARCHETYPES, directionOpposee } from '../data/archetypes.js';
-import { TOPOGRAPHIES, topographiesPour, choisirTopographie } from '../data/topographies.js';
+import { TOPOGRAPHIES, topographiesPour, BOSS_ARENA_PAR_ETAGE } from '../data/topographies.js';
 import { biomePourEtage } from '../data/biomes.js';
 
 /**
@@ -30,26 +30,41 @@ function combineSeed(a, b) {
 }
 
 /**
- * Choisit un (archétype, topographie) pour un noeud "main". Filtre les
- * archétypes du biome à ceux qui ont au moins une topographie supportant
- * `portesNec`, puis tire au seed.
+ * Choisit un (archétype, topographie) pour un noeud "main".
+ *
+ * Tirage UNIFORME PAR TOPOGRAPHIE (et non plus par archétype) : on récolte
+ * toutes les topographies qui supportent `portesNec` ET qui sont compatibles
+ * avec au moins un archétype du biome, puis on en tire une au hasard. Pour
+ * l'archétype, on tire ensuite parmi ceux du biome qui sont compatibles avec
+ * la topo retenue.
+ *
+ * Effet vs ancien tirage (uniforme par archétype) : les topographies
+ * spécialisées (compatibles 1-2 archétypes) ne sont plus diluées par les
+ * topographies "polyvalentes". La variété de topo perçue augmente.
  */
 function choisirArchetypeEtTopographie(portesNec, biome, rng) {
-    // Archétypes du biome qui ont au moins UNE topographie compatible
-    // supportant toutes les portes nécessaires.
-    const candidatsArch = biome.archetypesAutorises
+    const archetypesBiome = biome.archetypesAutorises
         .map(id => ARCHETYPES[id])
-        .filter(a => a && topographiesPour(a.id, portesNec).length > 0);
+        .filter(Boolean);
+    const idsArchBiome = new Set(archetypesBiome.map(a => a.id));
 
-    let archetype;
-    if (candidatsArch.length > 0) {
-        archetype = candidatsArch[Math.floor(rng() * candidatsArch.length)];
-    } else {
-        // Fallback : sanctuaire (toujours connu pour avoir des topographies plates)
-        archetype = ARCHETYPES.sanctuaire;
+    const topographiesValides = Object.values(TOPOGRAPHIES).filter(topo =>
+        portesNec.every(d => topo.portesPossibles.includes(d)) &&
+        topo.archetypesCompatibles.some(archId => idsArchBiome.has(archId))
+    );
+
+    if (topographiesValides.length === 0) {
+        // Fallback dur : sanctuaire + arene_ouverte (toujours valide)
+        return { archetype: ARCHETYPES.sanctuaire, topographie: TOPOGRAPHIES.arene_ouverte };
     }
 
-    const topographie = choisirTopographie(archetype.id, portesNec, rng);
+    const topographie = topographiesValides[Math.floor(rng() * topographiesValides.length)];
+
+    const archetypesPossibles = archetypesBiome.filter(a =>
+        topographie.archetypesCompatibles.includes(a.id)
+    );
+    const archetype = archetypesPossibles[Math.floor(rng() * archetypesPossibles.length)];
+
     return { archetype, topographie };
 }
 
@@ -150,9 +165,11 @@ export function genererEtage(numero, seedRun) {
 
         let archetype, topographie;
         if (n.role === 'boss') {
-            // Boss : arène ouverte (combat dégagé pour les patterns de boss)
+            // Boss : arène dédiée à l'étage (10 designs uniques, complexité
+            // progressive, thème suivant le biome). Fallback arene_ouverte si
+            // l'étage est hors-plage.
             archetype = ARCHETYPES.arene;
-            topographie = TOPOGRAPHIES.arene_ouverte;
+            topographie = BOSS_ARENA_PAR_ETAGE[numero] ?? TOPOGRAPHIES.arene_ouverte;
         } else if (n.role === 'entree') {
             // Entrée = Cité Marchande en Miroir. Sol plat large pour les 3 PNJ.
             archetype = ARCHETYPES.sanctuaire;
