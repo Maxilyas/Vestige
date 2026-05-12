@@ -13,6 +13,13 @@ import './mousse_glissante.js';
 import './tombe_eclatee.js';
 import './vautour_debris.js';
 import './champignon_spore.js';
+// Phase 3c — visuels innovants (Halls Cendrés)
+import './chandelier_vivant.js';
+import './bruleur_lent.js';
+import './cendre_tisseuse.js';
+import './ardent_miroir.js';
+import './soupir_glacial.js';
+import './tisseur_embrasement.js';
 
 export { getVisuel } from './_registry.js';
 export { peindreAccessoire } from './_accessoires.js';

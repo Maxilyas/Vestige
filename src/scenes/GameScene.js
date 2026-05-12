@@ -478,18 +478,38 @@ export class GameScene extends Phaser.Scene {
         const body = this.player.body;
         const auSol = body.blocked.down || body.touching.down;
         const speed = this.statsEffectives.speed;
+        // Effet d'immobilisation (ex: web-spinner Cendre-Tisseuse). Bloque
+        // déplacement + saut mais autorise attaque / parry / interaction.
+        const immobilise = (this.player._immobiliseJusqu ?? 0) > this.time.now;
+        // Effet glissant (Mousse / Soupir Glacial) — friction réduite quand
+        // aucune input directionnelle n'est pressée.
+        const surGlissant = (this.player._tileEffectGlissant ?? 0) > this.time.now;
 
-        if (i.gauche && !i.droite) {
-            body.setVelocityX(-speed);
+        if (immobilise) {
+            body.setVelocityX(0);
+        } else if (i.gauche && !i.droite) {
+            // Sur tile glissante, l'accélération est aussi sluggish
+            if (surGlissant) {
+                body.setVelocityX(body.velocity.x * 0.92 + (-speed) * 0.08);
+            } else {
+                body.setVelocityX(-speed);
+            }
             this.lastDirection = -1;
         } else if (i.droite && !i.gauche) {
-            body.setVelocityX(speed);
+            if (surGlissant) {
+                body.setVelocityX(body.velocity.x * 0.92 + speed * 0.08);
+            } else {
+                body.setVelocityX(speed);
+            }
             this.lastDirection = 1;
+        } else if (surGlissant) {
+            // Glissement quand input relâché : decay lent
+            body.setVelocityX(body.velocity.x * 0.98);
         } else {
             body.setVelocityX(0);
         }
 
-        if (i.sauter && auSol) {
+        if (i.sauter && auSol && !immobilise) {
             body.setVelocityY(-this.statsEffectives.jumpVelocity);
         }
 
@@ -914,10 +934,22 @@ export class GameScene extends Phaser.Scene {
         };
         this.events.on('obstacle:pieu:hit', onPieuHit);
 
+        // Mur de feu (mutator) touché : DPS gate, dgts forfaitaire 4
+        const onMurFeuHit = (_player) => {
+            const now = this.time.now;
+            if (now < this.invincibleJusqu) return;
+            this.resonance.prendreDegats(4);
+            this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
+            this.flashJoueur(0xff6060);
+            this.afficherMessageFlottant('-4', '#ff6060');
+        };
+        this.events.on('mutator:mur_feu:hit', onMurFeuHit);
+
         this.events.once('shutdown', () => {
             this.events.off('enemy:tir', onTir);
             this.events.off('boss:tir', onTir);
             this.events.off('enemy:spawn', onSpawn);
+            this.events.off('mutator:mur_feu:hit', onMurFeuHit);
             this.events.off('boss:smash:telegraph', onTelegraph);
             this.events.off('boss:smash:impact', onImpact);
             this.events.off('boss:phase', onPhase);
@@ -946,6 +978,10 @@ export class GameScene extends Phaser.Scene {
             this.resonance.prendreDegats(proj.degats);
             this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
             this.flashJoueur(0xff6060);
+            // Effet additionnel à l'impact (ex: immobilisation web)
+            if (typeof proj.effetImpact === 'function') {
+                proj.effetImpact(this, this.player);
+            }
             proj.detruire(true);
         });
         this.projectiles.push(proj);

@@ -54,7 +54,19 @@ export const BIOMES = {
             ambiance: 0x6a4a3a,
             accent: 0xffa040
         },
-        ennemisPool: ['sentinelle_cendre', 'goule_volante', 'ombre_galopante', 'suintement'],
+        // Pool pondéré (cf. ruines_basses) : 4 basics × 3 + 6 innovants × 2 = 24
+        ennemisPool: [
+            'sentinelle_cendre', 'sentinelle_cendre', 'sentinelle_cendre',
+            'goule_volante',     'goule_volante',     'goule_volante',
+            'ombre_galopante',   'ombre_galopante',   'ombre_galopante',
+            'suintement',        'suintement',        'suintement',
+            'chandelier_vivant',     'chandelier_vivant',
+            'bruleur_lent',          'bruleur_lent',
+            'cendre_tisseuse',       'cendre_tisseuse',
+            'ardent_miroir',         'ardent_miroir',
+            'soupir_glacial',        'soupir_glacial',
+            'tisseur_embrasement',   'tisseur_embrasement'
+        ],
         densite: { min: 3, max: 5 }
     },
     cristaux_glaces: {

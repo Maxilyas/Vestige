@@ -21,12 +21,19 @@ registerComportement('traqueur', traqueur);
 registerComportement('chargeur', chargeur);
 registerComportement('tireur',   tireur);
 
-// Phase 3b — archétypes innovants (auto-enregistrement via side-effect)
+// Phase 3b — archétypes innovants (Ruines basses)
 import './dormant.js';
 import './anchor.js';
 import './trail-tile.js';
 import './spawner.js';
 import './diver.js';
 import './cloud.js';
+// Phase 3c — archétypes innovants (Halls Cendrés)
+import './lighting-mod.js';
+import './detonator.js';
+import './web-spinner.js';
+import './reflector.js';
+import './frost-trailer.js';
+import './wall-builder.js';
 
 export { COMPORTEMENTS, registerComportement, getComportement } from './_registry.js';

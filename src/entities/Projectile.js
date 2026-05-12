@@ -23,6 +23,10 @@ export class Projectile {
         this.naissance = scene.time.now;
         this.distanceParcourue = 0;
         this.detruit = false;
+        // Effet additionnel appliqué au joueur à l'impact (signature: fn(scene, player)).
+        // Utilisé par les projectiles spéciaux (ex: web-spinner Cendre-Tisseuse
+        // qui immobilise le joueur au sol 1s).
+        this.effetImpact = options.effetImpact ?? null;
 
         // Sprite physique invisible
         this.sprite = scene.add.rectangle(options.x, options.y, RAYON_HITBOX * 2, RAYON_HITBOX * 2, 0xffffff, 0);
