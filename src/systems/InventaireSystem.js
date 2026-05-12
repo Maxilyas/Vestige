@@ -3,6 +3,7 @@
 // Modèle :
 //   inventaire   : Array<itemId>          — taille variable, plafonnée à CAPACITE
 //   equipement   : { tete, corps, accessoire } — chaque slot contient un itemId ou null
+//   vestiges     : { geste, maitrise1, maitrise2 } — 3 slots Vestige (Phase 5b)
 //   coffres_vus  : Set<string>            — clé "monde:indexSalle" → coffre déjà ouvert
 //   drops_pris   : Set<string>            — idem pour les drops orphelins au sol
 //
@@ -12,17 +13,25 @@
 // Tous les changements émettent des events sur le registry pour que UIScene
 // et InventaireScene se redessinent automatiquement.
 
+import { VESTIGES } from '../data/vestiges.js';
+
 export const CAPACITE_INVENTAIRE = 40;
 
 export const SLOTS = ['tete', 'corps', 'accessoire'];
 
+// Slots Vestige (Phase 5b) : 1 Geste (touche V) + 2 Maîtrises (passifs).
+// `trophee` accepté dans n'importe quel slot.
+export const SLOTS_VESTIGE = ['geste', 'maitrise1', 'maitrise2'];
+
 const CLE_INVENTAIRE = 'inventaire';
 const CLE_EQUIPEMENT = 'equipement';
+const CLE_VESTIGES_EQUIPES = 'vestiges_equipes';
 const CLE_COFFRES_VUS = 'coffres_vus';
 const CLE_DROPS_PRIS = 'drops_pris';
 
 export const EVT_INV_CHANGE = 'inventaire:change';
 export const EVT_EQUIP_CHANGE = 'equipement:change';
+export const EVT_VESTIGES_CHANGE = 'vestiges:change';
 
 export class InventaireSystem {
     constructor(registry) {
@@ -33,6 +42,9 @@ export class InventaireSystem {
         }
         if (this.registry.get(CLE_EQUIPEMENT) === undefined) {
             this.registry.set(CLE_EQUIPEMENT, { tete: null, corps: null, accessoire: null });
+        }
+        if (this.registry.get(CLE_VESTIGES_EQUIPES) === undefined) {
+            this.registry.set(CLE_VESTIGES_EQUIPES, { geste: null, maitrise1: null, maitrise2: null });
         }
         if (this.registry.get(CLE_COFFRES_VUS) === undefined) {
             this.registry.set(CLE_COFFRES_VUS, []); // serialisable, pas Set
@@ -132,6 +144,106 @@ export class InventaireSystem {
      */
     jeter(index) {
         return this.retirerIndex(index) !== null;
+    }
+
+    // ============================================================
+    // Vestiges (Phase 5b)
+    // ============================================================
+    getVestiges() {
+        return this.registry.get(CLE_VESTIGES_EQUIPES);
+    }
+
+    /**
+     * Renvoie l'array des Vestiges (def) actuellement équipés, ordre :
+     * [geste, maitrise1, maitrise2]. Les slots vides retournent null.
+     */
+    getVestigesDefs() {
+        const v = this.getVestiges();
+        return [
+            v.geste ? VESTIGES[v.geste] : null,
+            v.maitrise1 ? VESTIGES[v.maitrise1] : null,
+            v.maitrise2 ? VESTIGES[v.maitrise2] : null
+        ];
+    }
+
+    /**
+     * Slot dans lequel un Vestige peut être équipé selon son sousType :
+     *   - 'geste'   → 'geste'
+     *   - 'maitrise' / 'trophee' → 1er slot maîtrise libre, sinon 'maitrise1'
+     */
+    _slotPourVestige(vestige) {
+        if (!vestige) return null;
+        const v = this.getVestiges();
+        if (vestige.sousType === 'geste') return 'geste';
+        if (vestige.sousType === 'trophee') {
+            // Trophée → priorité Geste si libre, sinon maîtrise libre
+            if (!v.geste) return 'geste';
+        }
+        // Maîtrise (et fallback trophée) : 1er slot libre, sinon 'maitrise1'
+        if (!v.maitrise1) return 'maitrise1';
+        if (!v.maitrise2) return 'maitrise2';
+        return 'maitrise1';
+    }
+
+    /**
+     * Équipe un Vestige depuis l'inventaire à l'index donné. L'ancien Vestige
+     * du slot retourne dans l'inventaire (à la place du nouveau). Retourne
+     * true si OK.
+     */
+    equiperVestigeDepuisInventaire(index, vestige) {
+        if (!vestige || vestige.categorie !== 'vestige') return false;
+        const inv = [...this.getInventaire()];
+        if (index < 0 || index >= inv.length) return false;
+        if (inv[index] !== vestige.id) return false;
+
+        const v = { ...this.getVestiges() };
+        const slot = this._slotPourVestige(vestige);
+        if (!slot) return false;
+
+        const ancienId = v[slot];
+        inv.splice(index, 1);
+        v[slot] = vestige.id;
+        if (ancienId) inv.splice(index, 0, ancienId);
+
+        this.registry.set(CLE_INVENTAIRE, inv);
+        this.registry.set(CLE_VESTIGES_EQUIPES, v);
+        this.registry.events.emit(EVT_INV_CHANGE);
+        this.registry.events.emit(EVT_VESTIGES_CHANGE);
+        return true;
+    }
+
+    /**
+     * Déséquipe le Vestige du slot donné. Retourne dans l'inventaire. Échec
+     * si inventaire plein.
+     */
+    desequiperVestige(slot) {
+        const v = { ...this.getVestiges() };
+        if (!v[slot]) return false;
+        if (this.estPlein()) return false;
+
+        const inv = [...this.getInventaire(), v[slot]];
+        v[slot] = null;
+
+        this.registry.set(CLE_INVENTAIRE, inv);
+        this.registry.set(CLE_VESTIGES_EQUIPES, v);
+        this.registry.events.emit(EVT_INV_CHANGE);
+        this.registry.events.emit(EVT_VESTIGES_CHANGE);
+        return true;
+    }
+
+    /**
+     * Vrai si le Vestige est soit en inventaire, soit équipé. Utilisé pour
+     * éviter les doublons : si déjà possédé, le boss ne re-drop pas.
+     */
+    possedeVestige(vestigeId) {
+        if (this.getInventaire().includes(vestigeId)) return true;
+        const v = this.getVestiges();
+        return v.geste === vestigeId || v.maitrise1 === vestigeId || v.maitrise2 === vestigeId;
+    }
+
+    /** Renvoie true si au moins un Vestige équipé porte le flag donné. */
+    aVestigeFlag(flag) {
+        return this.getVestigesDefs().some(d => d?.flags?.[flag] === true);
     }
 
     // ----- État des coffres / drops -----

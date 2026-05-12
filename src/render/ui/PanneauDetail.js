@@ -64,15 +64,21 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
         const couleurCss = couleurHex(familleColor);
         const cx = largeur / 2;
 
-        // --- Emblème agrandi avec halo ---
+        // ─── HEADER HORIZONTAL : emblème + nom sur la même ligne ─────────
+        // Layout responsive Phase 5b — économise ~60 px verticaux pour la
+        // liste d'effets. Emblème à gauche, infos (nom + sous-titre) à droite.
+        const xEmb = 32;
+        const yEmb = 28;
+        const rEmb = 18;
+
         const halo = scene.add.graphics();
         halo.setBlendMode(Phaser.BlendModes.ADD);
         halo.fillStyle(familleColor, 0.4);
-        halo.fillCircle(cx, 50, 38);
+        halo.fillCircle(xEmb, yEmb, rEmb + 6);
         halo.fillStyle(familleColor, 0.7);
-        halo.fillCircle(cx, 50, 24);
+        halo.fillCircle(xEmb, yEmb, rEmb - 4);
         contenu.add(halo);
-        const emb = peindreEmblemeFamille(scene, cx, 50, item.famille, 38);
+        const emb = peindreEmblemeFamille(scene, xEmb, yEmb, item.famille, rEmb * 2);
         contenu.add(emb);
 
         scene.tweens.add({
@@ -84,65 +90,54 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
             repeat: -1
         });
 
-        // --- Nom stylisé ---
+        // Nom à droite de l'emblème, baseline alignée
         let nomTexte = item.nom;
         if (item.tier === 3) nomTexte += ' ★';
-        const nom = scene.add.text(cx, 100, nomTexte, {
+        const xInfo = xEmb + rEmb + 14;
+        const nom = scene.add.text(xInfo, yEmb - 12, nomTexte, {
             fontFamily: 'monospace',
-            fontSize: '15px',
+            fontSize: '14px',
             color: couleurCss,
             fontStyle: 'bold',
             stroke: '#000000',
-            strokeThickness: 4,
-            align: 'center',
-            wordWrap: { width: largeur - 20 }
-        }).setOrigin(0.5, 0);
+            strokeThickness: 3,
+            wordWrap: { width: largeur - xInfo - 12 }
+        }).setOrigin(0, 0);
         contenu.add(nom);
 
-        // --- Sous-titre famille • slot ---
-        const sous = scene.add.text(cx, 124, `${item.famille.toUpperCase()}  •  ${item.slot}`, {
+        // Sous-titre famille • slot sous le nom
+        const sous = scene.add.text(xInfo, yEmb + 6, `${item.famille.toUpperCase()}  •  ${item.slot}`, {
             fontFamily: 'monospace',
-            fontSize: '10px',
+            fontSize: '9px',
             color: '#8a8a9a',
             fontStyle: 'bold'
-        }).setOrigin(0.5, 0);
+        }).setOrigin(0, 0);
         contenu.add(sous);
 
-        // --- Petit liseré séparateur ---
+        // ─── Liseré séparateur horizontal sous le header ───────────────
         const sep = scene.add.graphics();
-        sep.lineStyle(1, COULEURS_INVENTAIRE.or, 0.7);
+        sep.lineStyle(1, COULEURS_INVENTAIRE.or, 0.4);
         sep.beginPath();
-        sep.moveTo(cx - 60, 146);
-        sep.lineTo(cx + 60, 146);
+        sep.moveTo(12, 58);
+        sep.lineTo(largeur - 12, 58);
         sep.strokePath();
-        sep.fillStyle(COULEURS_INVENTAIRE.orClair, 1);
-        sep.beginPath();
-        sep.moveTo(cx, 143);
-        sep.lineTo(cx + 4, 146);
-        sep.lineTo(cx, 149);
-        sep.lineTo(cx - 4, 146);
-        sep.closePath();
-        sep.fillPath();
         contenu.add(sep);
 
-        // --- Description italique encadrée ---
-        const descBox = scene.add.graphics();
-        descBox.lineStyle(1, COULEURS_INVENTAIRE.or, 0.4);
-        descBox.strokeRect(12, 158, largeur - 24, 50);
-        contenu.add(descBox);
-
-        const desc = scene.add.text(cx, 183, item.description ?? '...', {
+        // ─── Description italique (sur toute la largeur, 2 lignes max) ──
+        const desc = scene.add.text(largeur / 2, 70, item.description ?? '...', {
             fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#e8e4d8',
+            fontSize: '10px',
+            color: '#c8c4b8',
             fontStyle: 'italic',
             align: 'center',
-            wordWrap: { width: largeur - 36 }
-        }).setOrigin(0.5);
+            wordWrap: { width: largeur - 28 }
+        }).setOrigin(0.5, 0);
         contenu.add(desc);
 
-        // --- Effets selon tier ET révélations de l'Identifieur ---
-        const yEff = 220;
+        // ─── Effets (zone large : de yEff à hauteur-40 réservé aux boutons) ──
+        // Calcul de la position : juste sous la description, mais on tient compte
+        // de sa hauteur dynamique (1, 2 ou 3 lignes) en mesurant sa height réelle.
+        const yEff = Math.max(108, 70 + desc.height + 8);
         const lignes = [];
         // IdentificationSystem calcule l'état réel des effets (Tier 1 = tout
         // visible, Tier 2 = visible:true ou révélé, Tier 3 = uniquement révélé)
@@ -175,8 +170,8 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
         sepEff.strokePath();
         contenu.add(sepEff);
 
-        // Lignes d'effets avec puces dorées
-        let yL = yEff + 22;
+        // Lignes d'effets avec puces dorées (compactes)
+        let yL = yEff + 18;
         for (const ligne of lignes) {
             const isUnknown = ligne.startsWith('?');
             const isMystere = ligne.startsWith('Cet objet');
@@ -184,23 +179,21 @@ export function creerPanneauDetail(scene, x, y, largeur, hauteur) {
             // Puce
             const puce = scene.add.graphics();
             puce.fillStyle(isMystere ? 0xff6060 : COULEURS_INVENTAIRE.orClair, 1);
-            puce.fillCircle(28, yL + 7, 2);
+            puce.fillCircle(28, yL + 5, 2);
             contenu.add(puce);
 
             const txt = scene.add.text(38, yL, ligne, {
                 fontFamily: 'monospace',
-                fontSize: '11px',
+                fontSize: '10px',
                 color: isMystere ? '#ff8080' : (isUnknown ? '#7a7a8a' : '#d8d4c8'),
                 fontStyle: isMystere ? 'italic' : 'normal'
             });
             contenu.add(txt);
-            yL += 16;
+            yL += 12;
         }
 
-        // --- Boutons d'action ---
-        // yL contient la position après la dernière ligne d'effet : on place
-        // les boutons AU MOINS 24 px sous les effets, sinon à 44 px du bas
-        const yBtn = Math.max(yL + 24, hauteur - 44);
+        // --- Boutons d'action — toujours collés au bas du panneau ---
+        const yBtn = hauteur - 32;
         if (ctx.equipe) {
             ajouterBouton(scene, contenu, 20, yBtn, 'Déséquiper', () => actions.onDesequiper());
         } else {

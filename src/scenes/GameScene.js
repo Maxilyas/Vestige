@@ -20,6 +20,7 @@ import {
     defAvecRarete, modificateursDrop, dropSignature, TIERS
 } from '../systems/RaritySystem.js';
 import { COULEURS_FAMILLE, ITEMS } from '../data/items.js';
+import { vestigePourEtage } from '../data/vestiges.js';
 import { ENEMIES } from '../data/enemies/index.js';
 import { definitionBoss } from '../data/boss.js';
 import { ARCHETYPES, spawnDepuisPorte, directionOpposee } from '../data/archetypes.js';
@@ -1025,10 +1026,10 @@ export class GameScene extends Phaser.Scene {
         };
         this.events.on('boss:phase', onPhase);
 
-        // Boss mort : drop Tier 3 garanti + débloquage porte + sceau d'étage
+        // Boss mort : drop Vestige signature + débloquage porte + sceau d'étage
         const onBossDead = (boss) => {
             this.enemySystem.marquerMort('normal', this.cleSalleEtage, 'boss');
-            this._dropBossTier3(boss);
+            this._dropBossVestige(boss);
             this.bossVivant = false;
             this.afficherMessageFlottant('La voie s\'ouvre', '#ffd070');
             // Phase 5a : sceau d'étage. marquerSceau retourne vrai si NOUVEAU
@@ -1205,32 +1206,52 @@ export class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Drop garanti à la mort d'un boss : 1 item Tier 3 (étoile rouge)
-     * de la famille du boss, qui flotte vers le joueur.
+     * Drop garanti à la mort d'un boss : le Vestige signature de l'étage
+     * (Phase 5b). Si le joueur le possède déjà (inventaire ou équipé), pas
+     * de redrop. Cube cramoisi (doré pour Artefact étage 10) qui flotte vers
+     * le joueur.
      */
-    _dropBossTier3(boss) {
-        const famille = boss.def.familleFragment ?? 'noir';
-        const pool = Object.values(ITEMS).filter(it => it.famille === famille && it.tier === 3);
-        const fallback = Object.values(ITEMS).filter(it => it.tier === 3);
-        const finalPool = pool.length > 0 ? pool : fallback;
-        if (finalPool.length === 0) return;
-        const item = finalPool[Math.floor(this.rngLoot() * finalPool.length)];
-        const cube = this.add.rectangle(
-            boss.sprite.x, boss.sprite.y,
-            18, 18,
-            COULEURS_FAMILLE[item.famille]
-        );
+    _dropBossVestige(boss) {
+        const etage = boss.def.etage ?? this.etageNumero;
+        const vestige = vestigePourEtage(etage);
+        if (!vestige) return;
+        if (this.inventaire.possedeVestige(vestige.id)) {
+            // Le joueur l'a déjà — on signale silencieusement.
+            this.afficherMessageFlottant(`(${vestige.nom} déjà acquis)`, '#8a8a9a');
+            return;
+        }
+
+        const couleur = COULEURS_FAMILLE[vestige.famille] ?? COULEURS_FAMILLE.noir;
+        const cube = this.add.rectangle(boss.sprite.x, boss.sprite.y, 22, 22, couleur);
+        cube.setStrokeStyle(2, 0xffd070, 0.9);
         cube.setDepth(DEPTH.EFFETS);
+
+        // Étincelles cramoisi/dorées brèves au spawn du drop
+        for (let k = 0; k < 5; k++) {
+            const px = boss.sprite.x + (Math.random() - 0.5) * 30;
+            const py = boss.sprite.y + (Math.random() - 0.5) * 30;
+            const p = this.add.circle(px, py, 2, 0xffd070, 0.9);
+            p.setBlendMode(Phaser.BlendModes.ADD);
+            p.setDepth(DEPTH.EFFETS);
+            this.tweens.add({
+                targets: p, alpha: 0, scale: 0.2,
+                duration: 500 + Math.random() * 300,
+                onComplete: () => p.destroy()
+            });
+        }
+
         this.tweens.add({
             targets: cube,
             x: this.player.x, y: this.player.y, alpha: 0,
-            duration: 600,
+            duration: 700,
+            ease: 'Quad.In',
             onComplete: () => {
                 cube.destroy();
-                if (this.inventaire.ajouter(item.id)) {
-                    this.afficherMessageFlottant(`★ ${item.nom}`, this.coulHex(COULEURS_FAMILLE[item.famille]));
+                if (this.inventaire.ajouter(vestige.id)) {
+                    const couleurHex = this.coulHex(couleur);
+                    this.afficherMessageFlottant(`✦ ${vestige.nom}`, couleurHex);
                 } else {
-                    this.afficherMessageFlottant("Inventaire plein", '#ff6060');
+                    this.afficherMessageFlottant('Inventaire plein', '#ff6060');
                 }
             }
         });

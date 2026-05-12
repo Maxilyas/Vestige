@@ -1,4 +1,7 @@
 // Catalogue des items et consommables de Vestige.
+// Import des Vestiges pour le résolveur universel (cf. getItemOuVestige).
+import { VESTIGES } from './vestiges.js';
+
 //
 // CHAQUE OBJET A 3 NIVEAUX DE RÉVÉLATION (tier) — voir LORE / Doctrine :
 //   tier 1 = Visible : nom + stats + effets affichés normalement
@@ -278,5 +281,20 @@ export function getConsommable(id) {
 export const COULEURS_FAMILLE = {
     blanc: 0xe8e4d8,
     bleu:  0x5a8ac8,
-    noir:  0x2a2a3a
+    noir:  0x2a2a3a,
+    // Phase 5b — Vestiges = drops boss exclusifs (cramoisi) / Artefact = trophée (doré)
+    vestige:  0xc04040,
+    artefact: 0xffd070
 };
+
+/**
+ * Résolveur universel : renvoie un item du catalogue (ITEMS) OU un Vestige
+ * (VESTIGES) selon l'id. Utilisé partout où on a juste un id en main.
+ */
+export function getItemOuVestige(id) {
+    return ITEMS[id] ?? VESTIGES[id] ?? null;
+}
+
+export function estVestigeId(id) {
+    return VESTIGES[id] !== undefined;
+}

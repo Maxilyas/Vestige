@@ -5,6 +5,7 @@
 // sont gérés ailleurs (MondeSystem, GameScene) qui interrogent ces stats.
 
 import { ITEMS, CONSOMMABLES, itemsParFamille } from '../data/items.js';
+import { VESTIGES } from '../data/vestiges.js';
 
 // Probabilités des familles selon le monde où le coffre est trouvé
 export const PROBA_FAMILLE = {
@@ -39,13 +40,17 @@ export function tirerConsommable(rng) {
 }
 
 /**
- * Calcule les stats effectives à partir des stats de base et de l'équipement.
- * @param {Object} statsBase   { speed, jumpVelocity, passiveMiroir, passivePresent, bonusRetour }
+ * Calcule les stats effectives à partir des stats de base et de l'équipement
+ * + des Vestiges équipés (Phase 5b).
+ * @param {Object} statsBase   { speed, jumpVelocity, passiveMiroir, passivePresent, bonusRetour, ... }
  * @param {Object} equipement  { tete, corps, accessoire } (itemIds ou null)
- * @returns {Object} stats effectives (mêmes clés que statsBase)
+ * @param {Object} [vestiges]  { geste, maitrise1, maitrise2 } (vestigeIds ou null)
+ * @returns {Object} stats effectives (mêmes clés que statsBase + nouvelles)
  */
-export function calculerStats(statsBase, equipement) {
+export function calculerStats(statsBase, equipement, vestiges = null) {
     const stats = { ...statsBase };
+
+    // Items équipement classique
     for (const slot of ['tete', 'corps', 'accessoire']) {
         const id = equipement[slot];
         if (!id) continue;
@@ -55,5 +60,19 @@ export function calculerStats(statsBase, equipement) {
             stats[eff.cible] = (stats[eff.cible] ?? 0) + eff.delta;
         }
     }
+
+    // Vestiges (Phase 5b) — empilent leurs effets additivement
+    if (vestiges) {
+        for (const slot of ['geste', 'maitrise1', 'maitrise2']) {
+            const id = vestiges[slot];
+            if (!id) continue;
+            const vest = VESTIGES[id];
+            if (!vest || !Array.isArray(vest.effets)) continue;
+            for (const eff of vest.effets) {
+                stats[eff.cible] = (stats[eff.cible] ?? 0) + eff.delta;
+            }
+        }
+    }
+
     return stats;
 }

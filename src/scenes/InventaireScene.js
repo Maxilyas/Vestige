@@ -6,10 +6,11 @@
 
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import {
-    InventaireSystem, SLOTS, EVT_INV_CHANGE, EVT_EQUIP_CHANGE, CAPACITE_INVENTAIRE
+    InventaireSystem, SLOTS, SLOTS_VESTIGE,
+    EVT_INV_CHANGE, EVT_EQUIP_CHANGE, EVT_VESTIGES_CHANGE, CAPACITE_INVENTAIRE
 } from '../systems/InventaireSystem.js';
 import { EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, getItemOuVestige } from '../data/items.js';
 import { poserCadreInventaire, poserBoutonFermer } from '../render/ui/CadreInventaire.js';
 import { creerSlot } from '../render/ui/SlotInventaire.js';
 import { creerPanneauDetail } from '../render/ui/PanneauDetail.js';
@@ -23,6 +24,8 @@ const COLS = 8;
 const ROWS = 5;
 
 const LABELS_SLOT = { tete: 'TÊTE', corps: 'CORPS', accessoire: 'ACC.' };
+const LABELS_VESTIGE = { geste: 'GESTE (V)', maitrise1: 'MAÎTRISE I', maitrise2: 'MAÎTRISE II' };
+const TAILLE_SLOT_VESTIGE = 38;
 
 export class InventaireScene extends Phaser.Scene {
     constructor() {
@@ -31,8 +34,9 @@ export class InventaireScene extends Phaser.Scene {
 
     create() {
         this.inventaire = new InventaireSystem(this.registry);
-        this.slotsInv = [];     // tableau de { container, refresh }
-        this.slotsEquip = {};   // map slot → { container, refresh }
+        this.slotsInv = [];      // tableau de { container, refresh }
+        this.slotsEquip = {};    // map slot → { container, refresh }
+        this.slotsVestige = {};  // map slot → { container, refresh } (Phase 5b)
 
         // --- Cadre stylisé ---
         const cadre = poserCadreInventaire(this, GAME_WIDTH, GAME_HEIGHT);
@@ -44,12 +48,14 @@ export class InventaireScene extends Phaser.Scene {
         // --- Bande RESSOURCES (Sel + Fragments) sous le titre ---
         this._dessinerBandeRessources(GAME_WIDTH);
 
-        // --- Section slots équipés (centrée en haut) ---
+        // --- Section slots équipés et Vestige (deux colonnes côte à côte) ---
+        // Layout Phase 5b : équipement à gauche du centre, vestiges à droite.
         this._dessinerEquipement();
+        this._dessinerVestiges();
 
-        // --- Section grille inventaire (à gauche) ---
+        // --- Section grille inventaire (à gauche), juste sous les deux colonnes ---
         const xGrilleDebut = 60;
-        const yGrilleDebut = 215;
+        const yGrilleDebut = 270;
         this._dessinerGrille(xGrilleDebut, yGrilleDebut);
 
         // --- Compteur N/40 (juste au-dessus de la grille) ---
@@ -61,11 +67,14 @@ export class InventaireScene extends Phaser.Scene {
         ).setScrollFactor(0).setDepth(305);
         this.compteur = compteur;
 
-        // --- Panneau détail (à droite) ---
+        // --- Panneau détail (à droite, aligné sur la grille) ---
         const xPan = xGrilleDebut + COLS * (TAILLE_SLOT_INV + ESPACE_SLOT) + 30;
-        const yPan = 175;
+        const yPan = yGrilleDebut;
         const wPan = GAME_WIDTH - xPan - 50;
-        const hPan = 320; // assez grand pour 4-5 effets + boutons sans chevauchement
+        // Hauteur : strictement aligné sur la grille (5 × 42 = 210 + 10
+        // d'amortissement = 220 px). Avec yPan=270 → fin 490, sous le cadre
+        // intérieur du carnet qui se termine vers y=510. 20 px d'air.
+        const hPan = ROWS * (TAILLE_SLOT_INV + ESPACE_SLOT) + 10;
         this.panneau = creerPanneauDetail(this, xPan, yPan, wPan, hPan);
 
         // --- Animation d'ouverture en cascade ---
@@ -77,17 +86,69 @@ export class InventaireScene extends Phaser.Scene {
 
         const handlerInv = () => this._refreshTout();
         const handlerEquip = () => this._refreshTout();
+        const handlerVestiges = () => this._refreshTout();
         const handlerEco = () => this._refreshRessources();
         this.registry.events.on(EVT_INV_CHANGE, handlerInv);
         this.registry.events.on(EVT_EQUIP_CHANGE, handlerEquip);
+        this.registry.events.on(EVT_VESTIGES_CHANGE, handlerVestiges);
         this.registry.events.on(EVT_SEL_CHANGE, handlerEco);
         this.registry.events.on(EVT_FRAGMENTS_CHANGE, handlerEco);
         this.events.once('shutdown', () => {
             this.registry.events.off(EVT_INV_CHANGE, handlerInv);
             this.registry.events.off(EVT_EQUIP_CHANGE, handlerEquip);
+            this.registry.events.off(EVT_VESTIGES_CHANGE, handlerVestiges);
             this.registry.events.off(EVT_SEL_CHANGE, handlerEco);
             this.registry.events.off(EVT_FRAGMENTS_CHANGE, handlerEco);
         });
+    }
+
+    /**
+     * 3 slots Vestige (Phase 5b). Colonne droite, miroir de l'équipement.
+     * Plus compacts, liseré cramoisi. Clic = desequipe vers inventaire.
+     */
+    _dessinerVestiges() {
+        const v = this.inventaire.getVestiges();
+        const espaceCase = TAILLE_SLOT_VESTIGE + 22;
+        const xColonne = GAME_WIDTH * 0.73;
+        const yCentre = 195;
+
+        // Titre section
+        this.add.text(xColonne, yCentre - 42, '— VESTIGES —', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#c04040',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5, 0).setDepth(305);
+
+        for (let k = 0; k < SLOTS_VESTIGE.length; k++) {
+            const slot = SLOTS_VESTIGE[k];
+            const x = xColonne + (k - 1) * espaceCase;
+            const y = yCentre;
+            const itemId = v[slot];
+
+            const s = creerSlot(this, x, y, {
+                taille: TAILLE_SLOT_VESTIGE,
+                itemId,
+                equipe: true,
+                label: LABELS_VESTIGE[slot],
+                onClick: () => {
+                    const id = this.inventaire.getVestiges()[slot];
+                    if (!id) {
+                        this.panneau.afficherTexte(`Slot ${LABELS_VESTIGE[slot]} vide.`);
+                    } else {
+                        const def = getItemOuVestige(id);
+                        this.panneau.afficherItem(def, { equipe: true, slot, vestige: true }, {
+                            onDesequiper: () => {
+                                if (this.inventaire.desequiperVestige(slot)) {
+                                    this.panneau.afficherTexte('Vestige déséquipé.');
+                                } else {
+                                    this.panneau.afficherTexte("Inventaire plein, impossible de déséquiper.");
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+            this.slotsVestige[slot] = s;
+        }
     }
 
     /**
@@ -95,9 +156,9 @@ export class InventaireScene extends Phaser.Scene {
      * Centrée horizontalement.
      */
     _dessinerBandeRessources(largeur) {
-        // Positionnée au-dessus du compteur N/40, dans la zone de la grille uniquement
-        // (ne déborde pas sur le panneau détail à droite).
-        const y = 162;
+        // Phase 5b — Réorganisation : bande remontée en haut du carnet (sous le
+        // titre), pour libérer la zone centrale aux deux colonnes Équip./Vest.
+        const y = 110;
         const xGauche = 60;
         // Largeur grille : 8 cols × 36 + 7 gaps × 6 = 288 + 42 = 330 px
         const largeurZone = 330;
@@ -189,17 +250,24 @@ export class InventaireScene extends Phaser.Scene {
     }
 
     // ============================================================
-    // Slots équipés (3 grands centrés en haut)
+    // Slots équipés (3 slots, COLONNE GAUCHE — Phase 5b)
     // ============================================================
     _dessinerEquipement() {
         const equip = this.inventaire.getEquipement();
-        const espaceCase = TAILLE_SLOT_EQUIP + 90;
-        const xCentre = GAME_WIDTH / 2;
-        const yCentre = 110;
+        // 3 slots compacts côte à côte, centrés autour de xColonneEquipement
+        const espaceCase = TAILLE_SLOT_EQUIP + 16;
+        const xColonne = GAME_WIDTH * 0.27;
+        const yCentre = 195;
+
+        // Titre section
+        this.add.text(xColonne, yCentre - 42, '— ÉQUIPEMENT —', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#c8a85a',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5, 0).setDepth(305);
 
         for (let k = 0; k < SLOTS.length; k++) {
             const slot = SLOTS[k];
-            const x = xCentre + (k - 1) * espaceCase;
+            const x = xColonne + (k - 1) * espaceCase;
             const y = yCentre;
             const itemId = equip[slot];
 
@@ -250,19 +318,22 @@ export class InventaireScene extends Phaser.Scene {
                         const id = inv2[idx];
                         if (!id) {
                             this.panneau.afficherTexte('Slot vide.');
-                        } else {
-                            const it = ITEMS[id];
-                            this.panneau.afficherItem(it, { equipe: false, indexInv: idx }, {
-                                onEquiper: () => {
-                                    this.inventaire.equiperDepuisInventaire(idx, it);
-                                    this.panneau.afficherTexte(`Équipé : ${it.nom}`);
-                                },
-                                onJeter: () => {
-                                    this.inventaire.jeter(idx);
-                                    this.panneau.afficherTexte('Jeté.');
-                                }
-                            });
+                            return;
                         }
+                        const def = getItemOuVestige(id);
+                        const estVestige = def?.categorie === 'vestige';
+                        this.panneau.afficherItem(def, { equipe: false, indexInv: idx, vestige: estVestige }, {
+                            onEquiper: () => {
+                                const ok = estVestige
+                                    ? this.inventaire.equiperVestigeDepuisInventaire(idx, def)
+                                    : this.inventaire.equiperDepuisInventaire(idx, def);
+                                this.panneau.afficherTexte(ok ? `Équipé : ${def.nom}` : 'Équipement impossible.');
+                            },
+                            onJeter: () => {
+                                this.inventaire.jeter(idx);
+                                this.panneau.afficherTexte('Jeté.');
+                            }
+                        });
                     }
                 });
                 this.slotsInv.push(s);
@@ -281,6 +352,10 @@ export class InventaireScene extends Phaser.Scene {
         const equip = this.inventaire.getEquipement();
         for (const slot of SLOTS) {
             this.slotsEquip[slot]?.refresh(equip[slot] ?? null);
+        }
+        const vest = this.inventaire.getVestiges();
+        for (const slot of SLOTS_VESTIGE) {
+            this.slotsVestige[slot]?.refresh(vest[slot] ?? null);
         }
         if (this.compteur) {
             this.compteur.setText(`${inv.length} / ${CAPACITE_INVENTAIRE}`);

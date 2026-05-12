@@ -4,7 +4,7 @@
 import { GAME_WIDTH } from '../config.js';
 import { RESONANCE_CLE, RESONANCE_MAX } from '../systems/ResonanceSystem.js';
 import { MONDE_CLE, MONDE_MIROIR } from '../systems/MondeSystem.js';
-import { EVT_EQUIP_CHANGE, SLOTS } from '../systems/InventaireSystem.js';
+import { EVT_EQUIP_CHANGE, EVT_VESTIGES_CHANGE, SLOTS, SLOTS_VESTIGE } from '../systems/InventaireSystem.js';
 import { EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE } from '../systems/EconomySystem.js';
 import { sceauObtenu, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { creerSlot } from '../render/ui/SlotInventaire.js';
@@ -20,6 +20,8 @@ const TAILLE_SLOT_HUD = 32;
 const ECART_SLOT = 8;
 
 const LABELS_SLOT = { tete: 'TÊTE', corps: 'CORPS', accessoire: 'ACC.' };
+// Phase 5b — labels courts pour les slots Vestige du HUD (espacement serré).
+const LABELS_VESTIGE = { geste: 'GESTE', maitrise1: 'MAÎT. I', maitrise2: 'MAÎT. II' };
 
 export class UIScene extends Phaser.Scene {
     constructor() {
@@ -94,8 +96,22 @@ export class UIScene extends Phaser.Scene {
         };
         this.registry.events.on(EVT_EQUIP_CHANGE, handlerEquip);
 
-        // --- Compteurs Sel + Fragments (sous l'équipement) ---
-        const yEco = yEquip + TAILLE_SLOT_HUD + 38;
+        // --- 3 slots Vestige sous l'équipement (Phase 5b) ---
+        // Espacement généreux (60 px) pour laisser place aux labels équipement
+        // (TÊTE/CORPS/ACC.) puis au titre VESTIGES sans collision verticale.
+        const yVestige = yEquip + TAILLE_SLOT_HUD + 60;
+        this._dessinerSlotsVestige(xEquipDebut, yVestige, totalLargeurSlots);
+
+        const handlerVestiges = () => {
+            const v = this.registry.get('vestiges_equipes') ?? { geste: null, maitrise1: null, maitrise2: null };
+            for (const slot of SLOTS_VESTIGE) {
+                this.slotsVestige[slot]?.refresh(v[slot] ?? null);
+            }
+        };
+        this.registry.events.on(EVT_VESTIGES_CHANGE, handlerVestiges);
+
+        // --- Compteurs Sel + Fragments (sous les Vestiges) ---
+        const yEco = yVestige + TAILLE_SLOT_HUD + 32;
         this._dessinerCompteurs(xEquipDebut, yEco, totalLargeurSlots);
 
         const handlerSel = () => this._refreshSel();
@@ -112,10 +128,43 @@ export class UIScene extends Phaser.Scene {
             this.registry.events.off(`changedata-${RESONANCE_CLE}`, handlerRes);
             this.registry.events.off(`changedata-${MONDE_CLE}`, handlerMonde);
             this.registry.events.off(EVT_EQUIP_CHANGE, handlerEquip);
+            this.registry.events.off(EVT_VESTIGES_CHANGE, handlerVestiges);
             this.registry.events.off(EVT_SEL_CHANGE, handlerSel);
             this.registry.events.off(EVT_FRAGMENTS_CHANGE, handlerFragments);
             this.registry.events.off(EVT_SCEAU_OBTENU, handlerSceau);
         });
+    }
+
+    /**
+     * 3 slots Vestige (Phase 5b) sous l'équipement principal.
+     * Label "VESTIGES" + liseré cramoisi (au lieu du doré équipement).
+     */
+    _dessinerSlotsVestige(xDebut, y, largeurZone) {
+        this.add.text(xDebut, y - 22, 'VESTIGES', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#c04040',
+            fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+        });
+        const liseré = this.add.graphics();
+        liseré.lineStyle(1, 0xc04040, 0.55);
+        liseré.beginPath();
+        liseré.moveTo(xDebut, y - 9);
+        liseré.lineTo(xDebut + largeurZone, y - 9);
+        liseré.strokePath();
+
+        this.slotsVestige = {};
+        const v = this.registry.get('vestiges_equipes') ?? { geste: null, maitrise1: null, maitrise2: null };
+        for (let k = 0; k < SLOTS_VESTIGE.length; k++) {
+            const slot = SLOTS_VESTIGE[k];
+            const sx = xDebut + k * (TAILLE_SLOT_HUD + ECART_SLOT) + TAILLE_SLOT_HUD / 2;
+            const sy = y + TAILLE_SLOT_HUD / 2;
+            const s = creerSlot(this, sx, sy, {
+                taille: TAILLE_SLOT_HUD,
+                itemId: v[slot],
+                equipe: true,
+                label: LABELS_VESTIGE[slot]
+            });
+            this.slotsVestige[slot] = s;
+        }
     }
 
     /**

@@ -6,7 +6,7 @@
 
 import { peindreEmblemeFamille } from './EmblemeFamille.js';
 import { COULEURS_INVENTAIRE } from './CadreInventaire.js';
-import { COULEURS_FAMILLE, ITEMS } from '../../data/items.js';
+import { COULEURS_FAMILLE, getItemOuVestige } from '../../data/items.js';
 
 /**
  * Crée un slot complet à la position (x, y).
@@ -81,7 +81,7 @@ export function creerSlot(scene, x, y, options = {}) {
         halo.clear();
         couches.removeAll(true);
 
-        const item = courantItemId ? ITEMS[courantItemId] : null;
+        const item = courantItemId ? getItemOuVestige(courantItemId) : null;
         const familleColor = item ? COULEURS_FAMILLE[item.famille] : null;
 
         // Fond légèrement teinté de la couleur de famille si plein
