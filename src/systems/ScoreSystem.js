@@ -31,14 +31,18 @@
 // Chaque tier : nom court + nom long + couleur RGB + nb d'affixes max.
 // Le tier "perfect" (100) n'est atteignable que par roll exceptionnel.
 
+// Palette retravaillée (feedback user) :
+// Gris → Blanc → Vert → Bleu → Violet → Orange → Rouge
+// Le rouge est désormais bien plus éclatant que l'iridescent — il signale
+// le "Perfect" sans ambiguïté visuelle.
 export const TIERS_SCORE = [
     {
         id: 'brise',
         nom: 'Brisé',
         nomLong: 'Brisé',
         scoreMin: 0, scoreMax: 30,
-        couleur: 0x5a5a6a,
-        couleurClaire: 0x7a7a8a,
+        couleur: 0x6a6a7a,         // gris froid
+        couleurClaire: 0x8a8a9a,
         nbPrimaires: 1, nbExotiques: 0,
         peutSort: false, peutSignature: false
     },
@@ -47,8 +51,8 @@ export const TIERS_SCORE = [
         nom: 'Commun',
         nomLong: 'Commun',
         scoreMin: 30, scoreMax: 50,
-        couleur: 0xc8c4b8,
-        couleurClaire: 0xe8e4d8,
+        couleur: 0xd8d4c8,         // blanc cassé
+        couleurClaire: 0xf0ece0,
         nbPrimaires: 2, nbExotiques: 0,
         peutSort: false, peutSignature: false
     },
@@ -57,8 +61,8 @@ export const TIERS_SCORE = [
         nom: 'Étoilé',
         nomLong: 'Étoilé',
         scoreMin: 50, scoreMax: 70,
-        couleur: 0x5a8ac8,
-        couleurClaire: 0x80b0e0,
+        couleur: 0x40b070,         // vert
+        couleurClaire: 0x60d090,
         nbPrimaires: 2, nbExotiques: 1,
         peutSort: false, peutSignature: false
     },
@@ -67,8 +71,8 @@ export const TIERS_SCORE = [
         nom: 'Spectral',
         nomLong: 'Spectral',
         scoreMin: 70, scoreMax: 85,
-        couleur: 0x9a60d0,
-        couleurClaire: 0xc090f0,
+        couleur: 0x4080d0,         // bleu
+        couleurClaire: 0x60a0f0,
         nbPrimaires: 3, nbExotiques: 1,
         peutSort: true, peutSignature: false
     },
@@ -77,8 +81,8 @@ export const TIERS_SCORE = [
         nom: 'Royal',
         nomLong: 'Royal',
         scoreMin: 85, scoreMax: 95,
-        couleur: 0xffd070,
-        couleurClaire: 0xffe8a0,
+        couleur: 0xa050d0,         // violet
+        couleurClaire: 0xc080f0,
         nbPrimaires: 3, nbExotiques: 2,
         peutSort: true, peutSignature: false
     },
@@ -87,18 +91,18 @@ export const TIERS_SCORE = [
         nom: 'Reliquaire',
         nomLong: 'Reliquaire',
         scoreMin: 95, scoreMax: 100,
-        couleur: 0xc04040,
-        couleurClaire: 0xff6060,
+        couleur: 0xff8030,         // orange
+        couleurClaire: 0xffa050,
         nbPrimaires: 4, nbExotiques: 2,
         peutSort: true, peutSignature: true
     },
     {
         id: 'perfect',
         nom: 'Perfect',
-        nomLong: 'Iridescent',
-        scoreMin: 100, scoreMax: 101, // strictement 100
-        couleur: 0xffffff,
-        couleurClaire: 0xffffff,
+        nomLong: 'Perfect',
+        scoreMin: 100, scoreMax: 101,
+        couleur: 0xff3030,         // rouge éclatant
+        couleurClaire: 0xff8080,
         nbPrimaires: 4, nbExotiques: 3,
         peutSort: true, peutSignature: true
     }
@@ -191,25 +195,29 @@ export function entryId(entry) {
  */
 export function tirerScoreDrop(contexte, rng, base = 50) {
     if (contexte === 'sol') {
-        // Distribution beta-like : la plupart sub-50, queue jusqu'à 90
+        // Distribution centrée sur `base` (qui inclut le boost étage). Plus on
+        // monte, plus les drops sont qualitatifs. Pour rester rare au top, on
+        // applique une distribution exponentielle décroissante autour de base.
         const r = rng();
-        if (r < 0.05) return 95 + rng() * 5;   // 5% jackpot
-        if (r < 0.20) return 70 + rng() * 20;  // 15% spectral/royal
-        if (r < 0.50) return 50 + rng() * 20;  // 30% étoilé
-        return 20 + rng() * 30;                // 50% commun/brisé
+        if (r < 0.01) return Math.min(100, base + 35 + rng() * 15);  //  1 % jackpot
+        if (r < 0.05) return Math.min(100, base + 20 + rng() * 15);  //  4 % très bon
+        if (r < 0.20) return Math.min(100, base + 5 + rng() * 15);   // 15 % au-dessus
+        if (r < 0.55) return Math.max(0, Math.min(100, base - 5 + rng() * 15));   // 35 % autour
+        // 45 % en-dessous
+        return Math.max(0, base - 20 + rng() * 18);
     }
     if (contexte === 'boss') {
         const r = rng();
-        if (r < 0.10) return 95 + rng() * 5;   // 10% jackpot
-        if (r < 0.45) return 85 + rng() * 10;  // 35% royal
-        if (r < 0.85) return 70 + rng() * 15;  // 40% spectral
-        return 50 + rng() * 20;                // 15% étoilé
+        if (r < 0.08) return 95 + rng() * 5;   //  8 % jackpot
+        if (r < 0.40) return 85 + rng() * 10;  // 32 % royal
+        if (r < 0.85) return 70 + rng() * 15;  // 45 % spectral
+        return 50 + rng() * 20;                // 15 % étoilé
     }
     if (contexte === 'forge') {
-        // Variance autour de `base` : ±15 normal, +25 jackpot (1%), -15 fail (selon T)
+        // Variance autour de `base` : ±15 normal, +25 jackpot (1%), -15 fail
         const r = rng();
         if (r < 0.01) return Math.min(100, base + 25);
-        const delta = (rng() - 0.5) * 30; // ±15
+        const delta = (rng() - 0.3) * 24; // skew +2.4 modéré
         return Math.max(0, Math.min(100, base + delta));
     }
     return base;

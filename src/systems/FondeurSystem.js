@@ -12,11 +12,13 @@
 
 import { coutEnSel } from '../data/recettes.js';
 import { genererInstance } from './ItemForge.js';
+import { FondeurUpgradeSystem } from './FondeurUpgradeSystem.js';
 
 export class FondeurSystem {
     constructor(economy, inventaire) {
         this.economy = economy;
         this.inventaire = inventaire;
+        this.upgrade = new FondeurUpgradeSystem();
     }
 
     /**
@@ -55,6 +57,8 @@ export class FondeurSystem {
         // Bonus pour fragments rares
         scoreBase += (lot.bleu ?? 0) * 5;
         scoreBase += (lot.noir ?? 0) * 5;
+        // Bonus du palier d'upgrade Fondeur (méta-progression entre runs)
+        scoreBase += this.upgrade.getScoreBonus();
 
         // Famille majoritaire (fallback : première du lot)
         const familleMajeure = Object.keys(lot)

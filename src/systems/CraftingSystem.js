@@ -12,6 +12,7 @@
 import { genererInstance } from './ItemForge.js';
 import { estInstance, tierPourScore, tirerScoreDrop } from './ScoreSystem.js';
 import { TEMPLATES, getTemplate } from '../data/templatesItems.js';
+import { FondeurUpgradeSystem } from './FondeurUpgradeSystem.js';
 
 // ============================================================
 // COÛTS — coûts exponentiels par tier du résultat anticipé
@@ -55,6 +56,7 @@ export class CraftingSystem {
     constructor(economy, inventaire) {
         this.economy = economy;
         this.inventaire = inventaire;
+        this.upgrade = new FondeurUpgradeSystem();
     }
 
     // ============================================================
@@ -115,11 +117,12 @@ export class CraftingSystem {
 
         this.economy.retirerSel(prev.cout);
 
-        // Jackpot/fail/normal
+        // Jackpot/fail/normal — risque Brisé réduit selon le palier d'upgrade
         let scoreFinal;
         let brise = false;
         const tirage = rng();
-        if (tirage < (RISQUE_BRISE[prev.tier.id] ?? 0)) {
+        const risqueBrise = Math.max(0, (RISQUE_BRISE[prev.tier.id] ?? 0) - this.upgrade.getRisqueBriseReduit());
+        if (tirage < risqueBrise) {
             // Brisé : un item gris dont le score est divisé par 2
             scoreFinal = Math.max(5, Math.round(prev.scoreBase * 0.4));
             brise = true;
@@ -128,8 +131,10 @@ export class CraftingSystem {
             scoreFinal = Math.min(100, prev.scoreBase + 20 + Math.round(rng() * 8));
         } else {
             // Normal : variance ±12 vers le haut (skew positif modéré)
+            // Le bonus d'upgrade Fondeur déplace la moyenne vers le haut.
             const delta = (rng() - 0.3) * 24; // moyenne +2.4
-            scoreFinal = Math.max(10, Math.min(100, Math.round(prev.scoreBase + delta)));
+            const upBoost = this.upgrade.getScoreBonus();
+            scoreFinal = Math.max(10, Math.min(100, Math.round(prev.scoreBase + delta + upBoost)));
         }
 
         const nouvelle = genererInstance({

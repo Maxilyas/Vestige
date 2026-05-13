@@ -322,6 +322,11 @@ function afficherInstanceForge(scene, contenu, item, ctx, actions, largeur, haut
     let yCursor = 60;
     if (instance.signatureId) {
         const sig = getSignature(instance.signatureId);
+        // Défense : id orphelin → on ignore silencieusement la signature
+        if (!sig) { instance.signatureId = null; }
+    }
+    if (instance.signatureId) {
+        const sig = getSignature(instance.signatureId);
         const revele = instance.revele.signature;
         const sigTxt = revele
             ? `« ${sig.nom} »`
@@ -355,13 +360,20 @@ function afficherInstanceForge(scene, contenu, item, ctx, actions, largeur, haut
     yCursor += 12;
 
     // ─── Affixes primaires ──────────────────────────────────────
+    // Layout compact Phase 6 (10px puce, 9-10 px texte, hauteur dynamique).
+    const yBtn = hauteur - 32;       // limite des boutons
+    const yMax = yBtn - 8;            // marge avant overflow
+    const TAILLE_TXT = '9px';
+    const TAILLE_TITRE = '10px';
+
     contenu.add(scene.add.text(20, yCursor, 'STATS', {
-        fontFamily: 'monospace', fontSize: '10px',
+        fontFamily: 'monospace', fontSize: TAILLE_TITRE,
         color: couleurHex(COULEURS_INVENTAIRE.or), fontStyle: 'bold'
     }));
-    yCursor += 14;
+    yCursor += 13;
 
     for (let i = 0; i < instance.affixesPrim.length; i++) {
+        if (yCursor > yMax) break;
         const aff = instance.affixesPrim[i];
         const revele = instance.revele.prim.includes(i);
         const def = STATS[aff.statId];
@@ -372,24 +384,25 @@ function afficherInstanceForge(scene, contenu, item, ctx, actions, largeur, haut
         contenu.add(puce);
         const txt = revele
             ? `${formaterStat(aff.statId, aff.delta)} — ${label}`
-            : `? — Stat non révélée (porte plus longtemps)`;
+            : `? — Stat non révélée`;
         contenu.add(scene.add.text(38, yCursor, txt, {
-            fontFamily: 'monospace', fontSize: '10px',
+            fontFamily: 'monospace', fontSize: TAILLE_TXT,
             color: revele ? '#d8d4c8' : '#6a6a7a',
             fontStyle: revele ? 'normal' : 'italic'
         }));
-        yCursor += 12;
+        yCursor += 11;
     }
 
     // ─── Affixes exotiques ─────────────────────────────────────
-    if (instance.affixesExo.length > 0) {
-        yCursor += 6;
+    if (instance.affixesExo.length > 0 && yCursor < yMax) {
+        yCursor += 4;
         contenu.add(scene.add.text(20, yCursor, 'EXOTIQUES', {
-            fontFamily: 'monospace', fontSize: '10px',
+            fontFamily: 'monospace', fontSize: TAILLE_TITRE,
             color: couleurHex(COULEURS_INVENTAIRE.or), fontStyle: 'bold'
         }));
-        yCursor += 14;
+        yCursor += 13;
         for (let i = 0; i < instance.affixesExo.length; i++) {
+            if (yCursor > yMax) break;
             const exoId = instance.affixesExo[i];
             const def = EXOTIQUES[exoId];
             const revele = instance.revele.exo.includes(i);
@@ -399,49 +412,54 @@ function afficherInstanceForge(scene, contenu, item, ctx, actions, largeur, haut
             contenu.add(puce);
             const txt = revele
                 ? `★ ${def?.label ?? exoId} — ${def?.description ?? ''}`
-                : `★ ? — Effet exotique inconnu (Identifieur)`;
-            contenu.add(scene.add.text(38, yCursor, txt, {
-                fontFamily: 'monospace', fontSize: '9px',
+                : `★ ? — Effet inconnu`;
+            const txtObj = scene.add.text(38, yCursor, txt, {
+                fontFamily: 'monospace', fontSize: TAILLE_TXT,
                 color: revele ? '#c0a0e8' : '#6a6a7a',
                 fontStyle: revele ? 'normal' : 'italic',
-                wordWrap: { width: largeur - 50 }
-            }));
-            yCursor += 22;
+                wordWrap: { width: largeur - 48 }
+            });
+            contenu.add(txtObj);
+            // Hauteur dynamique : suit le wrap réel du texte (+ 1 px d'air)
+            yCursor += Math.max(11, txtObj.height + 1);
         }
     }
 
     // ─── Sort ──────────────────────────────────────────────────
     if (instance.sortId) {
         const sortDef = getSort(instance.sortId);
+        if (!sortDef) { instance.sortId = null; }
+    }
+    if (instance.sortId && yCursor < yMax) {
+        const sortDef = getSort(instance.sortId);
         const revele = instance.revele.sort;
-        yCursor += 4;
+        yCursor += 2;
         const touche = item.slot === 'tete' ? '1' : (item.slot === 'corps' ? '2' : '3');
-        const sortLbl = scene.add.text(20, yCursor, `SORT (${touche})`, {
-            fontFamily: 'monospace', fontSize: '10px',
+        contenu.add(scene.add.text(20, yCursor, `SORT (${touche})`, {
+            fontFamily: 'monospace', fontSize: TAILLE_TITRE,
             color: '#ffd070', fontStyle: 'bold'
-        });
-        contenu.add(sortLbl);
-        yCursor += 14;
+        }));
+        yCursor += 13;
         const sortTxt = revele
             ? `→ ${sortDef?.label} — ${sortDef?.description}`
-            : `→ ? — Sort inconnu (Identifieur)`;
-        contenu.add(scene.add.text(28, yCursor, sortTxt, {
-            fontFamily: 'monospace', fontSize: '10px',
+            : `→ ? — Sort inconnu`;
+        const sortTxtObj = scene.add.text(28, yCursor, sortTxt, {
+            fontFamily: 'monospace', fontSize: TAILLE_TXT,
             color: revele ? '#ffd070' : '#6a6a7a',
             fontStyle: revele ? 'normal' : 'italic',
-            wordWrap: { width: largeur - 40 }
-        }));
-        yCursor += 14;
-        if (revele && sortDef) {
+            wordWrap: { width: largeur - 38 }
+        });
+        contenu.add(sortTxtObj);
+        yCursor += Math.max(11, sortTxtObj.height + 1);
+        if (revele && sortDef && yCursor < yMax) {
             contenu.add(scene.add.text(28, yCursor, `Cooldown ${(sortDef.cooldownMs / 1000).toFixed(1)}s`
                 + (sortDef.coutResonance > 0 ? `  •  ${sortDef.coutResonance} Résonance` : ''), {
-                fontFamily: 'monospace', fontSize: '9px', color: '#8a8a9a'
+                fontFamily: 'monospace', fontSize: '8px', color: '#8a8a9a'
             }));
         }
     }
 
     // ─── Boutons d'action ──────────────────────────────────────
-    const yBtn = hauteur - 32;
     if (ctx.equipe) {
         ajouterBouton(scene, contenu, 20, yBtn, 'Déséquiper', () => actions.onDesequiper());
     } else {

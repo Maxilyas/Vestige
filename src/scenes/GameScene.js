@@ -221,9 +221,14 @@ export class GameScene extends Phaser.Scene {
         this.cleSalleEtage = `e${etageNumero}:${salleId}`;
 
         const mondeCourant = this.monde.getMonde();
+        // Phase 6 — le compteur de visites Cité entre dans la sous-seed loot :
+        // à chaque mort/retour, les drops changent (ennemis restent stables car
+        // leur pool est seedé via une autre clé).
+        const visitesCite = this.registry.get('cite_visites') ?? 0;
         this.rngLoot = creerRng(
             (seedRun ^ (etageNumero * 0x9E3779B9) ^ this._hashStr(salleId) ^
-             (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0)) >>> 0
+             (mondeCourant === 'miroir' ? 0xC2B2AE35 : 0) ^
+             (visitesCite * 0x6A09E667)) >>> 0
         );
 
         // Phase 5b.2 — stats prennent en compte ITEMS + VESTIGES.
@@ -570,12 +575,14 @@ export class GameScene extends Phaser.Scene {
             }
             this.peutEtreDrop(ennemi);
             this._dropEconomique(ennemi);
-            // Phase 6 — procs exotiques sur kill
+            // Phase 6 — procs exotiques sur kill (stackent avec count)
             if (this.flagsExo?.proc_soin_kill) {
-                this.resonance.regagner(this.flagsExo.proc_soin_kill.params.gain ?? 2);
+                const f = this.flagsExo.proc_soin_kill;
+                this.resonance.regagner((f.params.gain ?? 2) * f.count);
             }
             if (this.flagsExo?.proc_garde_kill) {
-                this.garde?.restaurer(this.flagsExo.proc_garde_kill.params.gain ?? 4);
+                const f = this.flagsExo.proc_garde_kill;
+                this.garde?.restaurer((f.params.gain ?? 4) * f.count);
             }
             if (this.flagsExo?.proc_aoe_kill && ennemi.sprite) {
                 const portee = this.flagsExo.proc_aoe_kill.params.portee ?? 80;
@@ -684,9 +691,10 @@ export class GameScene extends Phaser.Scene {
                 body.setVelocityY(-this.statsEffectives.jumpVelocity);
                 // Phase 6 — auto-révélation par usage (saut)
                 this.revelation?.incrementer('sauts');
-                // Proc exotique "Pas du Vestige" : +1 Résonance à chaque saut
+                // Proc "Pas du Vestige" : +1 Résonance par saut (stacke avec count)
                 if (this.flagsExo?.proc_saut_resonance) {
-                    this.resonance.regagner(this.flagsExo.proc_saut_resonance.params.gain ?? 1);
+                    const f = this.flagsExo.proc_saut_resonance;
+                    this.resonance.regagner((f.params.gain ?? 1) * f.count);
                 }
             } else if (this.sautsRestants > 0 && aDoubleSaut) {
                 body.setVelocityY(-this.statsEffectives.jumpVelocity * 0.92);
@@ -863,9 +871,10 @@ export class GameScene extends Phaser.Scene {
                         if (!e.mort && e.sprite.active) e.recevoirDegats(degats);
                     });
                 }
-                // Phase 6 — vol de Résonance
+                // Phase 6 — vol de Résonance (stacke)
                 if (this.flagsExo?.proc_vol_resonance) {
-                    this.resonance.regagner(this.flagsExo.proc_vol_resonance.params.gain ?? 0.5);
+                    const f = this.flagsExo.proc_vol_resonance;
+                    this.resonance.regagner((f.params.gain ?? 0.5) * f.count);
                 }
             }
         }
@@ -1674,8 +1683,10 @@ export class GameScene extends Phaser.Scene {
     peutEtreDrop(ennemi) {
         // Les boss gèrent leur drop (T3 garanti) via `_dropBossTier3`
         if (ennemi.estBoss) return;
-        const proba = this.climaxDropDu ? 1 : ennemi.def.probaDrop;
-        if (this.rngLoot() >= proba) return;
+        // Phase 6 (feedback user) — drops en Présent réduits de moitié pour ne
+        // pas saturer l'inventaire. Climax reste à 100 % (drop chrono garanti).
+        const probaBrute = this.climaxDropDu ? 1 : (ennemi.def.probaDrop * 0.45);
+        if (this.rngLoot() >= probaBrute) return;
 
         // Phase 6 — toujours une instance forgée. Climax = score boost vers Bleu/Noir.
         let instance;
@@ -1976,6 +1987,11 @@ export class GameScene extends Phaser.Scene {
         // (inventaire, équipement, Sel, Fragments, identifications, etc.).
         this.inventaire.resetEtage(this.etageNumero);
         this.enemySystem.resetEtage(this.etageNumero);
+        // Phase 6 — Incrémente le compteur de visites Cité → la sous-seed loot
+        // changera, donc les coffres droppent des objets différents à chaque
+        // retour. Les ennemis restent stables (pool seedé indépendamment).
+        const v = (this.registry.get('cite_visites') ?? 0) + 1;
+        this.registry.set('cite_visites', v);
         // Spawn forcé sur la salle d'entrée en Présent, depuis le sol (pas de
         // position pendante : ce n'est plus un déplacement contrôlé).
         this.registry.remove(CLE_POSITION_PENDANTE);

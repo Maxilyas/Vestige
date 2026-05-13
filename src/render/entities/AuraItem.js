@@ -9,7 +9,7 @@
 // Lit l'équipement à chaque update et calcule le tier max. Recompose le visuel
 // si le tier max change.
 
-import { estInstance, tierPourScore, couleurIridescente } from '../../systems/ScoreSystem.js';
+import { estInstance, tierPourScore, couleurPourScore } from '../../systems/ScoreSystem.js';
 
 export class AuraItem {
     constructor(scene, joueur) {
@@ -71,9 +71,9 @@ export class AuraItem {
         const tier = tierPourScore(this.scoreMax);
         this.halo.clear();
 
-        // Couleur selon score (iridescent si Perfect)
-        let couleur = tier.couleur;
-        if (this.scoreMax >= 100) couleur = couleurIridescente(time);
+        // Couleur selon score — toujours la couleur du tier (rouge éclatant
+        // pour Perfect, pas d'iridescence depuis la refonte palette user).
+        const couleur = tier.couleur;
 
         // Pulse
         const pulse = 0.6 + 0.4 * Math.sin(time / 280);
@@ -91,9 +91,7 @@ export class AuraItem {
     _spawnerParticule() {
         if (!this.joueur || !this.joueur.active) return;
         const tier = tierPourScore(this.scoreMax);
-        const couleur = this.scoreMax >= 100
-            ? couleurIridescente(this.scene.time.now)
-            : tier.couleur;
+        const couleur = tier.couleur;
         const px = this.joueur.x + (Math.random() - 0.5) * 14;
         const py = this.joueur.y + (Math.random() - 0.5) * 20;
         const p = this.scene.add.graphics().setDepth(34);

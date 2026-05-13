@@ -12,6 +12,7 @@ import { InventaireSystem } from '../systems/InventaireSystem.js';
 import { EconomySystem, EVT_SEL_CHANGE, EVT_FRAGMENTS_CHANGE, EVT_ENCRE_CHANGE } from '../systems/EconomySystem.js';
 import { FondeurSystem } from '../systems/FondeurSystem.js';
 import { CraftingSystem, COUTS_COMBINAISON, RISQUE_BRISE, COUTS_REROLL } from '../systems/CraftingSystem.js';
+import { FondeurUpgradeSystem, PALIERS_FONDEUR, NIVEAU_MAX } from '../systems/FondeurUpgradeSystem.js';
 import { coutEnSel, phraseFondeur, PHRASE_INV_PLEIN } from '../data/recettes.js';
 import { ITEMS, COULEURS_FAMILLE, getItemOuVestige } from '../data/items.js';
 import { peindreEmblemeFamille } from '../render/ui/EmblemeFamille.js';
@@ -21,11 +22,12 @@ import { estInstance, tierPourScore, couleurPourScore } from '../systems/ScoreSy
 import { STATS } from '../data/stats.js';
 import { TEMPLATES } from '../data/templatesItems.js';
 
-const ONGLETS = ['fragments', 'combiner', 'reroll'];
+const ONGLETS = ['fragments', 'combiner', 'reroll', 'upgrade'];
 const LABEL_ONGLET = {
     fragments: 'FRAGMENTS',
     combiner: 'COMBINER',
-    reroll: 'RE-RÉSONNER'
+    reroll: 'RE-RÉSONNER',
+    upgrade: 'AMÉLIORER'
 };
 
 export class FondeurScene extends Phaser.Scene {
@@ -42,6 +44,7 @@ export class FondeurScene extends Phaser.Scene {
         this.inventaire = new InventaireSystem(this.registry);
         this.fondeur = new FondeurSystem(this.economy, this.inventaire);
         this.crafting = new CraftingSystem(this.economy, this.inventaire);
+        this.upgradeSys = new FondeurUpgradeSystem();
 
         // État commun
         this.ongletActif = 'fragments';
@@ -83,6 +86,7 @@ export class FondeurScene extends Phaser.Scene {
         this.input.keyboard.on('keydown-ONE', () => this._changerOnglet('fragments'));
         this.input.keyboard.on('keydown-TWO', () => this._changerOnglet('combiner'));
         this.input.keyboard.on('keydown-THREE', () => this._changerOnglet('reroll'));
+        this.input.keyboard.on('keydown-FOUR', () => this._changerOnglet('upgrade'));
 
         const handlerEco = () => this._refreshTout();
         this.registry.events.on(EVT_SEL_CHANGE, handlerEco);
@@ -98,7 +102,7 @@ export class FondeurScene extends Phaser.Scene {
     fermer() {
         const codes = Phaser.Input.Keyboard.KeyCodes;
         const keys = this.input.keyboard.keys;
-        [codes.ESC, codes.ONE, codes.TWO, codes.THREE].forEach(c => keys[c]?.reset());
+        [codes.ESC, codes.ONE, codes.TWO, codes.THREE, codes.FOUR].forEach(c => keys[c]?.reset());
         this.scene.resume('GameScene');
         this.scene.stop();
     }
@@ -111,9 +115,9 @@ export class FondeurScene extends Phaser.Scene {
         this.contOnglets = this.add.container(0, 0).setDepth(310);
 
         const yOnglets = 108;
-        const espace = 16;
-        const largOnglet = 140;
-        const xDebut = GAME_WIDTH / 2 - (3 * largOnglet + 2 * espace) / 2;
+        const espace = 12;
+        const largOnglet = 118;
+        const xDebut = GAME_WIDTH / 2 - (ONGLETS.length * largOnglet + (ONGLETS.length - 1) * espace) / 2;
 
         for (let i = 0; i < ONGLETS.length; i++) {
             const id = ONGLETS[i];
@@ -140,8 +144,8 @@ export class FondeurScene extends Phaser.Scene {
             this.contOnglets.add(hit);
         }
 
-        // Hint touches 1/2/3 sous les onglets
-        const hint = this.add.text(GAME_WIDTH / 2, yOnglets + 38, '— 1 / 2 / 3 pour changer d\'onglet —', {
+        // Hint touches 1/2/3/4 sous les onglets
+        const hint = this.add.text(GAME_WIDTH / 2, yOnglets + 38, '— 1 / 2 / 3 / 4 pour changer d\'onglet —', {
             fontFamily: 'monospace', fontSize: '9px', color: '#6a6a7a'
         }).setOrigin(0.5);
         this.contOnglets.add(hint);
@@ -163,6 +167,120 @@ export class FondeurScene extends Phaser.Scene {
         if (this.ongletActif === 'fragments') this._renderOngletFragments();
         else if (this.ongletActif === 'combiner') this._renderOngletCombiner();
         else if (this.ongletActif === 'reroll') this._renderOngletReroll();
+        else if (this.ongletActif === 'upgrade') this._renderOngletUpgrade();
+    }
+
+    // ============================================================
+    // ONGLET 4 — AMÉLIORER (méta-progression du Fondeur)
+    // ============================================================
+    _renderOngletUpgrade() {
+        const cx = GAME_WIDTH / 2;
+        const y0 = 180;
+
+        const niveau = this.upgradeSys.getNiveau();
+        const palier = this.upgradeSys.getPalier();
+        const suivant = this.upgradeSys.getPalierSuivant();
+
+        // Titre + palier actuel
+        this.zoneCont.add(this.add.text(cx, y0 - 18, 'PALIER DU FOYER', {
+            fontFamily: 'monospace', fontSize: '10px',
+            color: '#c8a85a', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
+        this.zoneCont.add(this.add.text(cx, y0, `Niveau ${niveau}  •  ${palier.nom}`, {
+            fontFamily: 'monospace', fontSize: '14px',
+            color: '#ffd070', fontStyle: 'bold',
+            stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5, 0));
+
+        // Effets actuels
+        let yC = y0 + 32;
+        this.zoneCont.add(this.add.text(cx, yC, `+${palier.scoreBonus} au score moyen forgé`, {
+            fontFamily: 'monospace', fontSize: '11px', color: '#d8d4c8'
+        }).setOrigin(0.5, 0));
+        yC += 16;
+        this.zoneCont.add(this.add.text(cx, yC,
+            `-${Math.round(palier.risqueBriseReduit * 100)} % risque de Brisé en combinaison`, {
+            fontFamily: 'monospace', fontSize: '11px', color: '#d8d4c8'
+        }).setOrigin(0.5, 0));
+        yC += 28;
+
+        // Aperçu palier suivant
+        if (!suivant) {
+            this.zoneCont.add(this.add.text(cx, yC, '— Tu as atteint le sommet du Foyer —', {
+                fontFamily: 'monospace', fontSize: '12px',
+                color: '#ff8030', fontStyle: 'italic bold'
+            }).setOrigin(0.5, 0));
+            return;
+        }
+
+        // Liseré
+        const sep = this.add.graphics();
+        sep.lineStyle(1, COULEURS_INVENTAIRE.or, 0.4);
+        sep.beginPath();
+        sep.moveTo(cx - 200, yC); sep.lineTo(cx + 200, yC);
+        sep.strokePath();
+        this.zoneCont.add(sep);
+        yC += 16;
+
+        this.zoneCont.add(this.add.text(cx, yC, `PROCHAIN PALIER : ${suivant.nom}`, {
+            fontFamily: 'monospace', fontSize: '11px',
+            color: '#ffd070', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
+        yC += 18;
+        this.zoneCont.add(this.add.text(cx, yC, suivant.description, {
+            fontFamily: 'monospace', fontSize: '10px', color: '#c8c4b8',
+            fontStyle: 'italic',
+            wordWrap: { width: 500 }, align: 'center'
+        }).setOrigin(0.5, 0));
+        yC += 30;
+
+        // Coût détaillé
+        const cout = suivant.cout;
+        this.zoneCont.add(this.add.text(cx, yC, 'COÛT :', {
+            fontFamily: 'monospace', fontSize: '10px',
+            color: '#c8a85a', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
+        yC += 16;
+
+        const sel = this.economy.getSel();
+        const okSel = sel >= cout.sel;
+        this.zoneCont.add(this.add.text(cx, yC, `${cout.sel} Sel  (tu en as ${sel})`, {
+            fontFamily: 'monospace', fontSize: '11px',
+            color: okSel ? '#ffd070' : '#ff6060', fontStyle: 'bold'
+        }).setOrigin(0.5, 0));
+        yC += 16;
+
+        let tousFragOk = true;
+        for (const fam of Object.keys(cout.fragments ?? {})) {
+            const need = cout.fragments[fam];
+            const have = this.economy.getFragment(fam);
+            const ok = have >= need;
+            if (!ok) tousFragOk = false;
+            this.zoneCont.add(this.add.text(cx, yC,
+                `${need} Fragment ${fam}  (tu en as ${have})`, {
+                fontFamily: 'monospace', fontSize: '11px',
+                color: ok ? '#d8d4c8' : '#ff6060'
+            }).setOrigin(0.5, 0));
+            yC += 15;
+        }
+
+        // Bouton
+        yC += 16;
+        const peutUpgrader = okSel && tousFragOk;
+        this._ajouterBouton(this.zoneCont, cx, yC, 'AMÉLIORER LE FOYER', peutUpgrader, () => {
+            const res = this.upgradeSys.upgrader(this.economy);
+            if (!res.success) {
+                this.phraseTexte.setText('"Le Foyer attend encore."');
+                this.phraseTexte.setColor('#ff6060');
+                return;
+            }
+            // Resync les autres systèmes pour appliquer le nouveau bonus
+            this.fondeur.upgrade = this.upgradeSys;
+            this.crafting.upgrade = this.upgradeSys;
+            this.phraseTexte.setText(`"${res.palier.nom} — le Foyer rugit."`);
+            this.phraseTexte.setColor('#ffd070');
+            this._dessinerContenuOnglet();
+        });
     }
 
     // ============================================================

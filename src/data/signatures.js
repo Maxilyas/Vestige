@@ -113,7 +113,7 @@ export const SIGNATURES = {
         params: {}
     },
     serment_du_dernier_souffle: {
-        id: 'serment_dernier_souffle',
+        id: 'serment_du_dernier_souffle',
         nom: 'Serment du Dernier Souffle',
         slot: 'corps',
         description: 'Sous 20 PV de Résonance, +100 % vitesse d\'attaque.',
@@ -129,7 +129,7 @@ export const SIGNATURES = {
         params: { bonusPct: 0.3, dureeMs: 4000 }
     },
     couronne_des_quatre_vents: {
-        id: 'couronne_quatre_vents',
+        id: 'couronne_des_quatre_vents',
         nom: 'Couronne des Quatre Vents',
         slot: 'tete',
         description: 'Toutes les 8s, un éclat de vent te suit et frappe l\'ennemi le plus proche.',
@@ -137,7 +137,7 @@ export const SIGNATURES = {
         params: { intervalle: 8000, degats: 5 }
     },
     main_qui_n_oublie: {
-        id: 'main_n_oublie',
+        id: 'main_qui_n_oublie',
         nom: 'Main qui n\'Oublie',
         slot: 'accessoire',
         description: 'Chaque sort utilisé augmente tes dégâts de +5 % (max 30 %, reset à la mort).',
@@ -153,7 +153,7 @@ export const SIGNATURES = {
         params: { retourPct: 0.3 }
     },
     pierre_d_avant: {
-        id: 'pierre_avant',
+        id: 'pierre_d_avant',
         nom: 'Pierre d\'Avant',
         slot: 'accessoire',
         description: 'Chaque parry réussi rajoute 0.5 s au cooldown du parry de l\'ennemi.',
@@ -161,7 +161,7 @@ export const SIGNATURES = {
         params: { ajoutMs: 500 }
     },
     voile_des_ages: {
-        id: 'voile_ages',
+        id: 'voile_des_ages',
         nom: 'Voile des Âges',
         slot: 'tete',
         description: 'À 100 % Garde, prendre des dégâts ne consomme que la Garde (immune Résonance).',

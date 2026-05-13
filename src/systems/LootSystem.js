@@ -42,9 +42,18 @@ export function tirerItem(monde, rng, opts = {}) {
     else if (r < probas.blanc + probas.bleu) famille = 'bleu';
     else famille = 'noir';
 
-    // Bonus de score selon étage — +2 par étage au-delà du premier (skew vers le haut)
-    const boostEtage = Math.max(0, (etage - 1) * 2);
-    const baseAjustee = scoreBase + boostEtage;
+    // Bonus de score selon étage — pour les drops 'sol' on part bas (étage 1
+    // ≈ Brisé/Commun) et on monte à +30 d'étage 10 (≈ Spectral). Pour les autres
+    // contextes (boss / forge) la base est déjà calibrée par l'appelant.
+    let baseAjustee = scoreBase;
+    if (contexte === 'sol') {
+        const baseEtage1 = 25;
+        const incrementParEtage = 3;
+        baseAjustee = baseEtage1 + (Math.max(1, etage) - 1) * incrementParEtage;
+    } else {
+        // Boss / forge : on garde scoreBase + un petit boost étage
+        baseAjustee = scoreBase + Math.max(0, (etage - 1) * 2);
+    }
 
     return genererInstance({ famille, slot, contexte, scoreBase: baseAjustee, rng });
 }

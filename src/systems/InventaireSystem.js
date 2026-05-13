@@ -14,6 +14,22 @@
 // et InventaireScene se redessinent automatiquement.
 
 import { VESTIGES } from '../data/vestiges.js';
+import { SIGNATURES } from '../data/signatures.js';
+import { SORTS } from '../data/sorts.js';
+
+/**
+ * Nettoie les sortId / signatureId orphelins dans une liste d'entrées
+ * (mutation in-place). Renvoie true si quelque chose a changé.
+ */
+function sanitizeInstancesIds(entries) {
+    let mutated = false;
+    for (const e of entries) {
+        if (!e || typeof e !== 'object' || !e._instance) continue;
+        if (e.sortId && !SORTS[e.sortId]) { e.sortId = null; mutated = true; }
+        if (e.signatureId && !SIGNATURES[e.signatureId]) { e.signatureId = null; mutated = true; }
+    }
+    return mutated;
+}
 
 // Phase 6 — étendu pour accueillir le farm crafting (Phase 5b = 40, Phase 6 = 60)
 export const CAPACITE_INVENTAIRE = 60;
@@ -42,20 +58,29 @@ export class InventaireSystem {
             this.registry.set(CLE_INVENTAIRE, []);
         }
         // Phase 6 — nettoie l'inventaire des entrées invalides (undefined/null/
-        // objets sans _instance). Indispensable après le retrait du legacy :
-        // un run en cours peut contenir des items legacy non reconnus → on les
-        // évacue silencieusement plutôt que de laisser des cases fantômes.
+        // objets sans _instance) + les ids orphelins dans les instances
+        // (sortId/signatureId non reconnus → set à null pour éviter crashes UI).
         else {
             const inv = this.registry.get(CLE_INVENTAIRE);
             if (Array.isArray(inv)) {
+                let mutated = false;
                 const propre = inv.filter(e => {
                     if (e === null || e === undefined) return false;
                     if (typeof e === 'string') return true;
                     if (typeof e === 'object' && e._instance === true) return true;
-                    return false; // objets bizarres / items legacy entiers
+                    return false;
                 });
-                if (propre.length !== inv.length) {
-                    this.registry.set(CLE_INVENTAIRE, propre);
+                if (propre.length !== inv.length) mutated = true;
+                // Sanitize sortId / signatureId orphelins
+                if (sanitizeInstancesIds(propre)) mutated = true;
+                if (mutated) this.registry.set(CLE_INVENTAIRE, propre);
+            }
+            // Pareil pour les slots équipés
+            const eq = this.registry.get(CLE_EQUIPEMENT);
+            if (eq && typeof eq === 'object') {
+                const list = ['tete', 'corps', 'accessoire'].map(s => eq[s]);
+                if (sanitizeInstancesIds(list)) {
+                    this.registry.set(CLE_EQUIPEMENT, { ...eq });
                 }
             }
         }

@@ -40,24 +40,36 @@ export function calculerStatsForge(equipement) {
 
 /**
  * Recense les flags exotiques + signatures actifs depuis l'équipement.
- * Utilisé par les systèmes qui veulent consulter "ai-je le proc X ?".
+ * Phase 6 — Le STACKING est désormais pris en compte : deux items portant
+ * le même flag (ex: deux "Cœur dilaté") s'additionnent.
  *
- * @returns {Object} flags { flagName: { def, params, source: slot } }
+ * @returns {Object} flags { flagName: { def, params, count, sources, instance } }
+ *   - count    : nombre total d'occurrences (pour additionner les bonus passifs)
+ *   - sources  : liste des slots qui portent le flag (ex: ['tete', 'accessoire'])
+ *   - instance : dernière instance vue (rétro-compat)
  */
 export function flagsExotiquesActifs(equipement) {
     const flags = {};
+    const ajouter = (flag, def, params, slot, entry, isSig = false) => {
+        if (!flags[flag]) {
+            flags[flag] = { def, params, count: 0, sources: [], instance: entry, signature: isSig };
+        }
+        flags[flag].count += 1;
+        flags[flag].sources.push(slot);
+        flags[flag].instance = entry; // garde la dernière vue
+    };
     for (const slot of ['tete', 'corps', 'accessoire']) {
         const entry = equipement[slot];
         if (!estInstance(entry)) continue;
         for (const exoId of entry.affixesExo) {
             const def = EXOTIQUES[exoId];
             if (!def) continue;
-            flags[def.flag] = { def, params: def, source: slot, instance: entry };
+            ajouter(def.flag, def, def, slot, entry, false);
         }
         if (entry.signatureId) {
             const sigDef = SIGNATURES[entry.signatureId];
             if (sigDef) {
-                flags[sigDef.flag] = { def: sigDef, params: sigDef.params, source: slot, instance: entry, signature: true };
+                ajouter(sigDef.flag, sigDef, sigDef.params, slot, entry, true);
             }
         }
     }
@@ -65,14 +77,15 @@ export function flagsExotiquesActifs(equipement) {
 }
 
 /**
- * Bonus Résonance MAX provenant de l'équipement (signature/exotique).
- * S'ajoute à la base ResonanceSystem (100) et au bonus Vestige.
+ * Bonus Résonance MAX provenant de l'équipement (signature/exotique). Stacke
+ * pour autant d'items "Cœur dilaté" équipés.
  */
 export function bonusResonanceMax(equipement) {
     let bonus = 0;
     const flags = flagsExotiquesActifs(equipement);
     if (flags.mod_resonance_max) {
-        bonus += flags.mod_resonance_max.params.bonus ?? 15;
+        const parItem = flags.mod_resonance_max.params.bonus ?? 15;
+        bonus += parItem * flags.mod_resonance_max.count;
     }
     return bonus;
 }

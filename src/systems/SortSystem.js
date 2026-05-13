@@ -256,16 +256,74 @@ function spawnerAOEDevant(scene, portee, degats, knockback = 0, vy = 0) {
 
 function spawnerMur(scene, largeur, hauteur, duree) {
     const dir = scene.lastDirection || 1;
-    const x = scene.player.x + dir * 50;
-    const y = scene.player.y - hauteur / 2;
-    const mur = scene.add.rectangle(x, y, largeur, hauteur, 0xd8d4c8, 0.85)
-        .setStrokeStyle(2, 0xffd070);
-    mur.setDepth(85);
-    // Visuel uniquement — pour un mur physique on devrait l'ajouter à un group
-    // static. Pour la simplicité du MVP, on laisse purement visuel (collision
-    // ne bloquerait que les projectiles ici, négligeable).
+    // Phase 6 fix — Centré sur la HAUTEUR du joueur (le rectangle physique a
+    // sa hauteur = PLAYER.HEIGHT ≈ 36). On positionne le mur de sorte que son
+    // bord bas matche le sol sous le joueur, comme un vrai mur dressé.
+    const x = scene.player.x + dir * (largeur / 2 + 30);
+    const playerBottom = scene.player.y + (scene.player.body?.height ?? 36) / 2;
+    const y = playerBottom - hauteur / 2;
+
+    // Conteneur visuel : volutes de cendre + halo additif. Style painterly,
+    // plus joli qu'un simple rectangle.
+    const cont = scene.add.container(x, y).setDepth(85);
+
+    // Halo additif d'arrière-plan (élargi)
+    const halo = scene.add.graphics();
+    halo.setBlendMode(Phaser.BlendModes.ADD);
+    halo.fillStyle(0xd0c8b8, 0.18);
+    halo.fillRect(-largeur / 2 - 6, -hauteur / 2 - 6, largeur + 12, hauteur + 12);
+    cont.add(halo);
+
+    // Corps du mur : pierre claire avec texture
+    const corps = scene.add.graphics();
+    corps.fillStyle(0xc8c0b0, 0.85);
+    corps.fillRect(-largeur / 2, -hauteur / 2, largeur, hauteur);
+    // Stries verticales (effet pierre)
+    corps.lineStyle(1, 0xa09888, 0.4);
+    for (let s = -largeur / 2 + 10; s < largeur / 2; s += 14) {
+        corps.beginPath();
+        corps.moveTo(s, -hauteur / 2 + 4);
+        corps.lineTo(s, hauteur / 2 - 4);
+        corps.strokePath();
+    }
+    corps.lineStyle(2, 0xffd070, 0.85);
+    corps.strokeRect(-largeur / 2, -hauteur / 2, largeur, hauteur);
+    cont.add(corps);
+
+    // Particules de cendre qui s'élèvent (décor)
+    const partTimer = scene.time.addEvent({
+        delay: 220, loop: true,
+        callback: () => {
+            const px = (Math.random() - 0.5) * largeur;
+            const py = hauteur / 2 - 4;
+            const p = scene.add.graphics().setDepth(86);
+            p.setBlendMode(Phaser.BlendModes.ADD);
+            p.fillStyle(0xffd070, 0.7);
+            p.fillCircle(0, 0, 2);
+            p.setPosition(x + px, y + py);
+            scene.tweens.add({
+                targets: p,
+                y: y + py - 20 - Math.random() * 14,
+                alpha: 0,
+                duration: 600,
+                onComplete: () => p.destroy()
+            });
+        }
+    });
+
+    // Anim d'apparition (rise from below)
+    cont.setScale(1, 0);
+    scene.tweens.add({ targets: cont, scaleY: 1, duration: 220, ease: 'Quad.Out' });
+
     scene.time.delayedCall(duree, () => {
-        scene.tweens.add({ targets: mur, alpha: 0, duration: 300, onComplete: () => mur.destroy() });
+        partTimer.remove();
+        scene.tweens.add({
+            targets: cont,
+            alpha: 0,
+            scaleY: 0.4,
+            duration: 320,
+            onComplete: () => cont.destroy()
+        });
     });
 }
 

@@ -181,6 +181,33 @@ export function creerSlot(scene, x, y, options = {}) {
                 couches.add(marker);
             }
 
+            // Badge SLOT (bas-gauche) — montre TÊTE / CORPS / ACC. sans clic.
+            // Affiché pour TOUS les items équipables (legacy + Phase 6).
+            // Pas affiché pour les Vestiges (qui ont leur propre marqueur).
+            if (item.slot && item.categorie !== 'vestige') {
+                const lettre = item.slot === 'tete' ? 'T'
+                    : item.slot === 'corps' ? 'C'
+                    : item.slot === 'accessoire' ? 'A'
+                    : null;
+                if (lettre) {
+                    const bx = -taille / 2 + 2;
+                    const by = taille / 2 - 2;
+                    // Pastille sombre
+                    const badge = scene.add.graphics();
+                    badge.fillStyle(0x000000, 0.7);
+                    badge.fillRect(bx, by - 9, 9, 9);
+                    badge.lineStyle(1, 0xc8a85a, 0.8);
+                    badge.strokeRect(bx, by - 9, 9, 9);
+                    couches.add(badge);
+                    // Lettre dorée
+                    const txt = scene.add.text(bx + 4.5, by - 4.5, lettre, {
+                        fontFamily: 'monospace', fontSize: '8px',
+                        color: '#ffd070', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    couches.add(txt);
+                }
+            }
+
             // Phase 6 — badge score chiffré (haut-droit) pour les instances
             if (estPhase6) {
                 const badge = scene.add.text(

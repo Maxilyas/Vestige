@@ -53,9 +53,10 @@ export class UIScene extends Phaser.Scene {
         this.miseAJourResonance(this.registry.get(RESONANCE_CLE) ?? RESONANCE_MAX);
         this._appliquerOpaciteJauge();
 
-        // --- Barre Garde Phase 6 — collée AU-DESSUS de la Résonance ---
+        // --- Barre Garde Phase 6 — fine ligne bleue SOUS la Résonance ---
+        // Hauteur 5 px, collée 2 px sous la Résonance.
         // (cachée tant qu'aucun item Phase 6 n'octroie de Garde)
-        this.barreGarde = poserBarreGarde(this, x, y - 24, LARGEUR_BARRE);
+        this.barreGarde = poserBarreGarde(this, x, y + HAUTEUR_BARRE + 2, LARGEUR_BARRE);
 
         // --- 3 slots SORTS Phase 6 — à GAUCHE de la Résonance ---
         // 3 × 32 px + 2 × 6 espace = 108 px largeur. Posés juste à gauche
