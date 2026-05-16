@@ -41,6 +41,7 @@ import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { executerGeste } from '../systems/GesteSystem.js';
 import { lancerCinematiqueFin } from '../systems/CinematiqueFusion.js';
 import { FRAGMENTS } from '../data/fragments.js';
+import { getAudioSystem } from '../systems/AudioSystem.js';
 import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
     poserVignette, poserParticulesAmbiance, tracerCourbeQuadratique
@@ -166,6 +167,10 @@ export class GameScene extends Phaser.Scene {
         const _prendreDegatsAvantGarde = this.resonance.prendreDegats;
         this.resonance.prendreDegats = (montant) => {
             if (montant <= 0) return _prendreDegatsAvantGarde(montant);
+            // SFX hurt : feedback dès qu'un coup est encaissé, que ce soit la
+            // Garde ou la Résonance qui absorbe. (Pas joué pour montant <= 0
+            // pour ne pas spammer sur les soins/no-op.)
+            this.audio?.jouerSfx('hurt');
             const reste = this.garde.absorber(montant, this.time.now);
             if (reste > 0) _prendreDegatsAvantGarde(reste);
         };
@@ -604,7 +609,83 @@ export class GameScene extends Phaser.Scene {
         this.events.on('enemy:dead', handlerEnemyDead);
         this.events.once('shutdown', () => this.events.off('enemy:dead', handlerEnemyDead));
 
+        // --- Musique : sélection initiale + tick d'adaptation combat ---
+        this._initialiserAudio(enMiroir);
+
         this.cameras.main.fadeIn(200, 0, 0, 0);
+    }
+
+    /**
+     * Choisit le patch musical à l'entrée de la salle, puis lance un tick
+     * périodique (250 ms) qui peut basculer combat/exploration selon la
+     * proximité des ennemis vivants.
+     *
+     *   Miroir          → 'cite'   (constant, pas de combat)
+     *   Présent + boss  → 'boss'   (tant que le boss est vivant)
+     *   Présent + ennemi <320px → 'combat'
+     *   Présent calme   → 'present' (retour 4s après le dernier ennemi proche)
+     */
+    _initialiserAudio(enMiroir) {
+        this.audio = getAudioSystem(this);
+        const initial = enMiroir ? 'cite'
+            : (this.bossVivant ? 'boss' : 'present');
+        this.audio.transitionVers(initial);
+
+        // Petit indicateur de debug — affiche le patch musical courant.
+        // À retirer une fois l'audio validé.
+        this._labelPatchDebug = this.add.text(GAME_WIDTH - 10, 10, '', {
+            fontFamily: 'monospace', fontSize: '10px',
+            color: '#7080a0'
+        }).setOrigin(1, 0).setScrollFactor(0).setDepth(200);
+
+        this._dernierCombatAt = 0;
+        if (!enMiroir) {
+            this._tickAudio = this.time.addEvent({
+                delay: 250, loop: true, callback: () => this._evaluerPatchAudio()
+            });
+            this.events.once('shutdown', () => this._tickAudio?.remove());
+        }
+        // Refresh debug — boucle indépendante pour aussi montrer 'cite' en Miroir
+        this._tickPatchLabel = this.time.addEvent({
+            delay: 250, loop: true, callback: () => {
+                if (!this._labelPatchDebug?.active) return;
+                const id = this.audio?.getPatchActif() ?? '—';
+                const pret = this.audio?.estPret() ? '' : ' (silencieux)';
+                this._labelPatchDebug.setText(`♪ ${id}${pret}`);
+            }
+        });
+        this.events.once('shutdown', () => this._tickPatchLabel?.remove());
+    }
+
+    _evaluerPatchAudio() {
+        if (!this.audio || this._cinematiqueFinEnCours) return;
+
+        // Boss prioritaire tant qu'il est en vie
+        if (this.salle?.estBoss && this.boss && !this.boss.mort) {
+            if (this.audio.getPatchActif() !== 'boss') this.audio.transitionVers('boss');
+            return;
+        }
+
+        const enCombat = this._ennemiProche(320);
+        const now = this.time.now;
+        if (enCombat) {
+            this._dernierCombatAt = now;
+            if (this.audio.getPatchActif() !== 'combat') this.audio.transitionVers('combat');
+        } else if (now - this._dernierCombatAt > 4000) {
+            if (this.audio.getPatchActif() !== 'present') this.audio.transitionVers('present');
+        }
+    }
+
+    _ennemiProche(distance) {
+        if (!this.enemies || !this.player) return false;
+        const d2 = distance * distance;
+        for (const e of this.enemies) {
+            if (!e || e.mort || !e.sprite?.active) continue;
+            const dx = e.sprite.x - this.player.x;
+            const dy = e.sprite.y - this.player.y;
+            if (dx * dx + dy * dy < d2) return true;
+        }
+        return false;
     }
 
     update() {
@@ -680,6 +761,16 @@ export class GameScene extends Phaser.Scene {
             body.setVelocityX(0);
         }
 
+        // Détection atterrissage : transition en l'air → au sol.
+        // `_enLair` est mis à true ci-dessous quand le joueur saute OU sort
+        // du sol sans sauter (chute du bord d'une plateforme).
+        if (auSol && this._enLair) {
+            this.audio?.jouerSfx('land');
+            this._enLair = false;
+        } else if (!auSol) {
+            this._enLair = true;
+        }
+
         // Phase 5b.2 — Double-saut (Vestige Voix Profonde) : 1 saut de plus
         // en l'air si flag actif. Reset au touche-sol.
         const aDoubleSaut = this.inventaire.aVestigeFlag?.('doubleSaut');
@@ -689,6 +780,7 @@ export class GameScene extends Phaser.Scene {
         if (i.sauter && !immobilise) {
             if (auSol) {
                 body.setVelocityY(-this.statsEffectives.jumpVelocity);
+                this.audio?.jouerSfx('jump');
                 // Phase 6 — auto-révélation par usage (saut)
                 this.revelation?.incrementer('sauts');
                 // Proc "Pas du Vestige" : +1 Résonance par saut (stacke avec count)
@@ -699,6 +791,7 @@ export class GameScene extends Phaser.Scene {
             } else if (this.sautsRestants > 0 && aDoubleSaut) {
                 body.setVelocityY(-this.statsEffectives.jumpVelocity * 0.92);
                 this.sautsRestants--;
+                this.audio?.jouerSfx('jump');
                 this._jouerEffetDoubleSaut?.();
             }
         }
@@ -883,6 +976,9 @@ export class GameScene extends Phaser.Scene {
 
         // === HIT FEEDBACK — c'est ici que ça devient jouissif ===
         if (aTouche) {
+            // 0. SFX d'impact
+            this.audio?.jouerSfx('hit');
+
             // 1. Screen shake court et sec
             this.cameras.main.shake(110, 0.006);
 
@@ -941,6 +1037,7 @@ export class GameScene extends Phaser.Scene {
         const fenetre = this.statsEffectives.parryFenetre;
         this.cooldownParryFin = now + this.statsEffectives.parryCooldown;
         this.parryActifJusqu = now + fenetre;
+        this.audio?.jouerSfx('parry');
 
         // === Anneau doré qui s'élargit autour du joueur (signal du déclenchement) ===
         const ring = this.add.graphics();

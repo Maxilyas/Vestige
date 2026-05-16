@@ -19,6 +19,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { DEPTH, paletteDuMonde } from '../render/PainterlyRenderer.js';
 import { poserCiel, poserSilhouettesLointaines } from '../render/Parallaxe.js';
 import { peindreLanterne } from '../render/elements/Lanterne.js';
+import { getAudioSystem } from '../systems/AudioSystem.js';
 
 const C_OR = 0xffd070;
 const C_OR_VIF = 0xfff0a0;
@@ -202,7 +203,9 @@ export class MenuScene extends Phaser.Scene {
         this._creerBouton(GAME_WIDTH / 2, boutonsY + ecartBoutons, 'Continuer', null, { desactive: true });
         this._creerBouton(GAME_WIDTH / 2, boutonsY + ecartBoutons * 2, 'Quitter', () => this._quitter());
 
-        // ── 5. CRÉDIT DISCRET EN BAS ────────────────────────────────────────
+        // ── 5. UI AUDIO + CRÉDIT DISCRET EN BAS ─────────────────────────────
+        this._creerUIAudio(GAME_WIDTH / 2, GAME_HEIGHT - 38);
+
         this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 16,
             '— prototype — VESTIGE —', {
                 fontFamily: 'Georgia, serif',
@@ -218,6 +221,11 @@ export class MenuScene extends Phaser.Scene {
         // ENTRÉE = raccourci "Nouvelle partie"
         this.input.keyboard.on('keydown-ENTER', () => this._nouvellePartie());
         this.input.keyboard.on('keydown-SPACE', () => this._nouvellePartie());
+
+        // Audio : démarrer Tone à la première interaction utilisateur
+        // (Web Audio l'exige). On n'attend pas un bouton précis — n'importe
+        // quel clic ou keydown suffit comme gesture.
+        this._brancherDemarrageAudio();
     }
 
     _estRunActif() {
@@ -348,8 +356,16 @@ export class MenuScene extends Phaser.Scene {
         // encore l'état du run gagné. Sans reset, GameScene récupérerait la
         // même seed et le même étage 10. Donc on reset systématiquement.
         // (Itération manuelle plutôt que .reset() pour compat large Phaser.)
+        //
+        // IMPORTANT : on préserve `audio_system` à travers le wipe. C'est un
+        // singleton transverse au run (contexte Web Audio + Transport déjà
+        // démarrés sur gesture utilisateur). Si on le drop ici, le nouveau
+        // GameScene crée une instance "pas prête" qui ne peut plus démarrer
+        // faute de nouveau gesture → la musique du menu joue à jamais.
+        const audioPreserve = this.registry.get('audio_system');
         const all = this.registry.getAll();
         for (const k of Object.keys(all)) this.registry.remove(k);
+        if (audioPreserve) this.registry.set('audio_system', audioPreserve);
 
         // GameScene.create() re-posera le marker, mais on l'écrit aussi ici
         // au cas où l'utilisateur ferme l'onglet entre le clic et l'init.
@@ -362,10 +378,88 @@ export class MenuScene extends Phaser.Scene {
         });
     }
 
+    _creerUIAudio(x, y) {
+        const audio = getAudioSystem(this);
+        const container = this.add.container(x, y).setDepth(DEPTH.EFFETS);
+
+        const label = this.add.text(-72, 0, '♪ Musique', {
+            fontFamily: 'Georgia, serif', fontSize: '11px',
+            color: C_OR_FADE_CSS, fontStyle: 'italic'
+        }).setOrigin(1, 0.5);
+        container.add(label);
+
+        const valeur = this.add.text(0, 0, '', {
+            fontFamily: 'Georgia, serif', fontSize: '12px',
+            color: C_OR_CSS
+        }).setOrigin(0.5);
+        container.add(valeur);
+
+        const refresh = () => {
+            const pct = Math.round(audio.getVolume() * 100);
+            valeur.setText(audio.estMute() ? 'coupé' : `${pct}%`);
+            valeur.setColor(audio.estMute() ? C_DESACTIVE_CSS : C_OR_CSS);
+        };
+
+        const flecheStyle = {
+            fontFamily: 'Georgia, serif', fontSize: '16px',
+            color: C_OR_CSS, fontStyle: 'bold'
+        };
+        const moins = this.add.text(-40, 0, '◂', flecheStyle).setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+        moins.on('pointerover', () => moins.setColor('#fff0a0'));
+        moins.on('pointerout',  () => moins.setColor(C_OR_CSS));
+        moins.on('pointerdown', () => {
+            if (audio.estMute()) audio.toggleMute(); // sortir du mute en baissant un cran
+            audio.setVolume(Math.max(0, audio.getVolume() - 0.1));
+            refresh();
+        });
+        container.add(moins);
+
+        const plus = this.add.text(40, 0, '▸', flecheStyle).setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+        plus.on('pointerover', () => plus.setColor('#fff0a0'));
+        plus.on('pointerout',  () => plus.setColor(C_OR_CSS));
+        plus.on('pointerdown', () => {
+            if (audio.estMute()) audio.toggleMute();
+            audio.setVolume(Math.min(1, audio.getVolume() + 0.1));
+            refresh();
+        });
+        container.add(plus);
+
+        const hint = this.add.text(75, 0, '(N pour couper)', {
+            fontFamily: 'Georgia, serif', fontSize: '10px',
+            color: C_SUBTLE_CSS, fontStyle: 'italic'
+        }).setOrigin(0, 0.5);
+        container.add(hint);
+
+        // Repeint quand le mute global change via touche N
+        this.registry.events.on('changedata', refresh);
+        this.events.once('shutdown', () => {
+            this.registry.events.off('changedata', refresh);
+        });
+        // Tick périodique pour suivre le mute via touche N (le système ne
+        // notifie pas via registry — petit poll de courtoisie suffit)
+        this.time.addEvent({ delay: 200, loop: true, callback: refresh });
+
+        refresh();
+    }
+
+    _brancherDemarrageAudio() {
+        const audio = getAudioSystem(this);
+        if (audio.estPret()) return;
+        const demarrer = () => {
+            audio.demarrer('menu');
+        };
+        // Tout user gesture (clic ou touche) déclenche le contexte audio
+        this.input.once('pointerdown', demarrer);
+        this.input.keyboard.once('keydown', demarrer);
+    }
+
     _quitter() {
         // Le navigateur ne peut pas être quitté programmatiquement (window.close
         // ne marche que si window a été ouverte par JS). On affiche un fade
         // d'adieu et on attend que l'utilisateur ferme l'onglet.
+        getAudioSystem(this).arreterTout();
         this.cameras.main.fadeOut(900, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.children.removeAll(true);

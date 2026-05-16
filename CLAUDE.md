@@ -89,6 +89,7 @@ npx live-server .
 - ✅ **Phases 1 → 4** — Simplification Miroir, refactor topographie/archétype, 40 topographies, bestiaires 5 biomes, rareté, étages déterministes
 - ✅ **Phase 5a → 5c.2** — Sceaux, Vestiges (fondations + capacités), MenuScene, cinématique fusion + FinScene
 - ✅ **Phase 6 → 6.2** — Crafting profond (instances forgées, score 0-100, 7 tiers couleur), Garde, sorts 1/2/3, Fondeur upgrade, fixes review
+- ✅ **Phase 7 (musique)** — Audio procédural Tone.js, 5 patches en crossfade adaptatif (menu/cité/présent/combat/boss), volume + mute persistés
 - ⬜ **5c.3** — Polish HUD cooldown Geste (overlay tournant + label)
 - ⬜ **5'** — Identité visuelle par paire d'étages (polish biome par biome)
 - ⬜ **Phase 6.x** — Passes successives polish/équilibrage Phase 6 selon retours user
@@ -133,9 +134,9 @@ npx live-server .
 ## État actuel
 *À mettre à jour à la fin de chaque session. Garder court — détails dans les commits.*
 
-- **Dernière étape franchie** : Phase 6.2 (commit `92b01cd`) — fixes review : projectiles de sort branchent overlap dégâts, taillade tournoyante orientée par `lastDirection`, layout 3 onglets Fondeur refondu en Y absolu, texte Garde repositionné sous la barre.
-- **À tester en navigateur** (Phase 6.1 + 6.2 non validées bout-en-bout) : sorts qui font des dégâts, spin orienté joueur, layout Fondeur lisible sur les 3 onglets, garde sans chevauchement, stacking exotiques (×N), reroll seed loot, palette 7 couleurs, badge T/C/A, Fondeur upgrade.
-- **Prochain chantier** : Phase 6.x — passes successives selon retours review. Échos en attente que l'équilibrage Phase 6 soit stable.
+- **Dernière étape franchie** : Phase 7 (musique) — moteur audio procédural Tone.js, 5 patches (menu/cité/présent/combat/boss) en crossfade 1.5 s, BPM par patch, volume + mute persistés localStorage, touche N pour couper. Aucun asset audio chargé.
+- **À tester en navigateur** : musique au Menu, transition Présent/Miroir en entrant en Cité, bascule combat quand un ennemi <320 px, bascule boss en salle BOSS, fade silence en FinScene, volume −/+ et N pour mute. Phase 6.1 + 6.2 toujours non validées bout-en-bout.
+- **Prochain chantier** : Phase 7.x — passes successives sur la sonorité des patches selon ressenti. Phase 6.x en attente. Échos en attente que l'équilibrage Phase 6 soit stable.
 
 ## Compromis MVP — dette technique / narrative documentée
 - **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce. La Cité = respawn point amélioré. Mécanique LORE complète (cf. [LORE.md §6](LORE.md)) reste vision long terme.

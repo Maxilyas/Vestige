@@ -16,6 +16,7 @@
 
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { VestigeIncarne } from '../render/entities/VestigeIncarne.js';
+import { getAudioSystem } from '../systems/AudioSystem.js';
 
 const C_OR = 0xffd070;
 const C_OR_VIF = 0xfff0a0;
@@ -65,6 +66,9 @@ export class FinScene extends Phaser.Scene {
                          'FondeurScene', 'IdentifieurScene', 'MarchandScene']) {
             if (this.scene.isActive(k)) this.scene.stop(k);
         }
+
+        // La musique du run s'éteint en douceur — la fin se savoure en silence
+        getAudioSystem(this).arreterTout();
 
         // Phase 5c.1 — le run est terminé, on clear le marker "run actif" pour
         // que le bouton "Continuer" du MenuScene soit grisé au prochain boot.
