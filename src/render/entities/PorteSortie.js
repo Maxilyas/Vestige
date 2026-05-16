@@ -5,7 +5,7 @@
 //   - Présent : arche érodée + intérieur BLEU FROID fantomatique tamisé + particules
 //                bleutées (vestige éteint, lueur ancienne, oubli)
 
-import { DEPTH, paletteDuMonde } from '../PainterlyRenderer.js';
+import { DEPTH, paletteCouranteScene } from '../PainterlyRenderer.js';
 
 // Lumière chaude du Miroir
 const COUL_LUMIERE_MIROIR = 0xc8a85a;
@@ -19,7 +19,7 @@ export function creerVisuelPorteSortie(scene, x, y, largeur, hauteur, monde) {
     container.setDepth(DEPTH.PLATEFORMES);
 
     const enMiroir = monde === 'miroir';
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
     const couleurPierre = enMiroir ? palette.pierre : palette.plateforme;
     const couleurPierreSombre = palette.pierreSombre;
 

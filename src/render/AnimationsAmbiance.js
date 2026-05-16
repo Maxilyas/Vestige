@@ -8,7 +8,7 @@
 //   - poserRayonsLumiere (Miroir) — faisceaux de lumière dorée en diagonale,
 //     évoque les vitraux invisibles et le soleil rasant
 
-import { DEPTH, paletteDuMonde } from './PainterlyRenderer.js';
+import { DEPTH, paletteCouranteScene } from './PainterlyRenderer.js';
 
 // ============================================================
 // HALO JOUEUR (Miroir uniquement)
@@ -16,7 +16,7 @@ import { DEPTH, paletteDuMonde } from './PainterlyRenderer.js';
 
 export function poserHaloJoueur(scene, player, monde) {
     if (monde !== 'miroir') return null;
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
 
     const halo = scene.add.graphics();
     halo.setBlendMode(Phaser.BlendModes.ADD);
@@ -58,7 +58,7 @@ export function poserHaloJoueur(scene, player, monde) {
 
 export function poserBrumeSol(scene, dims, monde) {
     if (monde !== 'normal') return [];
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
     const ySol = dims.hauteur - 40;
 
     const nuages = [];
@@ -100,7 +100,7 @@ export function poserBrumeSol(scene, dims, monde) {
 
 export function poserRayonsLumiere(scene, dims, monde) {
     if (monde !== 'miroir') return [];
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
 
     const rayons = [];
     const nbRayons = 3;

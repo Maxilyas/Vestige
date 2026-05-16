@@ -48,6 +48,11 @@ export class MenuScene extends Phaser.Scene {
     }
 
     create() {
+        // Reset biome palette active (le registry est partagé avec GameScene —
+        // sans ça le menu hériterait du dernier biome joué et perdrait son identité).
+        this.registry.set('biome_palette_active', null);
+        this.registry.set('biome_id_courant', null);
+
         // ── 1. CIEL + AMBIANCE PARALLAXE ────────────────────────────────────
         poserCiel(this, 'normal');
 

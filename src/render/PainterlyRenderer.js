@@ -56,8 +56,28 @@ export const PALETTE_MIROIR = {
     particule: 0xffd070      // étincelles dorées qui montent
 };
 
-export function paletteDuMonde(monde) {
-    return monde === 'miroir' ? PALETTE_MIROIR : PALETTE_PRESENT;
+/**
+ * Renvoie la palette à utiliser pour rendre. En Miroir, la palette MIROIR prime
+ * (le sanctuaire est universel, indépendant du biome). En Présent, on fusionne
+ * `paletteBiome` par-dessus PALETTE_PRESENT — chaque biome peut overrider tout
+ * ou partie des teintes pour donner sa signature.
+ */
+export function paletteDuMonde(monde, paletteBiome = null) {
+    if (monde === 'miroir') return PALETTE_MIROIR;
+    if (!paletteBiome) return PALETTE_PRESENT;
+    return { ...PALETTE_PRESENT, ...paletteBiome };
+}
+
+/**
+ * Lit la `paletteBiome` active stockée dans le registry de la scène (placée
+ * par GameScene à la construction de la salle) et renvoie la palette fusionnée.
+ * Helper à utiliser depuis les modules de rendu pour bénéficier automatiquement
+ * de l'overrides biome-spécifique.
+ */
+export function paletteCouranteScene(scene, monde) {
+    if (monde === 'miroir') return PALETTE_MIROIR;
+    const paletteBiome = scene.registry.get('biome_palette_active');
+    return paletteDuMonde(monde, paletteBiome);
 }
 
 // ============================================================
@@ -141,7 +161,7 @@ export function preparerTextureParticule(scene) {
  */
 export function poserParticulesAmbiance(scene, dims, monde) {
     preparerTextureParticule(scene);
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
     const enMiroir = monde === 'miroir';
 
     const config = enMiroir

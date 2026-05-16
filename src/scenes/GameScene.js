@@ -46,6 +46,7 @@ import {
     PALETTE_PRESENT, PALETTE_MIROIR, paletteDuMonde, DEPTH,
     poserVignette, poserParticulesAmbiance, tracerCourbeQuadratique
 } from '../render/PainterlyRenderer.js';
+import { paletteBiomePourId } from '../data/biomes.js';
 import { peindreDecor } from '../render/DecorRegistry.js';
 import { poserCiel, poserEtoilesOuPoussiere, poserSilhouettesLointaines } from '../render/Parallaxe.js';
 import { poserHaloJoueur, poserBrumeSol, poserRayonsLumiere } from '../render/AnimationsAmbiance.js';
@@ -295,7 +296,13 @@ export class GameScene extends Phaser.Scene {
         // --- Palette + salle ---
         const enMiroir = mondeCourant === 'miroir';
         const niveau = niveauDangerEtage(etageNumero);
-        const palette = paletteDuMonde(mondeCourant);
+        // Phase 5' — la palette biome enrichit PALETTE_PRESENT au runtime.
+        // En Miroir on garde la palette MIROIR pure (sanctuaire universel),
+        // donc on n'expose la paletteBiome que côté Présent.
+        const paletteBiome = enMiroir ? null : paletteBiomePourId(salle.biomeId);
+        this.registry.set('biome_id_courant', salle.biomeId);
+        this.registry.set('biome_palette_active', paletteBiome);
+        const palette = paletteDuMonde(mondeCourant, paletteBiome);
         this.palette = palette;
         this.mondeCourant = mondeCourant;
         // Le ciel a son propre dégradé qui couvre le fond — on garde quand même

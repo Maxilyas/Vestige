@@ -10,14 +10,14 @@
 import { peindreBatiment } from './elements/Batiment.js';
 import { peindreTour } from './elements/Tour.js';
 import { peindreDome } from './elements/Dome.js';
-import { paletteDuMonde, DEPTH } from './PainterlyRenderer.js';
+import { paletteCouranteScene, DEPTH } from './PainterlyRenderer.js';
 
 // ============================================================
 // CIEL / ABÎME — dégradé vertical via texture Canvas
 // ============================================================
 
-function preparerTextureCiel(scene, monde) {
-    const id = `_ciel_${monde}`;
+function preparerTextureCiel(scene, monde, paletteBiome, biomeKey) {
+    const id = `_ciel_${monde}_${biomeKey || 'default'}`;
     if (scene.textures.exists(id)) return id;
     const cv = scene.textures.createCanvas(id, 4, 540);
     const ctx = cv.getContext();
@@ -26,7 +26,13 @@ function preparerTextureCiel(scene, monde) {
         gradient.addColorStop(0, '#5a3a20');
         gradient.addColorStop(0.55, '#2a1810');
         gradient.addColorStop(1, '#0a0604');
+    } else if (paletteBiome && paletteBiome.fondGradientHaut) {
+        // Biome enrichi : utilise ses propres stops (haut/mid/bas)
+        gradient.addColorStop(0, paletteBiome.fondGradientHaut);
+        gradient.addColorStop(0.55, paletteBiome.fondGradientMid || paletteBiome.fondGradientBas);
+        gradient.addColorStop(1, paletteBiome.fondGradientBas);
     } else {
+        // Présent générique (biomes pas encore enrichis)
         gradient.addColorStop(0, '#162236');
         gradient.addColorStop(0.55, '#0a1424');
         gradient.addColorStop(1, '#03050c');
@@ -39,10 +45,14 @@ function preparerTextureCiel(scene, monde) {
 
 /**
  * Pose le ciel/abîme : image stretchée à la taille du canvas, fixe à l'écran.
+ * Lit la `paletteBiome` active dans le registry pour fabriquer un dégradé
+ * spécifique au biome courant (mise en cache par couple monde + biomeId).
  */
 export function poserCiel(scene, monde) {
     const cam = scene.cameras.main;
-    const id = preparerTextureCiel(scene, monde);
+    const paletteBiome = scene.registry.get('biome_palette_active');
+    const biomeKey = scene.registry.get('biome_id_courant') || 'default';
+    const id = preparerTextureCiel(scene, monde, paletteBiome, biomeKey);
     const ciel = scene.add.image(cam.width / 2, cam.height / 2, id);
     ciel.setDisplaySize(cam.width, cam.height);
     ciel.setScrollFactor(0); // collé à la caméra (parallax x0 — fond fixe)
@@ -56,7 +66,7 @@ export function poserCiel(scene, monde) {
 
 export function poserEtoilesOuPoussiere(scene, dims, monde) {
     if (!scene.textures.exists('_particule')) return null;
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
     const enMiroir = monde === 'miroir';
 
     const config = {
@@ -88,7 +98,7 @@ export function poserEtoilesOuPoussiere(scene, dims, monde) {
  * Composition seedée par rng.
  */
 export function poserSilhouettesLointaines(scene, dims, monde, rng) {
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
     const ySol = dims.hauteur - 40;
 
     // 5-7 silhouettes réparties horizontalement, sur une largeur étendue

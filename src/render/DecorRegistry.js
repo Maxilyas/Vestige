@@ -21,7 +21,7 @@ import { peindreLanterne } from './elements/Lanterne.js';
 import { peindreBanderole } from './elements/Banderole.js';
 import { peindreTonneau, peindreCaisse, peindrePotFleurs, peindreEtalMarchand } from './elements/MobilierVie.js';
 import { peindreCascade } from './elements/Cascade.js';
-import { paletteDuMonde } from './PainterlyRenderer.js';
+import { paletteCouranteScene } from './PainterlyRenderer.js';
 
 const HAUTEUR_SOL = 40;
 
@@ -419,7 +419,7 @@ export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, op
     const plan = options.estCiteMarchande ? planCiteMarchande : PLANS[archetype];
     if (!plan) return [];
 
-    const palette = paletteDuMonde(monde);
+    const palette = paletteCouranteScene(scene, monde);
     const elements = plan(dims, rng);
     const objets = [];
 

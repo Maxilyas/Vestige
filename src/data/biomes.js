@@ -25,6 +25,38 @@ export const BIOMES = {
             ambiance: 0x3a4a3a,
             accent: 0xc8a85a
         },
+        // Phase 5' — palette enrichie peinte par-dessus PALETTE_PRESENT au runtime.
+        // Direction artistique : aube voilée matin, mélancolique paisible. La ruine
+        // est ancienne, la mousse a repris ses droits, les racines pourpres percent
+        // la pierre — premier présage discret du Reflux à venir.
+        paletteBiome: {
+            // Ciel : aube voilée, brun-vert pâle qui tire vers le sol obscur
+            fond: '#1a1f18',
+            fondGradientHaut: '#3a4838',
+            fondGradientMid:  '#202820',
+            fondGradientBas:  '#0e120c',
+
+            // Plateformes : pierre humide vert-gris, contour herbe vivace,
+            // ornements pourpres (racines qui transpercent la roche)
+            plateforme:          0x3a463a,
+            plateformeContour:   0x5a6a52,
+            plateformeOrnement:  0x6a3060,
+
+            // Structures pierre — trois tons pour le volume painterly
+            pierre:        0x5a6850,
+            pierreSombre:  0x2a352a,
+            pierreClaire:  0x7a8a6a,
+
+            // Signature biome : mousse vivace + racines pourpres saturées
+            mousse:  0x4a6240,
+            racine:  0x6a2070,
+            accent:  0x88643a, // or terni (les ruines ont gardé un peu d'éclat)
+
+            // Atmosphère : brume verte-grise, poussière vert pâle (les lucioles
+            // de l'Étape 4 viendront se superposer en mode ADD)
+            brume:     0x3a5448,
+            particule: 0xb8c89a
+        },
         // Pool pondéré : 4 basics × 3 copies + 6 innovants × 2 copies = 24 entries
         // → ~50% basics, ~50% innovants. Courbe d'apprentissage douce (le
         // joueur voit majoritairement les basics au début, puis croise les
@@ -155,4 +187,14 @@ export function biomePourEtage(numero) {
     if (numero <= 6) return BIOMES.cristaux_glaces;
     if (numero <= 8) return BIOMES.voile_inverse;
     return BIOMES.coeur_reflux;
+}
+
+/**
+ * Renvoie la `paletteBiome` (overrides peints sur PALETTE_PRESENT) pour un
+ * biomeId, ou `null` si le biome n'a pas (encore) sa palette enrichie.
+ * Utilisé par GameScene pour alimenter le registry, puis lu par les helpers
+ * de rendu via `paletteCouranteScene`.
+ */
+export function paletteBiomePourId(biomeId) {
+    return BIOMES[biomeId]?.paletteBiome || null;
 }
