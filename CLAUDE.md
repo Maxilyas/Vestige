@@ -192,6 +192,15 @@ npx live-server .
 
 - **⚠️ Review (continuée)** : la Phase 6.1 ajoute des correctifs mais reste **non testée bout-en-bout en navigateur**. Points à valider après cette passe : (a) cleanup auto des items legacy/orphelins au démarrage, (b) signatures Médaille de l'aube + Plastron gravé affichent leur nom propre + description, (c) deux Cœur dilaté donnent bien +30 Résonance max, (d) loot change après retour Cité, (e) mur de cendre est posé devant le joueur au niveau du sol, (f) panneau détails ne dépasse plus les boutons même avec 4 stats + 2 exotiques + 1 sort + 1 signature, (g) badge T/C/A visible sur chaque item équipable de l'inventaire, (h) drop rates feels OK en early game, (i) barre Garde bleue fine sous la Résonance, (j) onglet AMÉLIORER + achat palier 1 fonctionne, (k) palier persiste après reload page.
 
+- **Phase 6.2 — Deuxième passe de corrections** (suite à la review user) :
+  - **Garde texte** : repositionné SOUS la barre (origin top-right à `y + hauteur + 2`), plus de chevauchement avec la barre Résonance au-dessus.
+  - **Projectiles de sort sans dégâts** : `SortSystem.spawnerProjectile` créait directement `new Projectile(...)` sans brancher d'overlap avec les ennemis. Refondu pour passer par `scene._creerProjectile({ origine: 'joueur', ... })` qui pose les overlaps dynamiques sur tous les ennemis + boss et applique `e.recevoirDegats(proj.degats)` à l'impact. Concerne : tir_conique, projectile_homing, projectile_perce, projectile_eventail, pointe_devant.
+  - **Taillade tournoyante (spin)** : nouvelle implémentation `spawnerSpin(scene, rayon, degats, hits)` qui tient compte de `lastDirection` du joueur. Une lame visible (3 couches concentriques : outer halo, mid, core blanc) tourne 360° autour du joueur sur la durée totale (hits × 120 ms), suit la position du joueur via `onUpdate`, et applique les dégâts circulaires en N pulses. Sens horaire si dir > 0, antihoraire si dir < 0. Angle de départ devant le joueur.
+  - **Layout 3 onglets Fondeur** : reflow vertical complet avec coordonnées Y absolues et séparateurs horizontaux (`_tracerSep(y)`).
+    - **FRAGMENTS** : slots à fondre (168) → label (196) → boutons d'ajout (234) → sep (282) → coût (294) → bouton FONDRE (326) → sep (354) → titre RÉSULTAT (364) → losange + nom (392-410).
+    - **COMBINER** : explication (162) → slots A + B + signe + (204) → sep (296) → preview (306-356) → bouton COMBINER (388) → sep (416 si résultat) → RÉSULTAT (424-438).
+    - **RE-RÉSONNER** : explication (162) → slot CIBLE (204) → sep (286) → titre VERROUILLER + stats (296-380) → coût (388) → bouton RÉSONNER (414) → sep (440 si résultat) → NOUVEAU SCORE (448-462).
+
 - **Prochain chantier** : Phase 6.x — passes successives sur les retours user après tests en navigateur. Le système d'Échos (re-respawn salles nettoyées en Élite + drop bonus) reste à implémenter quand l'équilibrage de Phase 6 sera stable.
 
 ## Compromis MVP — dette technique / narrative documentée

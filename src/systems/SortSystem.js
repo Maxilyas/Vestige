@@ -66,9 +66,7 @@ function executerCodeSort(scene, sortDef, slot, instance) {
             scene.time.delayedCall(180, () => spawnerAOEAutour(scene, p.portee, p.degats));
             break;
         case 'spin':
-            for (let h = 0; h < (p.hits ?? 3); h++) {
-                scene.time.delayedCall(h * 120, () => spawnerAOEAutour(scene, p.rayon, p.degats));
-            }
+            spawnerSpin(scene, p.rayon, p.degats, p.hits ?? 3);
             break;
         case 'aoe_au_sol':
             player.body.setVelocityY(-340);
@@ -197,13 +195,15 @@ function executerCodeSort(scene, sortDef, slot, instance) {
 // ============================================================
 
 function spawnerProjectile(scene, degats, portee, couleur, homing = false, angleOffset = 0) {
-    if (!scene.player || !scene.projectiles) return;
+    if (!scene.player || typeof scene._creerProjectile !== 'function') return;
     const dir = scene.lastDirection || 1;
     const px = scene.player.x + dir * 20;
     const py = scene.player.y;
     const cibleX = px + Math.cos(angleOffset) * dir * portee;
     const cibleY = py + Math.sin(angleOffset) * portee;
-    const proj = new Projectile(scene, {
+    // Passe par _creerProjectile pour brancher les overlaps ennemis correctement.
+    // L'origine "joueur" garantit que les ennemis et le boss prennent les dégâts.
+    scene._creerProjectile({
         x: px, y: py, cibleX, cibleY,
         vitesse: 480,
         degats,
@@ -211,9 +211,74 @@ function spawnerProjectile(scene, degats, portee, couleur, homing = false, angle
         couleur,
         halo: couleur,
         homing,
-        sourceJoueur: true
+        origine: 'joueur'
     });
-    scene.projectiles.push(proj);
+}
+
+/**
+ * Taillade tournoyante — une lame visible qui pivote 360° autour du joueur,
+ * avec N hits successifs (chaque hit applique les dégâts à tous les ennemis
+ * dans le cercle). Le sens de rotation suit la direction du joueur :
+ * → joueur à droite → rotation horaire ; ← joueur à gauche → antihoraire.
+ */
+function spawnerSpin(scene, rayon, degats, hits) {
+    if (!scene.player) return;
+    const dir = scene.lastDirection || 1; // sens horaire si +1, antihoraire si -1
+    const dureeHit = 120;
+    const dureeTotale = hits * dureeHit;
+    // Angle de départ : devant le joueur (dir > 0 → 0 rad, dir < 0 → π)
+    const angleStart = dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+
+    // Conteneur visuel suivant le joueur
+    const cont = scene.add.container(scene.player.x, scene.player.y).setDepth(80);
+    cont.setBlendMode(Phaser.BlendModes.ADD);
+
+    // Lame qui tourne — trois couches concentriques pour la profondeur
+    const lameOuter = scene.add.graphics();
+    lameOuter.fillStyle(0xffd070, 0.18);
+    lameOuter.slice(0, 0, rayon, 0, Math.PI * 0.55, false);
+    lameOuter.fillPath();
+    cont.add(lameOuter);
+    const lameMid = scene.add.graphics();
+    lameMid.fillStyle(0xffd070, 0.45);
+    lameMid.slice(0, 0, rayon * 0.85, 0, Math.PI * 0.4, false);
+    lameMid.fillPath();
+    cont.add(lameMid);
+    const lameCore = scene.add.graphics();
+    lameCore.fillStyle(0xffffff, 0.85);
+    lameCore.slice(0, 0, rayon * 0.7, 0, Math.PI * 0.25, false);
+    lameCore.fillPath();
+    cont.add(lameCore);
+
+    cont.rotation = angleStart;
+
+    // Tween de rotation : 3 tours par seconde (cohérent avec hits × 120 ms)
+    const toursTotal = hits;
+    scene.tweens.add({
+        targets: cont,
+        rotation: angleStart + dir * Math.PI * 2 * toursTotal,
+        duration: dureeTotale,
+        ease: 'Linear',
+        onUpdate: () => {
+            // Suit la position du joueur
+            cont.x = scene.player.x;
+            cont.y = scene.player.y;
+        },
+        onComplete: () => cont.destroy()
+    });
+
+    // Hits successifs : on applique les dégâts en pulses
+    for (let h = 0; h < hits; h++) {
+        scene.time.delayedCall(h * dureeHit, () => {
+            if (!Array.isArray(scene.enemies)) return;
+            const cx = scene.player.x, cy = scene.player.y;
+            for (const e of scene.enemies) {
+                if (!e || e.mort || !e.sprite?.active) continue;
+                const dist = Phaser.Math.Distance.Between(cx, cy, e.sprite.x, e.sprite.y);
+                if (dist <= rayon) e.recevoirDegats?.(degats);
+            }
+        });
+    }
 }
 
 function spawnerAOEAutour(scene, rayon, degats) {

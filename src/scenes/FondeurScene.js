@@ -284,38 +284,51 @@ export class FondeurScene extends Phaser.Scene {
     }
 
     // ============================================================
-    // ONGLET 1 — FRAGMENTS (forge legacy)
+    // ONGLET 1 — FRAGMENTS (forge par fragments)
+    // Layout vertical compact :
+    //   Y_SLOTS (168)      slots fragments à fondre
+    //   Y_LABEL_BIN (196)  label "FRAGMENTS"
+    //   Y_BTN_AJOUT (232)  3 boutons d'ajout par famille
+    //   Y_SEP (290)        séparateur
+    //   Y_COUT (300)       texte du coût
+    //   Y_BTN (326)        bouton FONDRE
+    //   Y_SEP2 (354)       séparateur
+    //   Y_RESULTAT (366)   titre + losange + nom du résultat
     // ============================================================
     _renderOngletFragments() {
         const cx = GAME_WIDTH / 2;
-        const y0 = 170;
 
-        // 3 emplacements
-        const taille = 52;
-        const espace = 16;
+        // ─── Slots à fondre (3 cases) ─────────────────────────────
+        const yS = 168;
+        const taille = 50;
+        const espace = 14;
         for (let i = 0; i < 3; i++) {
             const x = cx + (i - 1) * (taille + espace);
             const cadre = this.add.graphics();
             cadre.fillStyle(0x080604, 1);
-            cadre.fillRect(x - taille / 2, y0 - taille / 2, taille, taille);
+            cadre.fillRect(x - taille / 2, yS - taille / 2, taille, taille);
             cadre.lineStyle(2, COULEURS_INVENTAIRE.or, 0.85);
-            cadre.strokeRect(x - taille / 2, y0 - taille / 2, taille, taille);
+            cadre.strokeRect(x - taille / 2, yS - taille / 2, taille, taille);
             this.zoneCont.add(cadre);
             const fam = this.slots[i];
-            if (fam) this.zoneCont.add(peindreEmblemeFamille(this, x, y0, fam, 26));
-            const hit = this.add.rectangle(x, y0, taille, taille, 0xffffff, 0)
+            if (fam) this.zoneCont.add(peindreEmblemeFamille(this, x, yS, fam, 24));
+            const hit = this.add.rectangle(x, yS, taille, taille, 0xffffff, 0)
                 .setInteractive({ useHandCursor: true });
             hit.on('pointerdown', () => { this.slots[i] = null; this._dessinerContenuOnglet(); });
             this.zoneCont.add(hit);
         }
-        this.zoneCont.add(this.add.text(cx, y0 + taille / 2 + 8, 'FRAGMENTS', {
+        this.zoneCont.add(this.add.text(cx, yS + taille / 2 + 6, 'FRAGMENTS À FONDRE', {
             fontFamily: 'monospace', fontSize: '9px', color: '#8a8a9a', fontStyle: 'bold'
         }).setOrigin(0.5, 0));
 
-        // Boutons ajout (3 familles)
-        const y1 = y0 + 78;
-        const tailleBtn = 42;
+        // ─── Boutons d'ajout (3 familles) ─────────────────────────
+        const yA = 234;
+        const tailleBtn = 38;
         const familles = ['blanc', 'bleu', 'noir'];
+        // Petit titre au-dessus
+        this.zoneCont.add(this.add.text(cx, yA - tailleBtn / 2 - 10, '— AJOUTER UN FRAGMENT —', {
+            fontFamily: 'monospace', fontSize: '8px', color: '#6a6a7a'
+        }).setOrigin(0.5, 0));
         for (let i = 0; i < familles.length; i++) {
             const fam = familles[i];
             const x = cx + (i - 1) * (tailleBtn + 14);
@@ -323,19 +336,19 @@ export class FondeurScene extends Phaser.Scene {
             const interactif = dispo > 0 && this.slots.some(s => s === null);
             const cadre = this.add.graphics();
             cadre.fillStyle(0x080604, 1);
-            cadre.fillRect(x - tailleBtn / 2, y1 - tailleBtn / 2, tailleBtn, tailleBtn);
+            cadre.fillRect(x - tailleBtn / 2, yA - tailleBtn / 2, tailleBtn, tailleBtn);
             cadre.lineStyle(1, interactif ? COULEURS_INVENTAIRE.or : 0x4a4a5a, interactif ? 0.85 : 0.4);
-            cadre.strokeRect(x - tailleBtn / 2, y1 - tailleBtn / 2, tailleBtn, tailleBtn);
+            cadre.strokeRect(x - tailleBtn / 2, yA - tailleBtn / 2, tailleBtn, tailleBtn);
             this.zoneCont.add(cadre);
-            const emb = peindreEmblemeFamille(this, x, y1 - 4, fam, 22);
+            const emb = peindreEmblemeFamille(this, x, yA - 4, fam, 20);
             if (!interactif) emb.setAlpha(0.35);
             this.zoneCont.add(emb);
-            this.zoneCont.add(this.add.text(x, y1 + tailleBtn / 2 - 6, String(dispo), {
-                fontFamily: 'monospace', fontSize: '11px',
+            this.zoneCont.add(this.add.text(x, yA + tailleBtn / 2 - 6, String(dispo), {
+                fontFamily: 'monospace', fontSize: '10px',
                 color: interactif ? '#e8e4d8' : '#5a5a6a', fontStyle: 'bold'
             }).setOrigin(0.5));
             if (interactif) {
-                const hit = this.add.rectangle(x, y1, tailleBtn, tailleBtn, 0xffffff, 0)
+                const hit = this.add.rectangle(x, yA, tailleBtn, tailleBtn, 0xffffff, 0)
                     .setInteractive({ useHandCursor: true });
                 hit.on('pointerdown', () => {
                     const idx = this.slots.findIndex(s => s === null);
@@ -345,8 +358,10 @@ export class FondeurScene extends Phaser.Scene {
             }
         }
 
-        // Coût + bouton FONDRE
-        const y2 = y1 + 60;
+        // ─── Séparateur ───────────────────────────────────────────
+        this._tracerSep(282);
+
+        // ─── Coût + bouton FONDRE ─────────────────────────────────
         const nbFrag = this.slots.filter(s => s !== null).length;
         const cout = coutEnSel(nbFrag);
         const sel = this.economy.getSel();
@@ -354,11 +369,11 @@ export class FondeurScene extends Phaser.Scene {
         const invPlein = this.inventaire.estPlein();
         const peutForger = nbFrag > 0 && peutPayer && !invPlein;
         const couleurCout = peutPayer ? '#ffd070' : '#ff6060';
-        this.zoneCont.add(this.add.text(cx, y2, `Coût : ${cout} Sel`, {
-            fontFamily: 'monospace', fontSize: '13px', color: couleurCout,
+        this.zoneCont.add(this.add.text(cx, 294, `Coût : ${cout} Sel`, {
+            fontFamily: 'monospace', fontSize: '12px', color: couleurCout,
             fontStyle: 'bold', stroke: '#000', strokeThickness: 2
         }).setOrigin(0.5, 0));
-        this._ajouterBouton(this.zoneCont, cx, y2 + 28, 'FONDRE', peutForger, () => {
+        this._ajouterBouton(this.zoneCont, cx, 326, 'FONDRE', peutForger, () => {
             const fragments = this.slots.filter(s => s !== null);
             const res = this.fondeur.forger(fragments, this.rngForge);
             if (!res.success) {
@@ -371,9 +386,11 @@ export class FondeurScene extends Phaser.Scene {
             this._dessinerContenuOnglet();
         });
 
-        // Résultat — Phase 6 : instance forgée (losange coloré par score)
-        const y3 = y2 + 76;
-        this.zoneCont.add(this.add.text(cx, y3, '— RÉSULTAT —', {
+        // ─── Séparateur ───────────────────────────────────────────
+        this._tracerSep(354);
+
+        // ─── Résultat ─────────────────────────────────────────────
+        this.zoneCont.add(this.add.text(cx, 364, '— RÉSULTAT —', {
             fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a', fontStyle: 'bold'
         }).setOrigin(0.5, 0));
         if (this.instanceResultat) {
@@ -381,16 +398,15 @@ export class FondeurScene extends Phaser.Scene {
             const tpl = TEMPLATES[inst.templateId];
             const couleur = couleurPourScore(inst.score);
             const css = '#' + couleur.toString(16).padStart(6, '0');
-            const yRes = y3 + 26;
+            const yRes = 392;
             const halo = this.add.graphics();
             halo.setBlendMode(Phaser.BlendModes.ADD);
             halo.fillStyle(couleur, 0.6);
-            halo.fillCircle(cx, yRes, 28);
+            halo.fillCircle(cx, yRes, 26);
             this.zoneCont.add(halo);
-            // Losange Phase 6
             const losange = this.add.graphics();
             losange.fillStyle(couleur, 1);
-            const r = 18;
+            const r = 16;
             losange.beginPath();
             losange.moveTo(cx, yRes - r);
             losange.lineTo(cx + r, yRes);
@@ -399,83 +415,96 @@ export class FondeurScene extends Phaser.Scene {
             losange.closePath();
             losange.fillPath();
             this.zoneCont.add(losange);
-            // Score chiffré dans le losange
             this.zoneCont.add(this.add.text(cx, yRes, String(inst.score), {
-                fontFamily: 'monospace', fontSize: '13px', color: '#000', fontStyle: 'bold'
+                fontFamily: 'monospace', fontSize: '12px', color: '#000', fontStyle: 'bold'
             }).setOrigin(0.5));
-            // Nom + tier sous le losange
             const nom = `${tpl ? tpl.nom : 'Forgé'} • ${tierPourScore(inst.score).nomLong}`;
-            this.zoneCont.add(this.add.text(cx, yRes + r + 8, nom, {
+            this.zoneCont.add(this.add.text(cx, yRes + r + 6, nom, {
                 fontFamily: 'monospace', fontSize: '12px', color: css,
                 fontStyle: 'bold', stroke: '#000', strokeThickness: 3
             }).setOrigin(0.5, 0));
         }
     }
 
+    /** Trace un liseré horizontal doré à hauteur y. */
+    _tracerSep(y) {
+        const cx = GAME_WIDTH / 2;
+        const g = this.add.graphics();
+        g.lineStyle(1, COULEURS_INVENTAIRE.or, 0.35);
+        g.beginPath();
+        g.moveTo(cx - 220, y);
+        g.lineTo(cx + 220, y);
+        g.strokePath();
+        this.zoneCont.add(g);
+    }
+
     // ============================================================
     // ONGLET 2 — COMBINER (2 instances → 1 nouvelle)
+    // Layout :
+    //   Y_EXPL (160)       texte explicatif
+    //   Y_SLOTS (200)      slots A + B + signe central
+    //   Y_LABEL (240)      label OBJET A / OBJET B
+    //   Y_BTN_CHOISIR (260) bouton CHANGER / CHOISIR sous chaque slot
+    //   Y_SEP (296)        séparateur
+    //   Y_PREVIEW (308)    preview du résultat
+    //   Y_BTN (380)        bouton COMBINER
+    //   Y_SEP2 (408)       séparateur
+    //   Y_RES (418)        résultat
     // ============================================================
     _renderOngletCombiner() {
         const cx = GAME_WIDTH / 2;
-        const y0 = 180;
 
-        // Texte explicatif
-        this.zoneCont.add(this.add.text(cx, y0 - 18, 'Combine deux objets forgés en un seul.', {
+        this.zoneCont.add(this.add.text(cx, 162, 'Combine deux objets forgés en un seul.', {
             fontFamily: 'monospace', fontSize: '11px', color: '#a8a8b8', fontStyle: 'italic'
         }).setOrigin(0.5, 0));
 
-        // 2 slots : A + B
-        const tailleSlot = 56;
+        // ─── 2 slots A + B + signe central ────────────────────────
+        const yS = 204;
         const xA = cx - 90;
         const xB = cx + 90;
-        this._dessinerSlotCombiner(xA, y0, this.uidA, 'A', (uid) => { this.uidA = uid; this._dessinerContenuOnglet(); });
-        this._dessinerSlotCombiner(xB, y0, this.uidB, 'B', (uid) => { this.uidB = uid; this._dessinerContenuOnglet(); });
+        this._dessinerSlotCombiner(xA, yS, this.uidA, 'A', (uid) => { this.uidA = uid; this._dessinerContenuOnglet(); });
+        this._dessinerSlotCombiner(xB, yS, this.uidB, 'B', (uid) => { this.uidB = uid; this._dessinerContenuOnglet(); });
 
-        // Signe + central
-        this.zoneCont.add(this.add.text(cx, y0, '+', {
+        this.zoneCont.add(this.add.text(cx, yS, '+', {
             fontFamily: 'monospace', fontSize: '28px', color: '#c8a85a', fontStyle: 'bold'
         }).setOrigin(0.5));
 
-        // Preview
+        // ─── Séparateur ───────────────────────────────────────────
+        this._tracerSep(296);
+
+        // ─── Preview du résultat ──────────────────────────────────
         const preview = this.uidA && this.uidB
             ? this.crafting.previewCombinaison(this.uidA, this.uidB)
             : null;
-        const yPrev = y0 + 80;
         if (preview) {
             const couleur = couleurPourScore(preview.scoreBase);
             const css = '#' + couleur.toString(16).padStart(6, '0');
-            this.zoneCont.add(this.add.text(cx, yPrev, `Résultat probable :`, {
+            this.zoneCont.add(this.add.text(cx, 306, 'Résultat probable :', {
                 fontFamily: 'monospace', fontSize: '10px', color: '#8a8a9a'
             }).setOrigin(0.5, 0));
-            this.zoneCont.add(this.add.text(cx, yPrev + 14, `${preview.template.nom} • ${preview.tier.nomLong}`, {
+            this.zoneCont.add(this.add.text(cx, 320, `${preview.template.nom} • ${preview.tier.nomLong}`, {
                 fontFamily: 'monospace', fontSize: '12px', color: css, fontStyle: 'bold',
                 stroke: '#000', strokeThickness: 2
             }).setOrigin(0.5, 0));
-            this.zoneCont.add(this.add.text(cx, yPrev + 32, `Score base ${preview.scoreBase} ± 15`, {
-                fontFamily: 'monospace', fontSize: '10px', color: '#a8a8b8'
-            }).setOrigin(0.5, 0));
-            // Coût + risque
             const peutPayer = this.economy.getSel() >= preview.cout;
-            this.zoneCont.add(this.add.text(cx, yPrev + 50, `Coût : ${preview.cout} Sel`, {
-                fontFamily: 'monospace', fontSize: '11px',
-                color: peutPayer ? '#ffd070' : '#ff6060', fontStyle: 'bold',
-                stroke: '#000', strokeThickness: 2
+            this.zoneCont.add(this.add.text(cx, 340, `Coût : ${preview.cout} Sel  •  score base ${preview.scoreBase} ± 15`, {
+                fontFamily: 'monospace', fontSize: '10px',
+                color: peutPayer ? '#ffd070' : '#ff6060', fontStyle: 'bold'
             }).setOrigin(0.5, 0));
             if (preview.risque > 0) {
-                this.zoneCont.add(this.add.text(cx, yPrev + 66, `Risque de Brisé : ${Math.round(preview.risque * 100)}%`, {
+                this.zoneCont.add(this.add.text(cx, 356, `Risque de Brisé : ${Math.round(preview.risque * 100)}%`, {
                     fontFamily: 'monospace', fontSize: '10px', color: '#ff8060'
                 }).setOrigin(0.5, 0));
             }
         } else {
-            this.zoneCont.add(this.add.text(cx, yPrev, 'Sélectionne deux objets forgés à combiner.', {
+            this.zoneCont.add(this.add.text(cx, 320, 'Sélectionne deux objets forgés à combiner.', {
                 fontFamily: 'monospace', fontSize: '11px', color: '#6a6a7a', fontStyle: 'italic'
             }).setOrigin(0.5, 0));
         }
 
-        // Bouton COMBINER
-        const yBtn = yPrev + 96;
+        // ─── Bouton COMBINER ─────────────────────────────────────
         const peutCombiner = preview && this.economy.getSel() >= preview.cout && !this.inventaire.estPlein();
-        this._ajouterBouton(this.zoneCont, cx, yBtn, 'COMBINER', peutCombiner, () => {
+        this._ajouterBouton(this.zoneCont, cx, 388, 'COMBINER', peutCombiner, () => {
             const res = this.crafting.combiner(this.uidA, this.uidB, this.rngForge);
             if (!res.success) {
                 this.phraseTexte.setText('"' + (res.raison === 'inventaire_plein' ? PHRASE_INV_PLEIN : 'Les Vestiges refusent.') + '"');
@@ -488,19 +517,19 @@ export class FondeurScene extends Phaser.Scene {
             this._dessinerContenuOnglet();
         });
 
-        // Résultat
+        // ─── Résultat ─────────────────────────────────────────────
         if (this.combinerResultat) {
-            const yRes = yBtn + 38;
+            this._tracerSep(416);
             const inst = this.combinerResultat.instance;
             const brise = this.combinerResultat.brise;
             const couleur = brise ? 0x5a5a6a : couleurPourScore(inst.score);
             const css = '#' + couleur.toString(16).padStart(6, '0');
             const tpl = TEMPLATES[inst.templateId];
             const titre = brise ? 'BRISÉ' : tierPourScore(inst.score).nomLong;
-            this.zoneCont.add(this.add.text(cx, yRes, '— RÉSULTAT —', {
+            this.zoneCont.add(this.add.text(cx, 424, '— RÉSULTAT —', {
                 fontFamily: 'monospace', fontSize: '9px', color: '#c8a85a', fontStyle: 'bold'
             }).setOrigin(0.5, 0));
-            this.zoneCont.add(this.add.text(cx, yRes + 14, `${inst.score}  ★  ${tpl ? tpl.nom : '???'}  •  ${titre}`, {
+            this.zoneCont.add(this.add.text(cx, 438, `${inst.score}  ★  ${tpl ? tpl.nom : '???'}  •  ${titre}`, {
                 fontFamily: 'monospace', fontSize: '13px', color: css, fontStyle: 'bold',
                 stroke: '#000', strokeThickness: 3
             }).setOrigin(0.5, 0));
@@ -547,29 +576,39 @@ export class FondeurScene extends Phaser.Scene {
     }
 
     // ============================================================
-    // ONGLET 3 — RE-RÉSONNER (reroll)
+    // ONGLET 3 — RE-RÉSONNER (reroll d'un objet)
+    // Layout :
+    //   Y_EXPL (160)       texte explicatif
+    //   Y_SLOT (200)       slot CIBLE central
+    //   Y_BTN_CHOISIR (260) bouton CHANGER / CHOISIR
+    //   Y_SEP (286)        séparateur
+    //   Y_TITRE (296)      "VERROUILLER UNE STAT"
+    //   Y_STATS (314+)     stats cliquables (4 max)
+    //   Y_COUT (388)       texte du coût
+    //   Y_BTN (414)        bouton RÉSONNER
+    //   Y_RES (442)        résultat
     // ============================================================
     _renderOngletReroll() {
         const cx = GAME_WIDTH / 2;
-        const y0 = 180;
 
-        this.zoneCont.add(this.add.text(cx, y0 - 18, 'Reroll un objet forgé (verrouille une stat si tu veux).', {
+        this.zoneCont.add(this.add.text(cx, 162, 'Reroll un objet forgé (verrouille une stat si tu veux).', {
             fontFamily: 'monospace', fontSize: '11px', color: '#a8a8b8', fontStyle: 'italic'
         }).setOrigin(0.5, 0));
 
         const inst = this.uidReroll ? this._trouverInstance(this.uidReroll) : null;
 
-        // Slot principal
-        this._dessinerSlotCombiner(cx, y0, this.uidReroll, 'CIBLE', (uid) => {
+        // ─── Slot CIBLE ──────────────────────────────────────────
+        this._dessinerSlotCombiner(cx, 204, this.uidReroll, 'CIBLE', (uid) => {
             this.uidReroll = uid;
             this.lockedStat = null;
             this._dessinerContenuOnglet();
         });
 
         if (inst) {
-            // Liste des stats (cliquables pour verrouiller)
-            const yStats = y0 + 70;
-            this.zoneCont.add(this.add.text(cx, yStats, 'VERROUILLER UNE STAT :', {
+            this._tracerSep(286);
+
+            // ─── Liste des stats verrouillables ──────────────────
+            this.zoneCont.add(this.add.text(cx, 296, 'VERROUILLER UNE STAT (optionnel) :', {
                 fontFamily: 'monospace', fontSize: '10px', color: '#c8a85a', fontStyle: 'bold'
             }).setOrigin(0.5, 0));
 
@@ -577,7 +616,7 @@ export class FondeurScene extends Phaser.Scene {
                 const aff = inst.affixesPrim[i];
                 const def = STATS[aff.statId];
                 const verrouille = this.lockedStat === aff.statId;
-                const y = yStats + 20 + i * 18;
+                const y = 316 + i * 16;
                 const txt = `${verrouille ? '🔒 ' : '   '}${def?.label ?? aff.statId} (${aff.delta > 0 ? '+' : ''}${aff.delta})`;
                 const t = this.add.text(cx, y, txt, {
                     fontFamily: 'monospace', fontSize: '11px',
@@ -591,22 +630,19 @@ export class FondeurScene extends Phaser.Scene {
                 this.zoneCont.add(t);
             }
 
-            // Coût
+            // ─── Coût + bouton RÉSONNER ──────────────────────────
             const tier = tierPourScore(inst.score);
             const cout = COUTS_REROLL[tier.id] ?? 50;
             const peutPayer = this.economy.getSel() >= cout;
             const aEncre = this.economy.getEncre() >= 1;
-            const yCout = yStats + 24 + inst.affixesPrim.length * 18;
-            this.zoneCont.add(this.add.text(cx, yCout, `Coût : ${cout} Sel + 1 Encre du Témoin`, {
+            this.zoneCont.add(this.add.text(cx, 388, `Coût : ${cout} Sel + 1 Encre du Témoin`, {
                 fontFamily: 'monospace', fontSize: '11px',
                 color: (peutPayer && aEncre) ? '#ffd070' : '#ff6060',
                 fontStyle: 'bold'
             }).setOrigin(0.5, 0));
 
-            // Bouton
-            const yBtn = yCout + 26;
             const peutReroll = peutPayer && aEncre;
-            this._ajouterBouton(this.zoneCont, cx, yBtn, 'RÉSONNER', peutReroll, () => {
+            this._ajouterBouton(this.zoneCont, cx, 414, 'RÉSONNER', peutReroll, () => {
                 const res = this.crafting.rerollItem(this.uidReroll, this.lockedStat, this.rngForge);
                 if (!res.success) {
                     this.phraseTexte.setText('"L\'écho refuse."');
@@ -619,14 +655,14 @@ export class FondeurScene extends Phaser.Scene {
         }
 
         if (this.rerollResultat) {
+            this._tracerSep(440);
             const inst = this.rerollResultat;
-            const yRes = 480;
             const couleur = couleurPourScore(inst.score);
             const css = '#' + couleur.toString(16).padStart(6, '0');
-            this.zoneCont.add(this.add.text(cx, yRes, '— NOUVEAU SCORE —', {
+            this.zoneCont.add(this.add.text(cx, 448, '— NOUVEAU SCORE —', {
                 fontFamily: 'monospace', fontSize: '9px', color: '#c8a85a', fontStyle: 'bold'
             }).setOrigin(0.5, 0));
-            this.zoneCont.add(this.add.text(cx, yRes + 14, `${inst.score}  •  ${tierPourScore(inst.score).nomLong}`, {
+            this.zoneCont.add(this.add.text(cx, 462, `${inst.score}  •  ${tierPourScore(inst.score).nomLong}`, {
                 fontFamily: 'monospace', fontSize: '13px', color: css, fontStyle: 'bold',
                 stroke: '#000', strokeThickness: 3
             }).setOrigin(0.5, 0));

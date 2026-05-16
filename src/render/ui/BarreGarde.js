@@ -18,10 +18,11 @@ export function poserBarreGarde(scene, x, y, largeur) {
     const hauteur = 5; // barre fine
 
     // Pas de label texte — la couleur bleue suffit à identifier la barre.
-    // Valeur compacte à droite (8px) pour ne pas dominer.
-    const valeurTxt = scene.add.text(x + largeur, y - 2, '', {
+    // Valeur compacte SOUS la barre, alignée à droite, pour ne pas chevaucher
+    // la barre Résonance située au-dessus.
+    const valeurTxt = scene.add.text(x + largeur, y + hauteur + 2, '', {
         fontFamily: 'monospace', fontSize: '8px', color: COULEUR_TEXTE
-    }).setOrigin(1, 1);
+    }).setOrigin(1, 0);
     // Réfs label pour le cleanup ; ici label = juste un placeholder vide.
     const label = { setVisible: () => {} };
 
