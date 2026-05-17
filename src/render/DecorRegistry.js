@@ -368,15 +368,22 @@ const PLANS = {
 // API publique : peindreDecor()
 // ============================================================
 
+// Biomes Présent enrichis pour lesquels les silhouettes lointaines (Batiment /
+// Tour / Dome avec `silhouette: true`) sont rendues en formes opaques pures —
+// sans fenêtres, drapeaux ou lierres — pour rester cohérents avec la DA
+// (le composer biome dédié remplacera / complétera ces silhouettes).
+const BIOMES_SILHOUETTE_PURE = new Set(['ruines_basses', 'halls_cendres']);
+
 const PEINTRES = {
     colonne: (s, e, m, p) => peindreColonne(s, e.x, e.yBase, e.hauteur, m, p),
     statue: (s, e, m, p) => peindreStatue(s, e.x, e.yBase, e.hauteur ?? 100, m, p),
     racine: (s, e, m, p) => peindreRacine(s, e.x, e.yBase, e.dx, e.dy, e.longueur, m, p),
     batiment: (s, e, m, p) => {
-        // En biome Ruines basses Présent, les silhouettes lointaines sont
-        // peintes en formes opaques pures (sans fenêtres) pour rester cohérent
-        // avec la DA biome — éviter la confusion avec les plateformes.
-        const silhouettePure = e.silhouette && m !== 'miroir' && e.biomeId === 'ruines_basses';
+        // Pour les biomes enrichis Présent (Ruines basses, Halls Cendrés), les
+        // silhouettes lointaines sont peintes en formes opaques pures (sans
+        // fenêtres / drapeaux / lierres) pour rester cohérent avec la DA biome
+        // — éviter la confusion avec les plateformes praticables.
+        const silhouettePure = e.silhouette && m !== 'miroir' && BIOMES_SILHOUETTE_PURE.has(e.biomeId);
         const o = peindreBatiment(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, {
             silhouette: e.silhouette, silhouettePure
         });
@@ -384,7 +391,7 @@ const PEINTRES = {
         return o;
     },
     tour: (s, e, m, p) => {
-        const silhouettePure = e.silhouette && m !== 'miroir' && e.biomeId === 'ruines_basses';
+        const silhouettePure = e.silhouette && m !== 'miroir' && BIOMES_SILHOUETTE_PURE.has(e.biomeId);
         const o = peindreTour(s, e.x, e.yBase, e.hauteur, m, p, {
             silhouette: e.silhouette, silhouettePure
         });
@@ -392,7 +399,7 @@ const PEINTRES = {
         return o;
     },
     dome: (s, e, m, p) => {
-        const silhouettePure = e.silhouette && m !== 'miroir' && e.biomeId === 'ruines_basses';
+        const silhouettePure = e.silhouette && m !== 'miroir' && BIOMES_SILHOUETTE_PURE.has(e.biomeId);
         const o = peindreDome(s, e.x, e.yBase, e.rayon, m, p, {
             silhouette: e.silhouette, silhouettePure
         });

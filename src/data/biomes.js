@@ -86,6 +86,48 @@ export const BIOMES = {
             ambiance: 0x6a4a3a,
             accent: 0xffa040
         },
+        // Phase 5'.3 — palette enrichie peinte par-dessus PALETTE_PRESENT au runtime.
+        // Direction artistique : seuil hybride intérieur/extérieur — le joueur sort
+        // des Ruines mousseuses et entre dans une grande nef funéraire éventrée.
+        // Plafond voûté cassé au-dessus, ciel cendreux visible entre les fissures.
+        // Atmosphère SÈCHE, ÉTOUFFANTE, AMBRÉE — opposée à l'humide vert mélancolique
+        // des Ruines. "Les feux brûlent encore" : foyers résiduels qui s'éteignent
+        // au fil des étages (étage 3 vifs, étage 4 mourants — narratif "derniers feux").
+        // Signature bi-ton : braises actives orange vif ↔ foyers éteints cuivre terni.
+        paletteBiome: {
+            // Ciel hybride seuil : haut = plafond fendu (gris-violet sombre, nuit
+            // qui filtre par les brisures) → mid = lumière rasante ambrée poussiéreuse
+            // qui traverse la cendre en suspension → bas = suie noire au sol.
+            fond: '#0c0806',
+            fondGradientHaut: '#2a1e22',
+            fondGradientMid:  '#5a3a22',
+            fondGradientBas:  '#1a0e08',
+
+            // Plateformes : pierre carbonisée gris-anthracite. Top légèrement plus
+            // clair (poussière de cendre qui s'est déposée). Ornement = braise vive
+            // (lecture "ici on marche" mais aussi "ça brûle encore").
+            plateforme:          0x2e2620,
+            plateformeContour:   0x5a4030,
+            plateformeOrnement:  0xff7028,
+
+            // Pierre 3 tons cendrés — pour le volume painterly des structures
+            pierre:        0x3e3128,
+            pierreSombre:  0x1a1208,
+            pierreClaire:  0x6e5440,
+
+            // Signature biome — réinterprète les slots mousse/racine des Ruines :
+            //   `mousse` → suie (dépôts noirs profonds au lieu de mousse verdoyante)
+            //   `racine` → braise active (orange chaud vif au lieu de pourpre)
+            //   `accent` → cuivre terni (or éteint, feu mourant — pour le bi-ton)
+            mousse:  0x18120e,
+            racine:  0xff6020,
+            accent:  0xa86838,
+
+            // Atmosphère : fumée stagnante ambrée (vs brume verte) + escarbilles
+            // orangées en suspension (vs poussière vert pâle des lucioles)
+            brume:     0x4a2e1a,
+            particule: 0xffaa50
+        },
         // Pool pondéré (cf. ruines_basses) : 4 basics × 3 + 6 innovants × 2 = 24
         ennemisPool: [
             'sentinelle_cendre', 'sentinelle_cendre', 'sentinelle_cendre',
