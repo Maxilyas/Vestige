@@ -1766,10 +1766,11 @@ export function composerParallaxHallsCendres(scene, dims, monde, rng) {
         enregistrerInteractionsEscarbilles(scene, escarbilles);
     }
 
-    // Structures intérieures (cathédrale englobante) — gradient narratif :
-    //   étage 3 : teasing (1 colonne FG occasionnelle, proba 0.4)
-    //   étage 4 (salles normales) : pleine présence (2 colonnes + voute + coins)
-    //   étage 4 salle BOSS : climax (4 colonnes + voute massive + fenêtres ogives)
+    // Structures intérieures (cathédrale funéraire à demi effondrée) — activées
+    // uniquement en salle BOSS étage 4. Plafond cassé + murs latéraux ancrés
+    // caméra (scrollFactor 0,0), couleurs cohérentes plateforme du biome. Voir
+    // HallsCendresInterieur.js. Ailleurs, l'API renvoie un tableau vide et on
+    // garde le composer ouvert (silhouettes lointaines + parallax habituel).
     objets.push(...poserStructuresInterieurHallsCendres(scene, dims, rng, palette, {
         etage,
         boss: estSalleBoss
