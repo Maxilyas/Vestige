@@ -373,17 +373,29 @@ const PEINTRES = {
     statue: (s, e, m, p) => peindreStatue(s, e.x, e.yBase, e.hauteur ?? 100, m, p),
     racine: (s, e, m, p) => peindreRacine(s, e.x, e.yBase, e.dx, e.dy, e.longueur, m, p),
     batiment: (s, e, m, p) => {
-        const o = peindreBatiment(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, { silhouette: e.silhouette });
+        // En biome Ruines basses Présent, les silhouettes lointaines sont
+        // peintes en formes opaques pures (sans fenêtres) pour rester cohérent
+        // avec la DA biome — éviter la confusion avec les plateformes.
+        const silhouettePure = e.silhouette && m !== 'miroir' && e.biomeId === 'ruines_basses';
+        const o = peindreBatiment(s, e.x, e.yBase, e.hauteur, e.largeur, m, p, {
+            silhouette: e.silhouette, silhouettePure
+        });
         if (e.silhouette) o.setScrollFactor(0.7);
         return o;
     },
     tour: (s, e, m, p) => {
-        const o = peindreTour(s, e.x, e.yBase, e.hauteur, m, p, { silhouette: e.silhouette });
+        const silhouettePure = e.silhouette && m !== 'miroir' && e.biomeId === 'ruines_basses';
+        const o = peindreTour(s, e.x, e.yBase, e.hauteur, m, p, {
+            silhouette: e.silhouette, silhouettePure
+        });
         if (e.silhouette) o.setScrollFactor(0.7);
         return o;
     },
     dome: (s, e, m, p) => {
-        const o = peindreDome(s, e.x, e.yBase, e.rayon, m, p, { silhouette: e.silhouette });
+        const silhouettePure = e.silhouette && m !== 'miroir' && e.biomeId === 'ruines_basses';
+        const o = peindreDome(s, e.x, e.yBase, e.rayon, m, p, {
+            silhouette: e.silhouette, silhouettePure
+        });
         if (e.silhouette) o.setScrollFactor(0.7);
         return o;
     },
@@ -423,25 +435,13 @@ export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, op
     const elements = plan(dims, rng);
     const objets = [];
 
-    // === Cascades signature de biome (Présent uniquement, pas en cité) ===
-    // En Miroir on évite les cascades car le contraste atelier paisible /
-    // élément naturel agressif casse la lecture du monde.
+    // === Cascades signature de biome — DÉSACTIVÉES ===
+    // Retirées suite à un retour DA : les cascades bleues/jaunes/violettes selon
+    // le biome créaient des colonnes lumineuses verticales qui rivalisaient avec
+    // les plateformes physiques (effet "laser" qui sortait du tableau). On garde
+    // la possibilité de les réactiver plus tard si on veut une signature plus
+    // discrète (par exemple : flux statique alpha bas, sans bandes animées).
     const biomeId = options.biomeId ?? 'ruines_basses';
-    if (monde !== 'miroir' && !options.estCiteMarchande) {
-        const ySolPrincipal = dims.hauteur - HAUTEUR_SOL;
-        const hauteurCascade = Math.min(220, dims.hauteur * 0.55);
-        // Une cascade gauche à 8 % de la largeur et une droite à 92 %
-        const xGauche = dims.largeur * 0.08;
-        const xDroite = dims.largeur * 0.92;
-        const yTopCascade = ySolPrincipal - hauteurCascade;
-        // 70 % de chance de cascade gauche, 70 % cascade droite (variable)
-        if (rng() < 0.7) {
-            objets.push(peindreCascade(scene, xGauche, yTopCascade, hauteurCascade, biomeId));
-        }
-        if (rng() < 0.7) {
-            objets.push(peindreCascade(scene, xDroite, yTopCascade, hauteurCascade, biomeId));
-        }
-    }
 
     // 1. Sol décoré (par-dessus le sol uni mais sous les plateformes)
     if (plateformes) {
@@ -456,6 +456,9 @@ export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, op
     for (const el of elements) {
         const peintre = PEINTRES[el.type];
         if (!peintre) continue;
+        // Propage le biomeId pour que les peintres puissent adapter leur rendu
+        // (cf. silhouettePure pour les Ruines basses).
+        el.biomeId = biomeId;
         const obj = peintre(scene, el, monde, palette);
         if (obj) objets.push(obj);
     }

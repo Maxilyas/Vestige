@@ -29,28 +29,44 @@ export function peindreOrnementPlateforme(scene, x, y, largeur, hauteur, monde, 
     const enMiroir = monde === 'miroir';
 
     if (!enMiroir) {
-        // === PRÉSENT — pierre cassée ===
+        // === PRÉSENT — style "tableau peint" ===
+        // Le but : signaler "ici on marche" sans tomber dans le tranché Hollow
+        // Knight. On joue sur 4 leviers : top highlight peint, ombre portée
+        // qui décolle la plateforme du décor, micro-variations de teinte sur
+        // la surface (pas un aplat), et touffes/fleurs vivantes au sommet.
 
-        // Bandeau supérieur ombré (créve l'illusion de plat)
-        g.fillStyle(palette.pierreSombre, 0.35);
-        g.fillRect(xG, yT, largeur, 2);
-
-        // Fissures verticales aléatoires (PAS dans le sol pour ne pas le rendre trop chargé)
-        if (!estSol) {
-            const nbFissures = Math.max(1, Math.floor(largeur / 50));
-            g.lineStyle(1, palette.pierreSombre, 0.55);
-            for (let i = 0; i < nbFissures; i++) {
-                const xF = xG + ((i + 0.5) / nbFissures) * largeur + (Math.random() - 0.5) * 8;
-                g.beginPath();
-                g.moveTo(xF, yT + 1);
-                g.lineTo(xF + (Math.random() - 0.5) * 6, yB - 1);
-                g.strokePath();
-            }
+        // (1) Ombre portée — dégradé sombre 7 px sous la plateforme, décolle
+        //     visuellement du décor lointain en dessous.
+        for (let i = 0; i < 7; i++) {
+            const a = 0.20 * (1 - i / 7);
+            g.fillStyle(0x101810, a);
+            g.fillRect(xG + 1 + i * 0.5, yB + i, largeur - 2 - i, 1);
         }
 
-        // Bordure érodée (encoches irrégulières en haut)
-        g.fillStyle(palette.pierreSombre, 0.7);
-        const nbEncoches = Math.max(2, Math.floor(largeur / 30));
+        // (2) Micro-variations de teinte sur la surface — 3-5 zones légèrement
+        //     plus claires/sombres, donne l'effet "peint à main", pas aplat.
+        const nbZones = Math.max(3, Math.floor(largeur / 60));
+        for (let i = 0; i < nbZones; i++) {
+            const t = (i + 0.5) / nbZones;
+            const xZ = xG + t * largeur + (Math.random() - 0.5) * 8;
+            const wZ = largeur / nbZones * (0.6 + Math.random() * 0.4);
+            const variation = Math.random() < 0.5 ? palette.pierreClaire : palette.pierreSombre;
+            const alphaZ = 0.18 + Math.random() * 0.10;
+            g.fillStyle(variation, alphaZ);
+            g.fillRect(xZ - wZ / 2, yT + 2, wZ, hauteur - 3);
+        }
+
+        // (3) Top highlight peint — ligne 2 px claire au sommet (signal "praticable")
+        //     Couleur palette.plateformeContour avec un poil de variation pour
+        //     éviter l'aspect tracé droit.
+        g.fillStyle(palette.plateformeContour, 0.85);
+        g.fillRect(xG, yT, largeur, 1);
+        g.fillStyle(palette.pierreClaire, 0.50);
+        g.fillRect(xG, yT + 1, largeur, 1);
+
+        // (4) Bordure érodée (encoches subtiles en haut — moins denses qu'avant)
+        g.fillStyle(palette.pierreSombre, 0.6);
+        const nbEncoches = Math.max(2, Math.floor(largeur / 45));
         for (let i = 0; i < nbEncoches; i++) {
             if (Math.random() < 0.4) {
                 const xE = xG + ((i + 0.5) / nbEncoches) * largeur;
@@ -58,24 +74,93 @@ export function peindreOrnementPlateforme(scene, x, y, largeur, hauteur, monde, 
             }
         }
 
-        // Mousse aux extrémités (Présent : pourpre fanée)
-        g.fillStyle(palette.racine, 0.55);
-        g.fillCircle(xG + 4, yT + 2, 3);
-        g.fillCircle(xG + largeur - 4, yT + 2, 3);
-
-        // Quelques brindilles/herbes Présent (au sol uniquement, sinon trop chargé)
-        if (estSol) {
-            const nbHerbes = Math.floor(largeur / 80);
-            g.lineStyle(1, palette.racine, 0.5);
-            for (let i = 0; i < nbHerbes; i++) {
-                const xH = xG + Math.random() * largeur;
+        // (5) Fissures discrètes (segments courts, pas longues lignes verticales)
+        if (!estSol) {
+            const nbFissures = Math.max(1, Math.floor(largeur / 70));
+            g.lineStyle(1, palette.pierreSombre, 0.45);
+            for (let i = 0; i < nbFissures; i++) {
+                const xF = xG + ((i + 0.5) / nbFissures) * largeur + (Math.random() - 0.5) * 6;
+                const yF1 = yT + 3 + Math.random() * (hauteur - 6) * 0.3;
+                const yF2 = yF1 + (hauteur - 6) * (0.3 + Math.random() * 0.3);
                 g.beginPath();
-                g.moveTo(xH, yT);
-                g.lineTo(xH - 1, yT - 4);
-                g.lineTo(xH + 2, yT - 7);
+                g.moveTo(xF, yF1);
+                g.lineTo(xF + (Math.random() - 0.5) * 3, yF2);
                 g.strokePath();
             }
         }
+
+        // (6) Mousse / herbes sur le top — densité variable selon largeur
+        //     Mix de vert vif (palette.mousse) et rare pourpre (palette.racine)
+        const nbTouffes = Math.max(2, Math.floor(largeur / 24));
+        for (let i = 0; i < nbTouffes; i++) {
+            if (Math.random() < 0.65) {
+                const xT0 = xG + 3 + (i / nbTouffes) * (largeur - 6) + (Math.random() - 0.5) * 6;
+                const pourpre = Math.random() < 0.12;
+                const couleurT = pourpre ? palette.racine : palette.mousse;
+                const alphaT = pourpre ? 0.55 : 0.75;
+                const hauteurH = 3 + Math.random() * 5;
+                g.lineStyle(1, couleurT, alphaT);
+                g.beginPath();
+                g.moveTo(xT0, yT);
+                g.lineTo(xT0 + (Math.random() - 0.5) * 1.5, yT - hauteurH);
+                g.strokePath();
+                // 1 petit brin secondaire
+                if (Math.random() < 0.45) {
+                    g.beginPath();
+                    g.moveTo(xT0 + 1, yT);
+                    g.lineTo(xT0 + 1 + (Math.random() - 0.5) * 1, yT - hauteurH * 0.7);
+                    g.strokePath();
+                }
+            }
+        }
+
+        // (7) Touffes de mousse plus grasse aux deux extrémités (les bords retiennent
+        //     plus d'humidité — détail peint qui donne du poids visuel aux extrémités)
+        g.fillStyle(palette.mousse, 0.65);
+        g.fillEllipse(xG + 5, yT + 1, 10, 3);
+        g.fillEllipse(xG + largeur - 5, yT + 1, 10, 3);
+        g.fillStyle(palette.racine, 0.4);
+        g.fillCircle(xG + 4, yT + 2, 2);
+        g.fillCircle(xG + largeur - 4, yT + 2, 2);
+
+        // (8) Petite fleur occasionnelle (1 plateforme sur ~4) — un petit point
+        //     de couleur qui attire l'œil et rend chaque plateforme unique
+        if (Math.random() < 0.25) {
+            const xFl = xG + 10 + Math.random() * (largeur - 20);
+            const couleurFl = Math.random() < 0.5 ? 0xc8a85a : palette.racine;
+            g.fillStyle(couleurFl, 0.85);
+            g.fillCircle(xFl, yT - 4, 1.5);
+            // Tige
+            g.lineStyle(0.8, palette.mousse, 0.7);
+            g.beginPath();
+            g.moveTo(xFl, yT);
+            g.lineTo(xFl, yT - 4);
+            g.strokePath();
+        }
+
+        // (9) Mousse luminescente — 1-2 touches vert pâle qui luisent
+        //     subtilement (ADD), évoque la magie qui imprègne les ruines.
+        //     Sur un Graphics séparé pour pouvoir l'animer en pulsation.
+        const luminescence = scene.add.graphics();
+        luminescence.setDepth(DEPTH.PLATEFORMES + 1);
+        luminescence.setBlendMode(Phaser.BlendModes.ADD);
+        const nbLum = 1 + (Math.random() < 0.6 ? 1 : 0);
+        for (let i = 0; i < nbLum; i++) {
+            const xL = xG + 12 + Math.random() * Math.max(8, largeur - 24);
+            luminescence.fillStyle(0xc8e090, 0.32);
+            luminescence.fillEllipse(xL, yT + 1, 14, 5);
+            luminescence.fillStyle(0xe8ffb0, 0.45);
+            luminescence.fillEllipse(xL, yT + 1, 6, 2.5);
+        }
+        // Pulse très doux
+        scene.tweens.add({
+            targets: luminescence,
+            alpha: { from: 0.55, to: 1.0 },
+            duration: 1800 + Math.random() * 1400,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
     } else {
         // === MIROIR — pavés ornés ===
 

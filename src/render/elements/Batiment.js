@@ -18,6 +18,31 @@ export function peindreBatiment(scene, x, yBase, hauteur, largeur, monde, palett
         g.setDepth(DEPTH.DECOR_ARRIERE);
     }
 
+    // Mode silhouette pure : forme opaque sombre uniforme sans détails internes.
+    // Utilisé pour les biomes dont la DA exige des silhouettes nettes (ex: Ruines
+    // basses) afin de ne pas créer de confusion avec les plateformes physiques.
+    if (opts.silhouettePure) {
+        const lwHalf2 = largeur / 2;
+        const hReelle = enMiroir ? hauteur : hauteur * (0.55 + Math.random() * 0.3);
+        const couleur = 0x1a221a;
+        g.fillStyle(couleur, 1);
+        // Corps rectangulaire
+        g.fillRect(-lwHalf2, -hReelle, largeur, hReelle);
+        // Sommet effondré (segments irréguliers — caractère, pas détail intérieur)
+        g.beginPath();
+        g.moveTo(-lwHalf2, -hReelle);
+        const segs2 = 6;
+        for (let i = 1; i <= segs2; i++) {
+            const sx = -lwHalf2 + (largeur * i / segs2);
+            const sy = -hReelle + (Math.random() - 0.5) * 18 - 6;
+            g.lineTo(sx, sy);
+        }
+        g.lineTo(lwHalf2, -hReelle);
+        g.closePath();
+        g.fillPath();
+        return g;
+    }
+
     const lwHalf = largeur / 2;
     const nbEtages = Math.max(2, Math.floor(hauteur / 70));
     const hEtage = hauteur / nbEtages;

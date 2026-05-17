@@ -48,7 +48,8 @@ import {
 } from '../render/PainterlyRenderer.js';
 import { paletteBiomePourId } from '../data/biomes.js';
 import { peindreDecor } from '../render/DecorRegistry.js';
-import { poserCiel, poserEtoilesOuPoussiere, poserSilhouettesLointaines } from '../render/Parallaxe.js';
+import { poserCiel, poserEtoilesOuPoussiere } from '../render/Parallaxe.js';
+import { composerParallaxBiome } from '../render/biomes/index.js';
 import { poserHaloJoueur, poserBrumeSol, poserRayonsLumiere } from '../render/AnimationsAmbiance.js';
 import { peindreOrnementPlateforme } from '../render/PlateformeStyle.js';
 import { JoueurVisuel } from '../render/entities/Joueur.js';
@@ -302,6 +303,9 @@ export class GameScene extends Phaser.Scene {
         const paletteBiome = enMiroir ? null : paletteBiomePourId(salle.biomeId);
         this.registry.set('biome_id_courant', salle.biomeId);
         this.registry.set('biome_palette_active', paletteBiome);
+        // Drapeau lu par les composeurs biome pour adapter l'ambiance (mood
+        // salle de boss : voile plus sombre, pluie forcée, feuilles off…).
+        this.registry.set('salle_est_boss', !!salle.estBoss);
         const palette = paletteDuMonde(mondeCourant, paletteBiome);
         this.palette = palette;
         this.mondeCourant = mondeCourant;
@@ -322,8 +326,11 @@ export class GameScene extends Phaser.Scene {
         // Le rng du décor est seedé pour rester reproductible
         const rngDecor = creerRng((seedRun ^ 0x517CC1B7 ^ this._hashStr(salleId)) >>> 0);
 
-        // Couche 2 (x0.3) : silhouettes très lointaines (rangée de bâtiments à l'horizon)
-        poserSilhouettesLointaines(this, salle.dims, mondeCourant, rngDecor);
+        // Couches lointaines parallax — biome-spécifique en Présent (montagnes
+        // brumeuses x0.15 + ruines spécifiques x0.3 + forêt morte x0.5 pour
+        // les Ruines basses ; fallback générique sinon). En Miroir → silhouettes
+        // urbaines génériques (Cité).
+        composerParallaxBiome(this, salle.dims, mondeCourant, rngDecor, salle.biomeId);
 
         // Couche 3 (x0.7) : silhouettes proches + structures principales (DecorRegistry)
         // La salle d'entrée en Miroir est une CITÉ MARCHANDE — on enrichit le décor.
@@ -1181,6 +1188,11 @@ export class GameScene extends Phaser.Scene {
      * Effet visuel renforcé pour un parry réussi : flash expansif + burst doré.
      */
     _jouerEffetParryReussi() {
+        // Event scene-level pour que les biomes (ex: brume réactive Ruines basses)
+        // puissent réagir au parry. Émis une seule fois par parry quel que soit
+        // le call site (cf. les 3 appels à _jouerEffetParryReussi dans ce fichier).
+        this.events.emit('parry:success', { x: this.player.x, y: this.player.y });
+
         // Flash expansif additif
         const flash = this.add.graphics();
         flash.x = this.player.x;

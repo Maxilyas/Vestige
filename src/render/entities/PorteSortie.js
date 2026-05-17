@@ -33,60 +33,65 @@ export function creerVisuelPorteSortie(scene, x, y, largeur, hauteur, monde) {
     const epaisseurPied = 7;
     const hauteurArc = w / 2;
 
-    // --- Halo extérieur (additif, pulse) ---
-    // Miroir : franc et chaleureux. Présent : très diffus, presque imperceptible.
-    const halo = scene.add.graphics();
-    halo.setBlendMode(Phaser.BlendModes.ADD);
+    // --- Halo extérieur + intérieur lumineux (Miroir uniquement) ---
+    // En Miroir, la porte rayonne : les chasse-pieds dorés du sanctuaire signalent
+    // les passages. En Présent, on retire tout le glow pour rester cohérent avec
+    // la DA "ruines silhouettées sans halos fantomatiques" — la porte est lue
+    // uniquement via sa silhouette d'arche en pierre + un intérieur sombre.
     if (enMiroir) {
+        const halo = scene.add.graphics();
+        halo.setBlendMode(Phaser.BlendModes.ADD);
         halo.fillStyle(couleurLumiere, 0.18);
         halo.fillEllipse(0, 0, w + 30, h + 30);
         halo.fillStyle(couleurLumiere, 0.3);
         halo.fillEllipse(0, 0, w + 10, h + 10);
+        container.add(halo);
+        scene.tweens.add({
+            targets: halo,
+            alpha: { from: 0.7, to: 1 },
+            scale: { from: 0.95, to: 1.05 },
+            duration: 1500,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+
+        const interieur = scene.add.graphics();
+        interieur.setBlendMode(Phaser.BlendModes.ADD);
+        interieur.fillStyle(couleurLumiere, 0.55 * intensite);
+        interieur.fillRect(-w / 2 + epaisseurPied, -h / 2 + hauteurArc, w - 2 * epaisseurPied, h / 2 + h / 2 - hauteurArc);
+        interieur.fillStyle(couleurLumiere, 0.45 * intensite);
+        interieur.beginPath();
+        interieur.moveTo(-w / 2 + epaisseurPied, -h / 2 + hauteurArc);
+        interieur.arc(0, -h / 2 + hauteurArc, w / 2 - epaisseurPied, Math.PI, 0, false);
+        interieur.lineTo(w / 2 - epaisseurPied, -h / 2 + hauteurArc);
+        interieur.closePath();
+        interieur.fillPath();
+        interieur.fillStyle(couleurLumiereClaire, 0.65 * intensite);
+        interieur.fillEllipse(0, 0, w * 0.5, h * 0.6);
+        container.add(interieur);
+        scene.tweens.add({
+            targets: interieur,
+            alpha: { from: 0.8, to: 1 },
+            duration: 1300,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
     } else {
-        halo.fillStyle(couleurLumiere, 0.07);
-        halo.fillEllipse(0, 0, w + 18, h + 18);
-        halo.fillStyle(couleurLumiere, 0.12);
-        halo.fillEllipse(0, 0, w + 4, h + 4);
+        // Présent : seuil sombre (vide intérieur de l'arche), pas de lumière.
+        const seuil = scene.add.graphics();
+        seuil.fillStyle(0x0a0e0a, 0.85);
+        seuil.fillRect(-w / 2 + epaisseurPied, -h / 2 + hauteurArc, w - 2 * epaisseurPied, h / 2 + h / 2 - hauteurArc);
+        seuil.fillStyle(0x0a0e0a, 0.85);
+        seuil.beginPath();
+        seuil.moveTo(-w / 2 + epaisseurPied, -h / 2 + hauteurArc);
+        seuil.arc(0, -h / 2 + hauteurArc, w / 2 - epaisseurPied, Math.PI, 0, false);
+        seuil.lineTo(w / 2 - epaisseurPied, -h / 2 + hauteurArc);
+        seuil.closePath();
+        seuil.fillPath();
+        container.add(seuil);
     }
-    container.add(halo);
-    scene.tweens.add({
-        targets: halo,
-        alpha: { from: enMiroir ? 0.7 : 0.5, to: 1 },
-        scale: { from: 0.95, to: 1.05 },
-        duration: enMiroir ? 1500 : 2400,
-        ease: 'Sine.InOut',
-        yoyo: true,
-        repeat: -1
-    });
-
-    // --- Intérieur lumineux ---
-    const interieur = scene.add.graphics();
-    interieur.setBlendMode(Phaser.BlendModes.ADD);
-    // Rectangle bas (le seuil) — alpha modulé par intensite
-    interieur.fillStyle(couleurLumiere, 0.55 * intensite);
-    interieur.fillRect(-w / 2 + epaisseurPied, -h / 2 + hauteurArc, w - 2 * epaisseurPied, h / 2 + h / 2 - hauteurArc);
-    // Demi-cercle haut (sous l'arche)
-    interieur.fillStyle(couleurLumiere, 0.45 * intensite);
-    interieur.beginPath();
-    interieur.moveTo(-w / 2 + epaisseurPied, -h / 2 + hauteurArc);
-    interieur.arc(0, -h / 2 + hauteurArc, w / 2 - epaisseurPied, Math.PI, 0, false);
-    interieur.lineTo(w / 2 - epaisseurPied, -h / 2 + hauteurArc);
-    interieur.closePath();
-    interieur.fillPath();
-    // Cœur central — très lumineux en Miroir, juste une lueur résiduelle en Présent
-    interieur.fillStyle(couleurLumiereClaire, 0.65 * intensite);
-    interieur.fillEllipse(0, 0, w * 0.5, h * 0.6);
-    container.add(interieur);
-
-    // Pulse de l'intérieur — plus lent et discret en Présent (lueur ancienne, fatiguée)
-    scene.tweens.add({
-        targets: interieur,
-        alpha: { from: enMiroir ? 0.8 : 0.6, to: 1 },
-        duration: enMiroir ? 1300 : 2200,
-        ease: 'Sine.InOut',
-        yoyo: true,
-        repeat: -1
-    });
 
     // --- Arche de pierre (par-dessus l'intérieur lumineux pour silhouette nette) ---
     const arche = scene.add.graphics();
@@ -137,19 +142,20 @@ export function creerVisuelPorteSortie(scene, x, y, largeur, hauteur, monde) {
 
     container.add(arche);
 
-    // --- Particules additives qui montent depuis le seuil ---
-    // Dorées chaudes en Miroir, bleutées froides et plus rares en Présent
-    if (scene.textures.exists('_particule')) {
+    // --- Particules additives qui montent depuis le seuil (Miroir uniquement) ---
+    // En Présent, plus aucune émission lumineuse — la porte est sombre et muette,
+    // simple arche de pierre dans le décor ruiné.
+    if (enMiroir && scene.textures.exists('_particule')) {
         const part = scene.add.particles(0, 0, '_particule', {
-            lifespan: enMiroir ? 1300 : 1800,
-            speedY: enMiroir ? { min: -45, max: -20 } : { min: -25, max: -12 },
+            lifespan: 1300,
+            speedY: { min: -45, max: -20 },
             speedX: { min: -6, max: 6 },
-            scale: { start: enMiroir ? 0.45 : 0.35, end: 0 },
+            scale: { start: 0.45, end: 0 },
             tint: [couleurLumiere, couleurLumiereClaire],
             quantity: 1,
-            frequency: enMiroir ? 180 : 380, // beaucoup plus rare en Présent
+            frequency: 180,
             blendMode: Phaser.BlendModes.ADD,
-            alpha: { start: enMiroir ? 0.9 : 0.5, end: 0 },
+            alpha: { start: 0.9, end: 0 },
             emitZone: {
                 type: 'random',
                 source: new Phaser.Geom.Rectangle(

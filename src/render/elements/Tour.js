@@ -18,6 +18,25 @@ export function peindreTour(scene, x, yBase, hauteur, monde, palette, opts = {})
     const largeurBase = 32;
     const largeurSommet = 26;
 
+    // Mode silhouette pure : forme trapézoïdale opaque sans détails internes
+    if (opts.silhouettePure) {
+        const hReelle = enMiroir ? hauteur : hauteur * (0.6 + Math.random() * 0.2);
+        const couleur = 0x1a221a;
+        g.fillStyle(couleur, 1);
+        g.beginPath();
+        g.moveTo(-largeurBase / 2, 0);
+        g.lineTo(-largeurSommet / 2, -hReelle);
+        // Sommet brisé (dents)
+        g.lineTo(-largeurSommet / 2 + 4, -hReelle - 5);
+        g.lineTo(0, -hReelle + 2);
+        g.lineTo(largeurSommet / 2 - 2, -hReelle - 6);
+        g.lineTo(largeurSommet / 2, -hReelle);
+        g.lineTo(largeurBase / 2, 0);
+        g.closePath();
+        g.fillPath();
+        return g;
+    }
+
     if (!enMiroir) {
         // === PRÉSENT — tour brisée ===
         const hReelle = hauteur * (0.6 + Math.random() * 0.2);

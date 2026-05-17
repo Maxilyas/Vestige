@@ -17,6 +17,28 @@ export function peindreDome(scene, x, yBase, rayon, monde, palette, opts = {}) {
 
     // Tambour (base cylindrique sous le dôme)
     const hTambour = rayon * 0.4;
+
+    // Mode silhouette pure : tambour + demi-coupole opaque sans détails
+    if (opts.silhouettePure) {
+        const couleur = 0x1a221a;
+        g.fillStyle(couleur, 1);
+        // Tambour
+        g.fillRect(-rayon, -hTambour, rayon * 2, hTambour);
+        // Demi-coupole (Présent = cassée à gauche uniquement, Miroir = pleine)
+        if (enMiroir) {
+            g.beginPath();
+            g.arc(0, -hTambour, rayon, Math.PI, 0, false);
+            g.closePath();
+            g.fillPath();
+        } else {
+            g.beginPath();
+            g.arc(0, -hTambour, rayon, Math.PI, Math.PI * 1.5, false);
+            g.lineTo(0, -hTambour);
+            g.closePath();
+            g.fillPath();
+        }
+        return g;
+    }
     g.fillStyle(palette.pierreSombre);
     g.fillRect(-rayon - 1, -hTambour, rayon * 2 + 2, hTambour);
     g.fillStyle(palette.pierre);
