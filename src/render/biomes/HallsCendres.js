@@ -31,6 +31,7 @@
 
 import { DEPTH, paletteCouranteScene } from '../PainterlyRenderer.js';
 import { GAME_HEIGHT, GAME_WIDTH } from '../../config.js';
+import { poserStructuresInterieurHallsCendres } from './HallsCendresInterieur.js';
 
 // Helpers de teinte (mêmes formules que RuinesBasses)
 function teinterPlusClair(c, amount) {
@@ -1161,22 +1162,45 @@ function poserCendreTombante(scene, dims, rng, options = {}) {
     preparerTextureFloconCendre(scene);
     const forcer = options.forcer === true;
 
+    // Mode boss = chute de cendres dense et continue (rideau visible en
+    // permanence à l'écran) ; mode météo = chute fine et discrète.
     const em = scene.add.particles(0, 0, '_flocon_cendre_halls_cendres', {
         x: { min: -100, max: 1060 },
         y: -20,
-        lifespan: 5500,
-        speedY: { min: 80, max: 130 },   // beaucoup plus lent que la pluie
-        speedX: { min: -20, max: -5 },   // léger drift latéral (vent doux)
-        scale: { start: 1.0, end: 0.8 },
-        alpha: { start: 0.55, end: 0.35 },
+        lifespan: forcer ? 7000 : 5500,
+        speedY: { min: forcer ? 110 : 80, max: forcer ? 170 : 130 },
+        speedX: { min: -20, max: -5 },
+        scale: { start: forcer ? 1.3 : 1.0, end: forcer ? 1.0 : 0.8 },
+        alpha: { start: forcer ? 0.75 : 0.55, end: forcer ? 0.50 : 0.35 },
         rotate: { start: 0, end: 90 },
-        quantity: 3,
-        frequency: 90,
+        quantity: forcer ? 9 : 3,
+        frequency: forcer ? 40 : 90,
         emitting: forcer
     });
     em.setScrollFactor(0, 0);
     em.setDepth(8);
     objets.push(em);
+
+    // En mode boss, deuxième émetteur "gros flocons" en arrière-plan (depth
+    // plus bas, scale élargi, alpha plus faible) → effet de profondeur dans
+    // la chute, comme s'il y avait DES couches de cendre qui tombent.
+    if (forcer) {
+        const emArriere = scene.add.particles(0, 0, '_flocon_cendre_halls_cendres', {
+            x: { min: -100, max: 1060 },
+            y: -20,
+            lifespan: 8500,
+            speedY: { min: 60, max: 100 },
+            speedX: { min: -12, max: 0 },
+            scale: { start: 2.0, end: 1.7 },
+            alpha: { start: 0.32, end: 0.18 },
+            rotate: { start: 0, end: 60 },
+            quantity: 4,
+            frequency: 90
+        });
+        emArriere.setScrollFactor(0, 0);
+        emArriere.setDepth(6);
+        objets.push(emArriere);
+    }
 
     if (forcer) return objets;
 
@@ -1741,6 +1765,15 @@ export function composerParallaxHallsCendres(scene, dims, monde, rng) {
         objets.push(...escObjets);
         enregistrerInteractionsEscarbilles(scene, escarbilles);
     }
+
+    // Structures intérieures (cathédrale englobante) — gradient narratif :
+    //   étage 3 : teasing (1 colonne FG occasionnelle, proba 0.4)
+    //   étage 4 (salles normales) : pleine présence (2 colonnes + voute + coins)
+    //   étage 4 salle BOSS : climax (4 colonnes + voute massive + fenêtres ogives)
+    objets.push(...poserStructuresInterieurHallsCendres(scene, dims, rng, palette, {
+        etage,
+        boss: estSalleBoss
+    }));
 
     // Cendre tombante (cycle météo) — forcée en salle de boss
     const cendreObjets = poserCendreTombante(scene, dims, rng, { forcer: estSalleBoss });
