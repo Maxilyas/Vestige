@@ -217,15 +217,18 @@ function poserTemplesGrecsLointains(scene, dims, rng, palette) {
     const largeurEtendue = dims.largeur * 1.6;
     const decalageX = -dims.largeur * 0.3;
 
-    // Deux rangées superposées. Plus lointaine = plus pâle, plus proche =
-    // plus opaque. Espace au centre laissé libre pour l'arbre cristallin
-    // central (qui prend toute la verticalité sur ~ 25 % de largeur).
+    // Deux rangées superposées. Hauteurs majorées (×1.5) pour que les temples
+    // soient vraiment imposants à l'horizon. Espace au centre laissé libre
+    // pour l'arbre cristallin (large 280 px). Plus de structures par rangée
+    // pour densifier la skyline (vue de cité dense).
     const xCentre = dims.largeur / 2;
-    const exclusionCentre = 200;
+    const exclusionCentre = 280;
 
     const rangees = [
-        { nb: 6, hMin: 130, hMax: 200, alpha: 0.45, teinteShift: 0.10, yOffset: 4 },
-        { nb: 5, hMin: 180, hMax: 280, alpha: 0.75, teinteShift: 0.0,  yOffset: 14 }
+        // Rangée arrière : skyline lointaine, plus de structures (8 au lieu de 6)
+        { nb: 8, hMin: 190, hMax: 280, alpha: 0.50, teinteShift: 0.10, yOffset: 4 },
+        // Rangée avant : plus grande encore, plus opaque
+        { nb: 7, hMin: 260, hMax: 380, alpha: 0.80, teinteShift: 0.0,  yOffset: 14 }
     ];
 
     const types = [
@@ -284,6 +287,426 @@ function poserTemplesGrecsLointains(scene, dims, rng, palette) {
         yoyo: true
     });
     objets.push(brume);
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 1.5 — CITÉ MOYEN PLAN (scrollFactor 0.40)
+// ============================================================
+//
+// Phase 5'.12 — pour que le joueur SENTE qu'il est dans une cité, pas juste
+// devant une skyline lointaine. 3-4 structures monumentales par salle, plus
+// proches (parallax 0.40, plus de mouvement avec la caméra), beaucoup plus
+// détaillées que les silhouettes lointaines :
+//   - Colonnes individuelles avec base + fût + chapiteau distincts
+//   - Frontons avec triangle décoratif intérieur
+//   - Multiples marches au socle
+//   - Bleu-violet plus saturé (palette.brume + accent argent-nacre)
+//
+// Placement : structures réparties sur les côtés, jamais devant l'arbre
+// central. Hauteur ~ 60 % de l'écran (vs ~ 30 % pour les temples lointains).
+
+function couleurStructureMoyenPlan() {
+    return 0x2a3a5a; // bleu profond — la cité s'assombrit en se rapprochant du joueur
+}
+
+function peindreTempleMonumental(scene, x, ySol, hauteur, alpha, rng) {
+    const g = scene.add.graphics();
+    const couleur = couleurStructureMoyenPlan();
+    const couleurClair = teinterPlusClair(couleur, 0.15);
+    const couleurOmbre = teinterPlusSombre(couleur, 0.20);
+    const w = hauteur * 1.4;
+    const yTop = ySol - hauteur;
+
+    g.fillStyle(couleur, alpha);
+
+    // === STYLOBATE : 4 marches (signature "monumental") ===
+    for (let m = 0; m < 4; m++) {
+        const ext = m * 3;
+        const yM = ySol - m * 5;
+        const wM = w + 12 + ext * 2;
+        g.fillStyle(m % 2 === 0 ? couleur : couleurOmbre, alpha);
+        g.fillRect(x - wM / 2, yM - 5, wM, 5);
+    }
+
+    // === COLONNES INDIVIDUELLES (8 colonnes corinthiennes) ===
+    const nbColonnes = 8;
+    const hauteurColonne = hauteur * 0.62;
+    const yColBas = ySol - 20;
+    const yColHaut = yColBas - hauteurColonne;
+    const epColonne = 9 + rng() * 2;
+    const espaceColonne = (w - nbColonnes * epColonne) / (nbColonnes - 1);
+
+    for (let c = 0; c < nbColonnes; c++) {
+        const xC = x - w / 2 + c * (epColonne + espaceColonne);
+        // Base (cube élargi)
+        g.fillStyle(couleurOmbre, alpha);
+        g.fillRect(xC - 1, yColBas - 4, epColonne + 2, 4);
+        // Fût (rectangle vertical, cannelé subtilement)
+        g.fillStyle(couleur, alpha);
+        g.fillRect(xC, yColBas - hauteurColonne, epColonne, hauteurColonne - 4);
+        // Stries verticales sur le fût (cannelures classiques)
+        g.lineStyle(0.8, couleurOmbre, alpha * 0.85);
+        for (let s = 1; s < 4; s++) {
+            const xS = xC + (s / 4) * epColonne;
+            g.beginPath();
+            g.moveTo(xS, yColBas - hauteurColonne + 2);
+            g.lineTo(xS, yColBas - 6);
+            g.strokePath();
+        }
+        // Chapiteau (chapeau élargi corinthien — 3 niveaux)
+        g.fillStyle(couleur, alpha);
+        g.fillRect(xC - 2, yColHaut - 4, epColonne + 4, 4);
+        g.fillStyle(couleurClair, alpha);
+        g.fillRect(xC - 3, yColHaut - 8, epColonne + 6, 4);
+        // Petit ornement (feuille acanthe stylisée — triangle inversé)
+        g.fillStyle(couleurOmbre, alpha);
+        g.beginPath();
+        g.moveTo(xC + epColonne / 2, yColHaut - 4);
+        g.lineTo(xC - 1, yColHaut);
+        g.lineTo(xC + epColonne + 1, yColHaut);
+        g.closePath();
+        g.fillPath();
+        // Highlight vertical sur le fût (face droite éclairée)
+        g.fillStyle(couleurClair, alpha * 0.55);
+        g.fillRect(xC + epColonne - 2, yColBas - hauteurColonne + 4, 2, hauteurColonne - 12);
+    }
+
+    // === ENTABLEMENT (architrave + frise + corniche) ===
+    const yEnt = yColHaut - 8;
+    // Architrave (bande basse)
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 4, yEnt - 7, w + 8, 7);
+    // Frise (bande médiane plus claire avec motifs suggérés)
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w / 2 - 4, yEnt - 14, w + 8, 7);
+    // Triglyphes (rectangles verticaux sombres sur la frise — toutes les ~30 px)
+    g.fillStyle(couleurOmbre, alpha);
+    const nbTriglyphes = Math.floor((w + 8) / 26);
+    for (let t = 0; t < nbTriglyphes; t++) {
+        const xT = x - w / 2 - 4 + (t + 0.5) * ((w + 8) / nbTriglyphes);
+        g.fillRect(xT - 2, yEnt - 14, 4, 7);
+    }
+    // Corniche (bande haute en débord)
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 8, yEnt - 20, w + 16, 6);
+
+    // === FRONTON TRIANGULAIRE ===
+    const yFronton = yEnt - 20;
+    g.fillStyle(couleur, alpha);
+    g.beginPath();
+    g.moveTo(x - w / 2 - 8, yFronton);
+    g.lineTo(x, yTop + 4);
+    g.lineTo(x + w / 2 + 8, yFronton);
+    g.closePath();
+    g.fillPath();
+
+    // Triangle décoratif intérieur (suggère sculpture / bas-relief)
+    g.fillStyle(couleurOmbre, alpha * 0.7);
+    g.beginPath();
+    g.moveTo(x - w * 0.32, yFronton - 4);
+    g.lineTo(x, yTop + 18);
+    g.lineTo(x + w * 0.32, yFronton - 4);
+    g.closePath();
+    g.fillPath();
+
+    // Acrotère central (petite figure au sommet)
+    g.fillStyle(couleur, alpha);
+    g.fillCircle(x, yTop + 2, 4);
+    g.fillRect(x - 1, yTop - 2, 2, 6);
+
+    return g;
+}
+
+function peindreStatueColossale(scene, x, ySol, hauteur, alpha, rng) {
+    const g = scene.add.graphics();
+    const couleur = couleurStructureMoyenPlan();
+    const couleurClair = teinterPlusClair(couleur, 0.15);
+    const couleurOmbre = teinterPlusSombre(couleur, 0.20);
+    const w = hauteur * 0.35;
+    const yTop = ySol - hauteur;
+
+    // === SOCLE MASSIF (3 niveaux) ===
+    const hSocle = hauteur * 0.18;
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w * 0.95, ySol - hSocle * 0.4, w * 1.9, hSocle * 0.4);
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w * 0.85, ySol - hSocle * 0.75, w * 1.7, hSocle * 0.35);
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w * 0.75, ySol - hSocle, w * 1.5, hSocle * 0.25);
+
+    // === CORPS (silhouette divine ample, robe longue) ===
+    const yBaseCorps = ySol - hSocle;
+    g.fillStyle(couleur, alpha);
+    g.beginPath();
+    g.moveTo(x - w * 0.65, yBaseCorps);
+    g.lineTo(x - w * 0.45, yBaseCorps - hauteur * 0.30);
+    g.lineTo(x - w * 0.35, yBaseCorps - hauteur * 0.55);
+    g.lineTo(x - w * 0.30, yBaseCorps - hauteur * 0.70);
+    g.lineTo(x + w * 0.30, yBaseCorps - hauteur * 0.70);
+    g.lineTo(x + w * 0.35, yBaseCorps - hauteur * 0.55);
+    g.lineTo(x + w * 0.45, yBaseCorps - hauteur * 0.30);
+    g.lineTo(x + w * 0.65, yBaseCorps);
+    g.closePath();
+    g.fillPath();
+
+    // Plis de la robe (lignes verticales d'ombre)
+    g.lineStyle(1.5, couleurOmbre, alpha * 0.7);
+    for (let p = 0; p < 5; p++) {
+        const xP = x - w * 0.45 + p * w * 0.225;
+        g.beginPath();
+        g.moveTo(xP, yBaseCorps - hauteur * 0.05);
+        g.lineTo(xP + (rng() - 0.5) * 3, yBaseCorps - hauteur * 0.55);
+        g.strokePath();
+    }
+
+    // === BRAS PENDANTS (silhouettes de chaque côté) ===
+    g.fillStyle(couleur, alpha);
+    // Bras gauche tient un objet (lance / sceptre)
+    g.beginPath();
+    g.moveTo(x - w * 0.45, yBaseCorps - hauteur * 0.55);
+    g.lineTo(x - w * 0.50, yBaseCorps - hauteur * 0.62);
+    g.lineTo(x - w * 0.42, yBaseCorps - hauteur * 0.35);
+    g.lineTo(x - w * 0.36, yBaseCorps - hauteur * 0.30);
+    g.closePath();
+    g.fillPath();
+    // Sceptre dans la main gauche (longue ligne verticale)
+    g.fillRect(x - w * 0.52, yBaseCorps - hauteur * 0.85, 3, hauteur * 0.50);
+    g.fillStyle(couleurClair, alpha);
+    g.fillCircle(x - w * 0.51, yBaseCorps - hauteur * 0.85, 5);
+
+    // Bras droit pendant naturellement
+    g.fillStyle(couleur, alpha);
+    g.beginPath();
+    g.moveTo(x + w * 0.45, yBaseCorps - hauteur * 0.55);
+    g.lineTo(x + w * 0.50, yBaseCorps - hauteur * 0.40);
+    g.lineTo(x + w * 0.42, yBaseCorps - hauteur * 0.30);
+    g.lineTo(x + w * 0.36, yBaseCorps - hauteur * 0.55);
+    g.closePath();
+    g.fillPath();
+
+    // === TÊTE ===
+    const yTete = yBaseCorps - hauteur * 0.70;
+    g.fillStyle(couleur, alpha);
+    g.fillCircle(x, yTete - hauteur * 0.08, w * 0.20);
+    // Casque / couronne (bande horizontale)
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w * 0.22, yTete - hauteur * 0.12, w * 0.44, 4);
+    // Trois pointes sur la couronne (signature divine)
+    g.beginPath();
+    g.moveTo(x - w * 0.18, yTete - hauteur * 0.12);
+    g.lineTo(x - w * 0.14, yTete - hauteur * 0.17);
+    g.lineTo(x - w * 0.10, yTete - hauteur * 0.12);
+    g.moveTo(x - w * 0.04, yTete - hauteur * 0.12);
+    g.lineTo(x, yTete - hauteur * 0.19);
+    g.lineTo(x + w * 0.04, yTete - hauteur * 0.12);
+    g.moveTo(x + w * 0.10, yTete - hauteur * 0.12);
+    g.lineTo(x + w * 0.14, yTete - hauteur * 0.17);
+    g.lineTo(x + w * 0.18, yTete - hauteur * 0.12);
+    g.closePath();
+    g.fillPath();
+
+    // === GRANDES AILES DÉPLOYÉES (signature divine) ===
+    // Aile gauche
+    g.fillStyle(couleurOmbre, alpha * 0.85);
+    g.beginPath();
+    g.moveTo(x - w * 0.40, yBaseCorps - hauteur * 0.60);
+    g.lineTo(x - w * 1.10, yBaseCorps - hauteur * 0.50);
+    g.lineTo(x - w * 1.20, yBaseCorps - hauteur * 0.40);
+    g.lineTo(x - w * 1.05, yBaseCorps - hauteur * 0.30);
+    g.lineTo(x - w * 0.55, yBaseCorps - hauteur * 0.42);
+    g.closePath();
+    g.fillPath();
+    // Plumes (lignes courbes intérieures)
+    g.lineStyle(1, couleurOmbre, alpha);
+    for (let p = 0; p < 4; p++) {
+        g.beginPath();
+        g.moveTo(x - w * 0.55 - p * w * 0.15, yBaseCorps - hauteur * 0.45);
+        g.lineTo(x - w * 0.60 - p * w * 0.15, yBaseCorps - hauteur * 0.36);
+        g.strokePath();
+    }
+    // Aile droite (miroir)
+    g.fillStyle(couleurOmbre, alpha * 0.85);
+    g.beginPath();
+    g.moveTo(x + w * 0.40, yBaseCorps - hauteur * 0.60);
+    g.lineTo(x + w * 1.10, yBaseCorps - hauteur * 0.50);
+    g.lineTo(x + w * 1.20, yBaseCorps - hauteur * 0.40);
+    g.lineTo(x + w * 1.05, yBaseCorps - hauteur * 0.30);
+    g.lineTo(x + w * 0.55, yBaseCorps - hauteur * 0.42);
+    g.closePath();
+    g.fillPath();
+    g.lineStyle(1, couleurOmbre, alpha);
+    for (let p = 0; p < 4; p++) {
+        g.beginPath();
+        g.moveTo(x + w * 0.55 + p * w * 0.15, yBaseCorps - hauteur * 0.45);
+        g.lineTo(x + w * 0.60 + p * w * 0.15, yBaseCorps - hauteur * 0.36);
+        g.strokePath();
+    }
+
+    return g;
+}
+
+function peindrePortiqueMonumental(scene, x, ySol, hauteur, alpha, rng) {
+    const g = scene.add.graphics();
+    const couleur = couleurStructureMoyenPlan();
+    const couleurClair = teinterPlusClair(couleur, 0.15);
+    const couleurOmbre = teinterPlusSombre(couleur, 0.20);
+    const w = hauteur * 1.8; // portique très large
+    const yTop = ySol - hauteur;
+
+    // === STYLOBATE 3 marches ===
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 8, ySol - 5, w + 16, 5);
+    g.fillStyle(couleurOmbre, alpha);
+    g.fillRect(x - w / 2 - 6, ySol - 10, w + 12, 5);
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 4, ySol - 15, w + 8, 5);
+
+    // === 2 PAIRES de colonnes monumentales (4 colonnes total très grosses) ===
+    const hauteurColonne = hauteur * 0.72;
+    const yColBas = ySol - 15;
+    const yColHaut = yColBas - hauteurColonne;
+    const epColonne = 14 + rng() * 3;
+    const xColonnes = [
+        x - w * 0.42,
+        x - w * 0.14,
+        x + w * 0.14,
+        x + w * 0.42
+    ];
+
+    for (const xC of xColonnes) {
+        // Base double
+        g.fillStyle(couleurOmbre, alpha);
+        g.fillRect(xC - epColonne / 2 - 2, yColBas - 6, epColonne + 4, 6);
+        g.fillStyle(couleur, alpha);
+        g.fillRect(xC - epColonne / 2 - 1, yColBas - 10, epColonne + 2, 4);
+        // Fût avec multiples cannelures
+        g.fillStyle(couleur, alpha);
+        g.fillRect(xC - epColonne / 2, yColBas - hauteurColonne + 8, epColonne, hauteurColonne - 18);
+        g.lineStyle(1, couleurOmbre, alpha * 0.85);
+        for (let s = 1; s < 5; s++) {
+            const xS = xC - epColonne / 2 + (s / 5) * epColonne;
+            g.beginPath();
+            g.moveTo(xS, yColBas - hauteurColonne + 12);
+            g.lineTo(xS, yColBas - 14);
+            g.strokePath();
+        }
+        // Highlight vertical (face droite éclairée)
+        g.fillStyle(couleurClair, alpha * 0.55);
+        g.fillRect(xC + epColonne / 2 - 2, yColBas - hauteurColonne + 12, 2, hauteurColonne - 22);
+        // Chapiteau ionique simplifié (volute)
+        g.fillStyle(couleur, alpha);
+        g.fillRect(xC - epColonne / 2 - 3, yColHaut - 4, epColonne + 6, 4);
+        g.fillStyle(couleurClair, alpha);
+        g.fillRect(xC - epColonne / 2 - 4, yColHaut - 8, epColonne + 8, 4);
+        // Volutes (deux petits cercles)
+        g.fillStyle(couleur, alpha);
+        g.fillCircle(xC - epColonne / 2 - 2, yColHaut - 6, 3);
+        g.fillCircle(xC + epColonne / 2 + 2, yColHaut - 6, 3);
+    }
+
+    // === ENTABLEMENT TRÈS LONG (signature portique) ===
+    const yEnt = yColHaut - 12;
+    // Architrave
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 6, yEnt - 8, w + 12, 8);
+    // Frise sculptée (bande plus claire avec motifs)
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w / 2 - 6, yEnt - 17, w + 12, 9);
+    // Motifs en relief (entrelacs simplifiés — losanges)
+    g.fillStyle(couleurOmbre, alpha);
+    const nbMotifs = Math.floor((w + 12) / 30);
+    for (let m = 0; m < nbMotifs; m++) {
+        const xM = x - w / 2 - 6 + (m + 0.5) * ((w + 12) / nbMotifs);
+        const yM = yEnt - 12.5;
+        // Losange
+        g.beginPath();
+        g.moveTo(xM, yM - 3);
+        g.lineTo(xM + 4, yM);
+        g.lineTo(xM, yM + 3);
+        g.lineTo(xM - 4, yM);
+        g.closePath();
+        g.fillPath();
+    }
+    // Corniche large en débord
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 12, yEnt - 24, w + 24, 7);
+    g.fillStyle(couleurOmbre, alpha);
+    g.fillRect(x - w / 2 - 10, yEnt - 26, w + 20, 2);
+
+    // === TOIT BAS (pas de fronton — portique a un toit plat ou légèrement incliné) ===
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w / 2 - 6, yEnt - 30, w + 12, 4);
+
+    // Petit acrotère central (sceptre / urne)
+    g.fillRect(x - 2, yEnt - 40, 4, 10);
+    g.fillCircle(x, yEnt - 42, 5);
+
+    return g;
+}
+
+function poserCiteMoyenPlan(scene, dims, rng, palette) {
+    const objets = [];
+    const ySol = GAME_HEIGHT - 40;
+    const xCentre = dims.largeur / 2;
+    const exclusionCentre = 320; // l'arbre prend le centre — large exclusion
+
+    // 3 structures par salle : une à gauche, une à droite, une "secondaire"
+    // (statue colossale ou petit temple). Placement seedé pour variabilité.
+    const types = [
+        { fn: peindreTempleMonumental,   poids: 0.45, hMin: 280, hMax: 380 },
+        { fn: peindreStatueColossale,    poids: 0.30, hMin: 320, hMax: 420 },
+        { fn: peindrePortiqueMonumental, poids: 0.25, hMin: 260, hMax: 360 }
+    ];
+
+    // Tirage 3 structures
+    const positions = [
+        { x: 180 + rng() * 80, prio: 'gauche' },
+        { x: dims.largeur - 180 - rng() * 80, prio: 'droite' },
+        // 3e structure : soit plus à l'extérieur (si la salle est large)
+        // soit on la skip si trop proche du centre
+        { x: rng() < 0.5 ? 80 + rng() * 60 : dims.largeur - 80 - rng() * 60, prio: 'bonus' }
+    ];
+
+    for (const pos of positions) {
+        // Vérif exclusion centre
+        if (Math.abs(pos.x - xCentre) < exclusionCentre) continue;
+        // Tirage type pondéré
+        let choix = rng();
+        let typeChoisi = types[types.length - 1];
+        let cumul = 0;
+        for (const t of types) {
+            cumul += t.poids;
+            if (choix < cumul) { typeChoisi = t; break; }
+        }
+        const hauteur = typeChoisi.hMin + rng() * (typeChoisi.hMax - typeChoisi.hMin);
+        const alpha = 0.88 + rng() * 0.10;
+        const obj = typeChoisi.fn(scene, pos.x, ySol, hauteur, alpha, rng);
+        obj.setScrollFactor(0.40, 0);
+        obj.setDepth(DEPTH.SILHOUETTES + 1);
+        objets.push(obj);
+
+        // Petit halo lumineux derrière la structure (lumière divine qui filtre
+        // entre les colonnes — détail signature cité Olympe)
+        const halo = scene.add.graphics();
+        halo.setBlendMode(Phaser.BlendModes.ADD);
+        halo.fillStyle(0xd0e0ff, 0.10);
+        halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 1.4, hauteur * 0.9);
+        halo.fillStyle(0xe8f0ff, 0.06);
+        halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 0.9, hauteur * 0.6);
+        halo.setScrollFactor(0.40, 0);
+        halo.setDepth(DEPTH.SILHOUETTES);
+        scene.tweens.add({
+            targets: halo,
+            alpha: { from: 0.7, to: 1.0 },
+            duration: 5000 + rng() * 2500,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+        objets.push(halo);
+    }
 
     return objets;
 }
@@ -2472,11 +2895,17 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     objets.push(...poserFloconsEnSuspension(scene, dims, rng));
 
     // Couche 1 — temples grecs hellénistiques en silhouettes lointaines
+    // (rangées arrière + avant, hauteurs majorées ×1.5 pour skyline imposante)
     objets.push(...poserTemplesGrecsLointains(scene, dims, rng, palette));
 
     // Couche 1' — arbre cristallin géant au centre (tronc + premières branches
     // + sève mnésique violet). La vision phare du biome.
     objets.push(...poserArbreCristallinCentre(scene, dims, rng, palette));
+
+    // Couche 1.5 — cité moyen plan : 3 structures monumentales détaillées
+    // (temples péristyles / statues colossales ailées / portiques ioniques)
+    // à scrollFactor 0.40. Le joueur sent qu'il est DANS la cité, pas devant.
+    objets.push(...poserCiteMoyenPlan(scene, dims, rng, palette));
 
     // Couche 2 — voile d'horizon : en salle de boss il s'épaissit
     const voile = poserVoileHorizonCG(scene);
