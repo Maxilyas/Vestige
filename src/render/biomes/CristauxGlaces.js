@@ -3315,6 +3315,545 @@ function enregistrerInteractionsEsprits(scene, esprits) {
 }
 
 // ============================================================
+// PHASE 5'.17 — CITÉ MINIMALISTE + TOUR CRISTALLINE CENTRALE
+// ============================================================
+//
+// Refonte radicale : abandon de l'arbre cristallin (trop gourmand, ~100
+// Graphics + 80 tweens) et des temples détaillés (cariatides, vitraux,
+// frises sculptées). Direction inspirée du pattern Ruines basses qui
+// marche bien : silhouettes simples + cohérence chromatique + touches
+// lumineuses parsemées.
+//
+// 4 couches de profondeur clairement distinctes (effet d'optique tangible) :
+//   - Couche 1 (sF 0.05) : skyline très lointaine, formes mini bleu sombre
+//   - Couche 2 (sF 0.15) : cité lointaine variée (maisons + temples + tholos
+//                         + statues + cyprès cristallins), bleu nuit
+//   - Couche 3 (sF 0.15) : tour cristalline centrale (focal du biome)
+//   - Couche 4 (sF 0.30) : 3 structures moyen plan (temples péristyles
+//                         et bâtiments monumentaux), bleu plus clair
+//
+// Performance : chaque couche = 1 ou 2 Graphics seulement (vs 8-15 avant).
+// Tweens : 3-4 au total (vs 50+ avant).
+
+// ============================================================
+// COUCHE 1 — SKYLINE TRÈS LOINTAINE (scrollFactor 0.05)
+// ============================================================
+
+function poserSkylineTresLointaine(scene, dims, rng, palette) {
+    const objets = [];
+    const g = scene.add.graphics();
+    const largeurEtendue = dims.largeur * 1.6;
+    const decalageX = -dims.largeur * 0.3;
+    const ySol = GAME_HEIGHT - 50;
+    const couleur = 0x0e1424; // bleu très sombre presque noir
+    const couleurClair = 0x1a2438; // discret highlight horizon
+
+    g.fillStyle(couleur, 1);
+
+    // Bandes basses suggérant une étendue urbaine très lointaine
+    const nbElements = 28;
+    for (let i = 0; i < nbElements; i++) {
+        const x = decalageX + (i / nbElements) * largeurEtendue + (rng() - 0.5) * 18;
+        const h = 8 + rng() * 18;
+        const w = 12 + rng() * 22;
+        const choix = rng();
+        if (choix < 0.4) {
+            // Petit cube (maison lointaine)
+            g.fillRect(x - w / 2, ySol - h, w, h);
+            // Toit triangulaire bas
+            g.beginPath();
+            g.moveTo(x - w / 2 - 1, ySol - h);
+            g.lineTo(x, ySol - h - 3);
+            g.lineTo(x + w / 2 + 1, ySol - h);
+            g.closePath();
+            g.fillPath();
+        } else if (choix < 0.7) {
+            // Petit dôme rond
+            g.fillRect(x - w / 2, ySol - h * 0.6, w, h * 0.6);
+            g.fillEllipse(x, ySol - h * 0.6, w * 0.9, h * 0.4);
+        } else {
+            // Petite tour étroite
+            const wT = 5 + rng() * 4;
+            g.fillRect(x - wT / 2, ySol - h * 1.5, wT, h * 1.5);
+            g.fillRect(x - wT / 2 - 1, ySol - h * 1.5 - 3, wT + 2, 3);
+        }
+    }
+
+    // Bande horizon claire 1 px (ligne d'horizon — donne l'effet profondeur)
+    g.fillStyle(couleurClair, 0.6);
+    g.fillRect(decalageX, ySol - 0.5, largeurEtendue, 1);
+
+    g.setScrollFactor(0.05, 0);
+    g.setDepth(DEPTH.SILHOUETTES - 4);
+    objets.push(g);
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 2 — CITÉ LOINTAINE VARIÉE (scrollFactor 0.15)
+// ============================================================
+//
+// Une seule couche Graphics qui dessine 10-12 structures variées formant
+// une vraie petite cité (pas que des temples) : maisons cubiques, temples
+// à fronton, tholos rotondes, statues sur piédestal, cyprès cristallins.
+// Tout en silhouettes bleu nuit opaques, sans alpha.
+
+function poserCiteLointaineSimple(scene, dims, rng, palette) {
+    const objets = [];
+    const g = scene.add.graphics();
+    const largeurEtendue = dims.largeur * 1.6;
+    const decalageX = -dims.largeur * 0.3;
+    const ySol = GAME_HEIGHT - 50;
+    const xCentre = dims.largeur / 2;
+    const exclusionCentre = 200; // pour la tour cristalline
+    const couleur = 0x1a2a44;       // bleu nuit (plus clair que skyline lointaine)
+    const couleurClair = 0x2a3e5e;  // highlight face droite
+    const couleurOmbre = 0x0a1224;  // ombre
+
+    g.fillStyle(couleur, 1);
+
+    // 12 positions réparties (en excluant le centre pour la tour)
+    const nb = 12;
+    const positions = [];
+    for (let i = 0; i < nb; i++) {
+        const xRaw = decalageX + (i / nb) * largeurEtendue + (rng() - 0.5) * 30;
+        if (Math.abs(xRaw - xCentre) < exclusionCentre) continue;
+        positions.push(xRaw);
+    }
+
+    for (const x of positions) {
+        const choix = rng();
+        if (choix < 0.30) {
+            // Maison cubique avec toit triangulaire
+            const w = 30 + rng() * 24;
+            const h = 35 + rng() * 28;
+            // Corps
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2, ySol - h, w, h);
+            // Toit triangulaire
+            g.fillStyle(couleurOmbre, 1);
+            g.beginPath();
+            g.moveTo(x - w / 2 - 4, ySol - h);
+            g.lineTo(x, ySol - h - h * 0.4);
+            g.lineTo(x + w / 2 + 4, ySol - h);
+            g.closePath();
+            g.fillPath();
+            // Highlight face droite
+            g.fillStyle(couleurClair, 0.5);
+            g.fillRect(x + w / 2 - 3, ySol - h + 4, 3, h - 4);
+            // Petite porte sombre
+            g.fillStyle(couleurOmbre, 1);
+            g.fillRect(x - 3, ySol - 10, 6, 10);
+            // Petite fenêtre
+            if (rng() < 0.6) g.fillRect(x + w * 0.25, ySol - h + 10, 4, 5);
+        } else if (choix < 0.55) {
+            // Temple à fronton (péristyle simple)
+            const w = 50 + rng() * 30;
+            const h = 50 + rng() * 30;
+            const hCol = h * 0.65;
+            // Stylobate
+            g.fillStyle(couleurOmbre, 1);
+            g.fillRect(x - w / 2 - 2, ySol - 4, w + 4, 4);
+            g.fillRect(x - w / 2, ySol - 7, w, 3);
+            // Colonnes (4-5 silhouettes verticales)
+            g.fillStyle(couleur, 1);
+            const nbCol = 4 + Math.floor(rng() * 2);
+            const epCol = 3;
+            const espCol = (w - nbCol * epCol) / (nbCol - 1);
+            for (let c = 0; c < nbCol; c++) {
+                const xC = x - w / 2 + c * (epCol + espCol);
+                g.fillRect(xC, ySol - 7 - hCol, epCol, hCol);
+            }
+            // Highlight sur dernière colonne (face droite)
+            g.fillStyle(couleurClair, 0.5);
+            g.fillRect(x + w / 2 - epCol + 0.5, ySol - 7 - hCol + 3, 1, hCol - 6);
+            // Entablement
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2 - 2, ySol - 7 - hCol - 5, w + 4, 5);
+            // Fronton triangulaire
+            g.beginPath();
+            g.moveTo(x - w / 2 - 4, ySol - 7 - hCol - 5);
+            g.lineTo(x, ySol - h - 2);
+            g.lineTo(x + w / 2 + 4, ySol - 7 - hCol - 5);
+            g.closePath();
+            g.fillPath();
+            // Acrotère central
+            g.fillStyle(couleurClair, 1);
+            g.fillCircle(x, ySol - h - 1, 2);
+        } else if (choix < 0.75) {
+            // Tholos (rotonde)
+            const w = 35 + rng() * 20;
+            const h = 30 + rng() * 20;
+            g.fillStyle(couleurOmbre, 1);
+            g.fillEllipse(x, ySol - 3, w + 8, 6);
+            // Tambour cylindrique
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2, ySol - 4 - h * 0.55, w, h * 0.55);
+            // Coupole demi-cercle
+            g.fillEllipse(x, ySol - 4 - h * 0.55, w * 0.9, h * 0.5);
+            // Highlight droite
+            g.fillStyle(couleurClair, 0.4);
+            g.fillRect(x + w / 2 - 4, ySol - 4 - h * 0.5, 4, h * 0.5);
+        } else if (choix < 0.90) {
+            // Statue sur piédestal
+            const w = 14 + rng() * 8;
+            const h = 50 + rng() * 25;
+            // Piédestal
+            g.fillStyle(couleurOmbre, 1);
+            g.fillRect(x - w / 2 - 2, ySol - 5, w + 4, 5);
+            g.fillRect(x - w / 2, ySol - h * 0.30, w, h * 0.30 - 5);
+            // Statue (silhouette ovale allongée avec tête)
+            g.fillStyle(couleur, 1);
+            g.fillEllipse(x, ySol - h * 0.60, w * 0.55, h * 0.55);
+            g.fillCircle(x, ySol - h * 0.92, w * 0.20);
+            // Highlight face droite
+            g.fillStyle(couleurClair, 0.5);
+            g.fillEllipse(x + w * 0.10, ySol - h * 0.55, w * 0.15, h * 0.40);
+        } else {
+            // Cyprès cristallin (silhouette verticale fine type cyprès grec)
+            const w = 8 + rng() * 4;
+            const h = 60 + rng() * 30;
+            g.fillStyle(couleurOmbre, 1);
+            // Tronc fin à la base
+            g.fillRect(x - 1.5, ySol - 6, 3, 6);
+            // Forme de cyprès (losange allongé)
+            g.fillStyle(couleur, 1);
+            g.beginPath();
+            g.moveTo(x, ySol - h);
+            g.lineTo(x - w / 2, ySol - h * 0.65);
+            g.lineTo(x - w * 0.30, ySol - 6);
+            g.lineTo(x + w * 0.30, ySol - 6);
+            g.lineTo(x + w / 2, ySol - h * 0.65);
+            g.closePath();
+            g.fillPath();
+            // Highlight droite
+            g.fillStyle(couleurClair, 0.45);
+            g.beginPath();
+            g.moveTo(x, ySol - h);
+            g.lineTo(x + w / 2, ySol - h * 0.65);
+            g.lineTo(x + w * 0.30, ySol - 6);
+            g.lineTo(x, ySol - 6);
+            g.closePath();
+            g.fillPath();
+        }
+    }
+
+    g.setScrollFactor(0.15, 0);
+    g.setDepth(DEPTH.SILHOUETTES - 2);
+    objets.push(g);
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 3 — TOUR CRISTALLINE CENTRALE (focal, scrollFactor 0.15)
+// ============================================================
+//
+// Remplace l'arbre cristallin. Silhouette verticale simple en obélisque
+// effilé avec quelques détails minimaux (3 anneaux d'ornement + pulse
+// violet ADD au sommet). Tout dans 2 Graphics (silhouette + lueur ADD).
+
+function poserTourCristallineCentrale(scene, dims, rng, palette) {
+    const objets = [];
+    const xCentre = dims.largeur / 2;
+    const ySol = GAME_HEIGHT - 50;
+    const etage = scene.registry.get('etage_courant') ?? 5;
+    const facteurEtage = etage <= 5 ? 1.0 : 1.12;
+
+    const hauteur = 360 * facteurEtage;
+    const wBase = 70 * facteurEtage;
+    const wHaut = 22 * facteurEtage;
+
+    const couleur = 0x1f2e4a;       // bleu profond
+    const couleurClair = 0x6890b8;  // highlight face droite
+    const couleurOmbre = 0x0a1224;  // ombre profonde
+    const couleurReflet = 0xb8d0e8; // reflet vif sur arêtes
+
+    // === SILHOUETTE PRINCIPALE (1 Graphics) ===
+    const g = scene.add.graphics();
+    g.fillStyle(couleur, 1);
+
+    // Polygone effilé (base trapézoïdale + corps allongé + pointe pyramidale)
+    g.beginPath();
+    g.moveTo(xCentre - wBase / 2, ySol);
+    g.lineTo(xCentre - wBase / 2 + 4, ySol - hauteur * 0.05);
+    g.lineTo(xCentre - wHaut / 2 - 4, ySol - hauteur * 0.90);
+    g.lineTo(xCentre, ySol - hauteur); // pointe sommet
+    g.lineTo(xCentre + wHaut / 2 + 4, ySol - hauteur * 0.90);
+    g.lineTo(xCentre + wBase / 2 - 4, ySol - hauteur * 0.05);
+    g.lineTo(xCentre + wBase / 2, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // Face éclairée (droite, plus claire)
+    g.fillStyle(couleurClair, 0.55);
+    g.beginPath();
+    g.moveTo(xCentre, ySol - hauteur);
+    g.lineTo(xCentre + wHaut / 2 + 4, ySol - hauteur * 0.90);
+    g.lineTo(xCentre + wBase / 2 - 4, ySol - hauteur * 0.05);
+    g.lineTo(xCentre + wBase / 2, ySol);
+    g.lineTo(xCentre + 1, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // Face ombrée (gauche)
+    g.fillStyle(couleurOmbre, 0.45);
+    g.beginPath();
+    g.moveTo(xCentre, ySol - hauteur);
+    g.lineTo(xCentre - wHaut / 2 - 4, ySol - hauteur * 0.90);
+    g.lineTo(xCentre - wBase / 2 + 4, ySol - hauteur * 0.05);
+    g.lineTo(xCentre - wBase / 2, ySol);
+    g.lineTo(xCentre - 1, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // 3 anneaux d'ornement horizontaux (sections de la tour)
+    const yAnneaux = [0.25, 0.50, 0.75];
+    for (const t of yAnneaux) {
+        const yA = ySol - hauteur * t;
+        // Largeur locale interpolée
+        const wLocal = wBase * (1 - t) + wHaut * t;
+        // Bande sombre + bande claire au-dessus (relief)
+        g.fillStyle(couleurOmbre, 1);
+        g.fillRect(xCentre - wLocal / 2 - 3, yA - 3, wLocal + 6, 4);
+        g.fillStyle(couleurClair, 0.85);
+        g.fillRect(xCentre - wLocal / 2 - 4, yA - 6, wLocal + 8, 2);
+        // Petite gemme au centre de l'anneau
+        g.fillStyle(couleurReflet, 0.9);
+        g.fillCircle(xCentre, yA - 1.5, 2);
+    }
+
+    // Arête verticale centrale (highlight reflet sur le bord vif)
+    g.lineStyle(1, couleurReflet, 0.6);
+    g.beginPath();
+    g.moveTo(xCentre, ySol - hauteur);
+    g.lineTo(xCentre + 2, ySol - hauteur * 0.5);
+    g.lineTo(xCentre + 1, ySol);
+    g.strokePath();
+
+    // Pointe sommet (petit losange cristallin)
+    g.fillStyle(couleurReflet, 1);
+    g.beginPath();
+    g.moveTo(xCentre, ySol - hauteur - 8);
+    g.lineTo(xCentre + 3, ySol - hauteur);
+    g.lineTo(xCentre, ySol - hauteur + 4);
+    g.lineTo(xCentre - 3, ySol - hauteur);
+    g.closePath();
+    g.fillPath();
+
+    g.setScrollFactor(0.15, 0);
+    g.setDepth(DEPTH.SILHOUETTES - 1);
+    objets.push(g);
+
+    // === LUEUR ADD VIOLETTE AU SOMMET (1 Graphics + 1 tween) ===
+    const lueur = scene.add.graphics();
+    lueur.setBlendMode(Phaser.BlendModes.ADD);
+    // Halo doux autour du sommet
+    lueur.fillStyle(0xb898e8, 0.45);
+    lueur.fillCircle(xCentre, ySol - hauteur, 22);
+    lueur.fillStyle(0xe0c8ff, 0.75);
+    lueur.fillCircle(xCentre, ySol - hauteur, 10);
+    lueur.fillStyle(0xffffff, 0.85);
+    lueur.fillCircle(xCentre, ySol - hauteur, 3);
+    // Petits cristaux ADD aux 3 anneaux (un point lumineux à chaque gemme)
+    for (const t of yAnneaux) {
+        const yA = ySol - hauteur * t - 1.5;
+        lueur.fillStyle(0xb898e8, 0.45);
+        lueur.fillCircle(xCentre, yA, 4);
+        lueur.fillStyle(0xffffff, 0.85);
+        lueur.fillCircle(xCentre, yA, 1.2);
+    }
+    lueur.setScrollFactor(0.15, 0);
+    lueur.setDepth(DEPTH.SILHOUETTES);
+    objets.push(lueur);
+
+    // 1 seul tween partagé (pulse géologique de toute la tour)
+    scene.tweens.add({
+        targets: lueur,
+        alpha: { from: 0.55, to: 1.0 },
+        duration: 3500 + rng() * 1500,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 4 — CITÉ MOYEN PLAN SIMPLIFIÉE (scrollFactor 0.30)
+// ============================================================
+//
+// 3 structures plus grosses (mais toujours en silhouette simple) au plus
+// près du joueur. Bleu plus clair pour signaler proximité.
+
+function poserCiteMoyenPlanSimple(scene, dims, rng, palette) {
+    const objets = [];
+    const g = scene.add.graphics();
+    const ySol = GAME_HEIGHT - 40;
+    const xCentre = dims.largeur / 2;
+    const exclusionCentre = 280; // tour cristalline + un peu de marge
+    const couleur = 0x2a3e5e;
+    const couleurClair = 0x4a6890;
+    const couleurOmbre = 0x141c2c;
+
+    // 3 positions : 2 latérales + 1 plus extérieure si possible
+    const positions = [];
+    positions.push(160 + rng() * 60);
+    positions.push(dims.largeur - 160 - rng() * 60);
+    const xBonus = rng() < 0.5 ? 40 + rng() * 50 : dims.largeur - 40 - rng() * 50;
+    positions.push(xBonus);
+
+    for (const x of positions) {
+        if (Math.abs(x - xCentre) < exclusionCentre) continue;
+        const choix = rng();
+        const h = 170 + rng() * 90;
+        const w = h * (0.9 + rng() * 0.5);
+
+        if (choix < 0.55) {
+            // Grand temple péristyle (signature cité)
+            // Stylobate 3 marches
+            g.fillStyle(couleurOmbre, 1);
+            for (let m = 0; m < 3; m++) {
+                const ext = m * 3;
+                g.fillRect(x - w / 2 - ext, ySol - 5 - m * 5, w + ext * 2, 5);
+            }
+            // Colonnes (6 colonnes verticales)
+            const nbCol = 6;
+            const epCol = 5 + rng() * 1.5;
+            const hCol = h * 0.62;
+            const espCol = (w - nbCol * epCol) / (nbCol - 1);
+            const yColBas = ySol - 18;
+            g.fillStyle(couleur, 1);
+            for (let c = 0; c < nbCol; c++) {
+                const xC = x - w / 2 + c * (epCol + espCol);
+                g.fillRect(xC, yColBas - hCol, epCol, hCol);
+            }
+            // Highlight (face droite éclairée)
+            g.fillStyle(couleurClair, 0.5);
+            g.fillRect(x + w / 2 - epCol + 0.5, yColBas - hCol + 4, 1.5, hCol - 8);
+            // Entablement
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2 - 4, yColBas - hCol - 8, w + 8, 8);
+            // Bande claire (frise simple — 1 ligne d'ombres verticales rares)
+            g.fillStyle(couleurClair, 1);
+            g.fillRect(x - w / 2 - 4, yColBas - hCol - 14, w + 8, 6);
+            const nbT = Math.floor(w / 22);
+            g.fillStyle(couleurOmbre, 1);
+            for (let t = 0; t < nbT; t++) {
+                const xT = x - w / 2 + (t + 0.5) * (w / nbT);
+                g.fillRect(xT - 1, yColBas - hCol - 14, 2, 6);
+            }
+            // Corniche
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2 - 8, yColBas - hCol - 18, w + 16, 4);
+            // Fronton triangulaire
+            const yF = yColBas - hCol - 18;
+            g.beginPath();
+            g.moveTo(x - w / 2 - 8, yF);
+            g.lineTo(x, yF - h * 0.20);
+            g.lineTo(x + w / 2 + 8, yF);
+            g.closePath();
+            g.fillPath();
+            // Acrotère central
+            g.fillStyle(couleurClair, 1);
+            g.fillCircle(x, yF - h * 0.20 - 2, 3);
+            // Highlight fronton (triangle décoratif intérieur — 1 forme simple)
+            g.fillStyle(couleurOmbre, 1);
+            g.beginPath();
+            g.moveTo(x - w * 0.18, yF - 4);
+            g.lineTo(x, yF - h * 0.15);
+            g.lineTo(x + w * 0.18, yF - 4);
+            g.closePath();
+            g.fillPath();
+        } else {
+            // Bâtiment monumental avec entrée arc
+            // Socle plat
+            g.fillStyle(couleurOmbre, 1);
+            g.fillRect(x - w / 2 - 4, ySol - 8, w + 8, 8);
+            // Corps principal
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2, ySol - h, w, h - 8);
+            // Highlight face droite
+            g.fillStyle(couleurClair, 0.5);
+            g.fillRect(x + w / 2 - 4, ySol - h + 8, 4, h - 16);
+            // Toit plat avec moulure
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - w / 2 - 4, ySol - h - 5, w + 8, 5);
+            g.fillStyle(couleurClair, 1);
+            g.fillRect(x - w / 2 - 6, ySol - h - 8, w + 12, 3);
+            // Entrée en arc cintré (porte centrale sombre)
+            const wPorte = w * 0.25;
+            const hPorte = h * 0.45;
+            g.fillStyle(couleurOmbre, 1);
+            g.fillRect(x - wPorte / 2, ySol - 8 - hPorte, wPorte, hPorte);
+            // Arc supérieur (demi-ellipse)
+            g.fillEllipse(x, ySol - 8 - hPorte, wPorte, wPorte * 0.5);
+            // 2 fenêtres rectangulaires de chaque côté
+            const wFen = w * 0.10;
+            const hFen = h * 0.20;
+            for (let side = -1; side <= 1; side += 2) {
+                g.fillStyle(couleurOmbre, 1);
+                g.fillRect(x + side * w * 0.30 - wFen / 2, ySol - h + h * 0.30, wFen, hFen);
+                g.fillRect(x + side * w * 0.30 - wFen / 2, ySol - h + h * 0.60, wFen, hFen);
+            }
+        }
+    }
+
+    g.setScrollFactor(0.30, 0);
+    g.setDepth(DEPTH.SILHOUETTES + 1);
+    objets.push(g);
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 5 — CRISTAUX FLOTTANTS ADD (touches lumineuses)
+// ============================================================
+//
+// 10-12 points violet pâle ADD distribués dans le ciel, partagent 1 seul
+// tween pour leur pulsation. Équivalent narratif des lucioles vertes des
+// Ruines basses, version glacée mnésique.
+
+function poserCristauxFlottants(scene, dims, rng, palette) {
+    const objets = [];
+    const g = scene.add.graphics();
+    g.setBlendMode(Phaser.BlendModes.ADD);
+
+    const nb = 10 + Math.floor(rng() * 3);
+    for (let i = 0; i < nb; i++) {
+        const x = (i / nb) * dims.largeur * 1.2 - dims.largeur * 0.1 + (rng() - 0.5) * 60;
+        const y = 60 + rng() * 280;
+        const taille = 1.5 + rng() * 2;
+        // Halo violet
+        g.fillStyle(0xb898e8, 0.40);
+        g.fillCircle(x, y, taille * 2.5);
+        // Cœur
+        g.fillStyle(0xe0c8ff, 0.85);
+        g.fillCircle(x, y, taille);
+        // Reflet blanc
+        g.fillStyle(0xffffff, 0.85);
+        g.fillCircle(x, y, taille * 0.4);
+    }
+    g.setScrollFactor(0.20, 0);
+    g.setDepth(DEPTH.SILHOUETTES);
+    objets.push(g);
+
+    // 1 seul tween partagé pour pulse de tous les cristaux (perf)
+    scene.tweens.add({
+        targets: g,
+        alpha: { from: 0.55, to: 1.0 },
+        duration: 4000 + rng() * 2000,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
+
+    return objets;
+}
+
+// ============================================================
 // COMPOSER PUBLIC
 // ============================================================
 
@@ -3325,32 +3864,36 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     const estSalleBoss = !!scene.registry.get('salle_est_boss');
     const etage = scene.registry.get('etage_courant') ?? 5;
 
-    // === BACKGROUND (du plus lointain au plus proche) ===
+    // === BACKGROUND (5'.17 — refonte minimaliste, cité variée + tour centrale) ===
+    // Les anciennes fonctions (arbre cristallin, temples détaillés) sont
+    // commentées : trop gourmandes en perf (~100 Graphics + 80 tweens pour
+    // l'arbre seul). Nouvelle approche : silhouettes simples + 1 Graphics
+    // par couche regroupant toutes les structures.
+    //
+    // const branches = poserBranchesArbreSommets(scene, dims, rng, palette);
+    // if (estSalleBoss) for (const b of branches) b.setAlpha(Math.min(1, (b.alpha ?? 1) * 1.15));
+    // objets.push(...branches);
+    // objets.push(...poserTemplesGrecsLointains(scene, dims, rng, palette));
+    // objets.push(...poserArbreCristallinCentre(scene, dims, rng, palette));
+    // objets.push(...poserCiteMoyenPlan(scene, dims, rng, palette));
 
-    // Couche 0 — branches géantes de l'arbre Yggdrasil cristallin qui
-    // dépassent depuis le haut. En salle de boss, elles s'illuminent davantage
-    // (le sanctuaire au sommet de l'arbre se rapproche).
-    const branches = poserBranchesArbreSommets(scene, dims, rng, palette);
-    if (estSalleBoss) {
-        for (const b of branches) b.setAlpha(Math.min(1, (b.alpha ?? 1) * 1.15));
-    }
-    objets.push(...branches);
-
-    // Couche 0.5 — flocons ambiants en suspension qui descendent
+    // Flocons ambiants qui descendent (cendre figée du Halls cendrés ci-dessous)
     objets.push(...poserFloconsEnSuspension(scene, dims, rng));
 
-    // Couche 1 — temples grecs hellénistiques en silhouettes lointaines
-    // (rangées arrière + avant, hauteurs majorées ×1.5 pour skyline imposante)
-    objets.push(...poserTemplesGrecsLointains(scene, dims, rng, palette));
+    // Couche 1 — skyline très lointaine (scrollFactor 0.05, plat à l'horizon)
+    objets.push(...poserSkylineTresLointaine(scene, dims, rng, palette));
 
-    // Couche 1' — arbre cristallin géant au centre (tronc + premières branches
-    // + sève mnésique violet). La vision phare du biome.
-    objets.push(...poserArbreCristallinCentre(scene, dims, rng, palette));
+    // Couche 2 — cité lointaine variée (maisons + temples + tholos + cyprès)
+    objets.push(...poserCiteLointaineSimple(scene, dims, rng, palette));
 
-    // Couche 1.5 — cité moyen plan : 3 structures monumentales détaillées
-    // (temples péristyles / statues colossales ailées / portiques ioniques)
-    // à scrollFactor 0.40. Le joueur sent qu'il est DANS la cité, pas devant.
-    objets.push(...poserCiteMoyenPlan(scene, dims, rng, palette));
+    // Couche 3 — tour cristalline centrale (focal du biome, scrollFactor 0.15)
+    objets.push(...poserTourCristallineCentrale(scene, dims, rng, palette));
+
+    // Couche 4 — cité moyen plan : 3 structures plus proches (scrollFactor 0.30)
+    objets.push(...poserCiteMoyenPlanSimple(scene, dims, rng, palette));
+
+    // Couche 5 — cristaux flottants ADD (touches lumineuses violet pâle)
+    objets.push(...poserCristauxFlottants(scene, dims, rng, palette));
 
     // === COUCHES ALPHA D'AMBIANCE — DÉSACTIVÉES (5'.14) ===
     // Le voile d'horizon (haze blanc-cyan plein écran), la brume glacée basse
@@ -3368,14 +3911,13 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     // if (estSalleBoss) for (const b of brumeBasse) b.setAlpha(b.alpha * 1.4);
     // objets.push(...brumeBasse);
 
-    // Couche 5 — cristaux mnésiques sur pied (densité variable, gradient étage 5→6)
-    // Mood boss : tous les cristaux vacillent (les dernières mémoires s'éteignent
-    // face au gardien du sanctuaire).
-    const cristaux = poserCristauxMnesiquesSurPied(scene, dims, rng, palette);
-    if (estSalleBoss) {
-        for (const c of cristaux) c.setAlpha((c.alpha ?? 1) * 0.7);
-    }
-    objets.push(...cristaux);
+    // Cristaux mnésiques sur pied — DÉSACTIVÉ (5'.17, perf)
+    // 14 cristaux animés sur pied : trop gourmand (14 Graphics + 14 tweens)
+    // pour la valeur ajoutée. Les cristaux flottants en ciel + le givre sol
+    // foreground (réactif) portent suffisamment la signature mnésique.
+    // const cristaux = poserCristauxMnesiquesSurPied(scene, dims, rng, palette);
+    // if (estSalleBoss) for (const c of cristaux) c.setAlpha((c.alpha ?? 1) * 0.7);
+    // objets.push(...cristaux);
 
     // Couche 6 — sol-glace fendue + veines cristallines ADD
     objets.push(...poserSolGlaceFendue(scene, dims, rng, palette));
@@ -3421,20 +3963,18 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     // propre.
     // objets.push(...poserBokehCristaux(scene, dims, rng));
 
-    // Stalactites pendantes depuis le haut (1-2). Étage 6 = un peu plus de
-    // stalactites (le pic se fragilise au seuil du Voile).
-    objets.push(...poserStalactitesPendantes(scene, dims, rng, palette));
-    if (etage >= 6 && !estSalleBoss) {
-        objets.push(...poserStalactitesPendantes(scene, dims, rng, palette));
-    }
+    // Stalactites pendantes — DÉSACTIVÉ (5'.17, redondant avec tour centrale)
+    // objets.push(...poserStalactitesPendantes(scene, dims, rng, palette));
+    // if (etage >= 6 && !estSalleBoss) objets.push(...poserStalactitesPendantes(scene, dims, rng, palette));
 
-    // Éclats cristallins tombants : désactivés en salle de boss
+    // Éclats cristallins tombants — DÉSACTIVÉ (5'.17, redondant avec tempête)
+    // Les flocons de la tempête cristalline suffisent à l'effet météo.
     let emetteurEclats = null;
-    if (!estSalleBoss) {
-        const eclatsObjets = poserEclatsCristallinTombants(scene, dims, rng);
-        objets.push(...eclatsObjets);
-        emetteurEclats = eclatsObjets[0];
-    }
+    // if (!estSalleBoss) {
+    //     const eclatsObjets = poserEclatsCristallinTombants(scene, dims, rng);
+    //     objets.push(...eclatsObjets);
+    //     emetteurEclats = eclatsObjets[0];
+    // }
 
     // Givre au sol foreground (résonne au passage joueur + pulsation mnésique)
     const givres = poserGivreSolForeground(scene, dims, rng, palette);
