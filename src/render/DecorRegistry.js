@@ -372,7 +372,7 @@ const PLANS = {
 // Tour / Dome avec `silhouette: true`) sont rendues en formes opaques pures —
 // sans fenêtres, drapeaux ou lierres — pour rester cohérents avec la DA
 // (le composer biome dédié remplacera / complétera ces silhouettes).
-const BIOMES_SILHOUETTE_PURE = new Set(['ruines_basses', 'halls_cendres']);
+const BIOMES_SILHOUETTE_PURE = new Set(['ruines_basses', 'halls_cendres', 'cristaux_glaces']);
 
 const PEINTRES = {
     colonne: (s, e, m, p) => peindreColonne(s, e.x, e.yBase, e.hauteur, m, p),

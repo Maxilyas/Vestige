@@ -154,6 +154,54 @@ export const BIOMES = {
             ambiance: 0x3a5a8a,
             accent: 0xa0d0ff
         },
+        // Phase 5'.8 — palette enrichie peinte par-dessus PALETTE_PRESENT au runtime.
+        // Direction artistique : "Sanctuaire Suspendu" — pic acéré au-dessus de la
+        // cathédrale en flammes des Halls. Les Sources stockaient leurs mémoires
+        // ici, dans des cristaux mnésiques. Le froid n'est pas saisonnier : c'est
+        // un ARRÊT DU TEMPS. La pierre s'est minéralisée, les cristaux pulsent à
+        // un rythme géologique, le silence est dense.
+        // Continuité Halls→Cristaux : les escarbilles des Halls retombent ici
+        // figées en flocons cristallins (cendre gelée, pas neige naturelle).
+        // Préfigure le Voile Inversé via des accents POURPRE-VIOLET sur les
+        // cristaux mnésiques (équivalent narratif des racines pourpres des Ruines
+        // qui annonçaient le Reflux).
+        paletteBiome: {
+            // Ciel : pic suspendu au-dessus du monde. Haut = nuit cosmique pâle,
+            // mid = lumière cristalline filtrée par les pics lointains, bas =
+            // abîme noir-bleuté (le pic flotte, pas de sol en-dessous visible).
+            fond: '#040814',
+            fondGradientHaut: '#0e1830',
+            fondGradientMid:  '#3a5e88',
+            fondGradientBas:  '#020610',
+
+            // Plateformes : pierre minéralisée gelée bleu profond. Top highlight
+            // = givre bleu pâle (lecture "ici on marche, mais c'est froid").
+            // Ornement = cristal mnésique violet pâle (lumière intérieure).
+            plateforme:          0x2a4262,
+            plateformeContour:   0x6a92c8,
+            plateformeOrnement:  0xb898e8,
+
+            // Pierre 3 tons gelés — volume painterly des structures
+            pierre:        0x365072,
+            pierreSombre:  0x121828,
+            pierreClaire:  0x6890b8,
+
+            // Signature biome — réinterprète les slots mousse/racine/accent :
+            //   `mousse` → givre (croûtes fines blanc-bleu, vs suie noire Halls)
+            //   `racine` → cristal mnésique (violet pâle, vs braise orange Halls)
+            //              — préfiguration discrète du Voile Inversé
+            //   `accent` → argent-nacre (lumière froide réfléchissante,
+            //              vs cuivre terni Halls)
+            mousse:  0xa8c8e8,
+            racine:  0xb898e8,
+            accent:  0xc8d8e8,
+
+            // Atmosphère : brume glacée diffuse (vs fumée ambrée Halls) +
+            // flocons de cendre figée en suspension lente (vs escarbilles
+            // orangées Halls — même particule narrative, état figé)
+            brume:     0x4a6890,
+            particule: 0xd8e8ff
+        },
         ennemisPool: [
             'idole_fissuree',  'idole_fissuree',  'idole_fissuree',
             'ombre_murmure',   'ombre_murmure',   'ombre_murmure',

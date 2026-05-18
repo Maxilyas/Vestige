@@ -3,12 +3,16 @@
 // La plateforme physique reste un Phaser.Rectangle (pour la collision arcade).
 // Au-dessus, on dessine un Graphics qui apporte la patine peinte :
 //   - Présent — branche par biome :
-//       ruines_basses : pierre humide, mousse vivace, fleurs occasionnelles,
-//                       luminescence vert pâle (ADD)
-//       halls_cendres : pierre carbonisée, suie aux bords, fissures rougeoyantes,
-//                       braises ADD pulsantes + foyers éteints cuivre terni
-//                       (gradient narratif étage 3 vifs → étage 4 mourants)
-//   - Miroir          : pavés ornés avec chasse-pieds doré, motifs de joints
+//       ruines_basses    : pierre humide, mousse vivace, fleurs occasionnelles,
+//                          luminescence vert pâle (ADD)
+//       halls_cendres    : pierre carbonisée, suie aux bords, fissures rougeoyantes,
+//                          braises ADD pulsantes + foyers éteints cuivre terni
+//                          (gradient narratif étage 3 vifs → étage 4 mourants)
+//       cristaux_glaces  : pierre minéralisée gelée, givre aux bords, veines
+//                          cristallines violet ADD pulsantes lentes + cristaux
+//                          mnésiques actifs/morts (gradient narratif étage 5
+//                          mémoires vives → étage 6 mémoires fossilisées)
+//   - Miroir             : pavés ornés avec chasse-pieds doré, motifs de joints
 
 import { DEPTH } from './PainterlyRenderer.js';
 
@@ -38,6 +42,10 @@ export function peindreOrnementPlateforme(scene, x, y, largeur, hauteur, monde, 
         const biomeId = scene.registry.get('biome_id_courant') || 'ruines_basses';
         if (biomeId === 'halls_cendres') {
             peindreOrnementHallsCendres(scene, g, xG, yT, yB, largeur, hauteur, palette, estSol);
+            return g;
+        }
+        if (biomeId === 'cristaux_glaces') {
+            peindreOrnementCristauxGlaces(scene, g, xG, yT, yB, largeur, hauteur, palette, estSol);
             return g;
         }
 
@@ -389,6 +397,210 @@ function peindreOrnementHallsCendres(scene, g, xG, yT, yB, largeur, hauteur, pal
             targets: luminescence,
             alpha: { from: 0.50, to: 1.0 },
             duration: 1400 + Math.random() * 1200,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+    }
+}
+
+// ============================================================
+// CRISTAUX GLACÉS — pierre minéralisée, givre, veines cristallines mnésiques
+// ============================================================
+//
+// Signature visuelle : arrêt du temps plutôt que froid saisonnier.
+//   - pas de mousse / pas de suie : GIVRE (croûtes blanc-bleu cristallines)
+//   - pas de fissures rougeoyantes : VEINES CRISTALLINES violet ADD (mémoires
+//     piégées qui pulsent à un rythme géologique)
+//   - pas de braise / pas de fleur : CRISTAL MNÉSIQUE (violet ADD pulse lent)
+//                                    ou CRISTAL FOSSILISÉ (gris-bleu mat)
+//   - pas de luminescence verte / orange : LUMINESCENCE NACRÉE blanc-violet
+//   - touffes d'extrémité : NACRE GIVRÉE (lumière froide réfléchissante)
+//
+// Gradient narratif "la mémoire s'éteint" étage 5 → 6 :
+//   - étage 5 : ~60 % des plateformes ont un cristal actif (mémoires vivantes)
+//   - étage 6 : ~25 % (mémoires fossilisées, au seuil du Voile Inversé)
+//   les autres ont des cristaux morts (nacre mate, pas d'ADD).
+//
+// Le tempo des pulsations est DÉLIBÉRÉMENT plus lent que les Halls (durée 3-5 s
+// vs 0.7-1.5 s) : la mémoire respire à l'échelle géologique, pas à celle du feu.
+function peindreOrnementCristauxGlaces(scene, g, xG, yT, yB, largeur, hauteur, palette, estSol) {
+    const etage = scene.registry.get('etage_courant') ?? 5;
+    const ratioCristalActif = etage <= 5 ? 0.60 : 0.25;
+
+    // (1) Ombre portée bleu-nuit — la pierre gelée tire vers l'abîme noir
+    //     en dessous, pas vert sombre ni cuivre. Décolle la plateforme du
+    //     vide du pic suspendu.
+    for (let i = 0; i < 7; i++) {
+        const a = 0.22 * (1 - i / 7);
+        g.fillStyle(0x040814, a);
+        g.fillRect(xG + 1 + i * 0.5, yB + i, largeur - 2 - i, 1);
+    }
+
+    // (2) Micro-variations de teinte — alternance pierre claire / sombre sur
+    //     la surface minéralisée, donne l'effet "peint à main" sur la glace.
+    const nbZones = Math.max(3, Math.floor(largeur / 60));
+    for (let i = 0; i < nbZones; i++) {
+        const t = (i + 0.5) / nbZones;
+        const xZ = xG + t * largeur + (Math.random() - 0.5) * 8;
+        const wZ = largeur / nbZones * (0.6 + Math.random() * 0.4);
+        const variation = Math.random() < 0.5 ? palette.pierreClaire : palette.pierreSombre;
+        const alphaZ = 0.18 + Math.random() * 0.10;
+        g.fillStyle(variation, alphaZ);
+        g.fillRect(xZ - wZ / 2, yT + 2, wZ, hauteur - 3);
+    }
+
+    // (3) Top highlight — couche de givre cristallin déposée sur la pierre
+    //     (signal "praticable" + lecture "c'est froid").
+    g.fillStyle(palette.plateformeContour, 0.85);
+    g.fillRect(xG, yT, largeur, 1);
+    g.fillStyle(palette.pierreClaire, 0.50);
+    g.fillRect(xG, yT + 1, largeur, 1);
+
+    // (4) Bordure érodée — encoches subtiles, identiques aux Ruines mais sur
+    //     pierre gelée donc rare (la glace n'éclate qu'aux points de tension)
+    g.fillStyle(palette.pierreSombre, 0.65);
+    const nbEncoches = Math.max(2, Math.floor(largeur / 45));
+    for (let i = 0; i < nbEncoches; i++) {
+        if (Math.random() < 0.35) {
+            const xE = xG + ((i + 0.5) / nbEncoches) * largeur;
+            g.fillRect(xE - 2, yT - 1, 4, 2);
+        }
+    }
+
+    // (5) VEINES CRISTALLINES — la signature interactive du biome.
+    //     ADD violet pâle pour qu'elles luisent comme des mémoires piégées
+    //     dans la pierre. Sur un graphics séparé pour le blend mode.
+    //     Tempo lent (3-5 s) : la mémoire respire à l'échelle géologique.
+    if (!estSol) {
+        const veines = scene.add.graphics();
+        veines.setDepth(DEPTH.PLATEFORMES + 1);
+        veines.setBlendMode(Phaser.BlendModes.ADD);
+        const nbVeines = Math.max(1, Math.floor(largeur / 70));
+        const couleurCristal = palette.racine; // signature cristaux = racine slot
+        for (let i = 0; i < nbVeines; i++) {
+            const xV = xG + ((i + 0.5) / nbVeines) * largeur + (Math.random() - 0.5) * 6;
+            const yV1 = yT + 3 + Math.random() * (hauteur - 6) * 0.3;
+            const yV2 = yV1 + (hauteur - 6) * (0.3 + Math.random() * 0.3);
+            // Halo flou (lumière intérieure diffuse de la mémoire)
+            veines.lineStyle(3, couleurCristal, 0.16);
+            veines.beginPath();
+            veines.moveTo(xV, yV1);
+            veines.lineTo(xV + (Math.random() - 0.5) * 3, yV2);
+            veines.strokePath();
+            // Cœur cristallin net
+            veines.lineStyle(1, couleurCristal, 0.70);
+            veines.beginPath();
+            veines.moveTo(xV, yV1);
+            veines.lineTo(xV + (Math.random() - 0.5) * 3, yV2);
+            veines.strokePath();
+        }
+        // Respiration très lente — battement de cœur fossile (3-5 s vs 2-4 s Halls)
+        scene.tweens.add({
+            targets: veines,
+            alpha: { from: 0.55, to: 1.0 },
+            duration: 3200 + Math.random() * 1800,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    // (6) Dépôts de GIVRE au sommet — 4-6 petites croûtes blanc-bleu irrégulières
+    //     (remplace la mousse des Ruines / la suie des Halls). Densité moyenne :
+    //     la glace recouvre la pierre mais ne l'étouffe pas.
+    const nbGivre = Math.max(2, Math.floor(largeur / 30));
+    for (let i = 0; i < nbGivre; i++) {
+        if (Math.random() < 0.60) {
+            const xGi = xG + 3 + (i / nbGivre) * (largeur - 6) + (Math.random() - 0.5) * 6;
+            const wGi = 3 + Math.random() * 5;
+            const hGi = 1 + Math.random() * 1.5;
+            g.fillStyle(palette.mousse, 0.70); // mousse slot = givre en cristaux_glaces
+            g.fillEllipse(xGi, yT - hGi * 0.3, wGi, hGi);
+            // Petit éclat blanc plus brillant par-dessus
+            if (Math.random() < 0.55) {
+                g.fillStyle(0xf0f8ff, 0.55);
+                g.fillCircle(xGi + (Math.random() - 0.5) * 2, yT - 1, 0.8);
+            }
+        }
+    }
+
+    // (7) Nacre givrée aux deux extrémités — dépôts argent-bleu qui évoquent
+    //     une glace lustrée par le temps (remplace les touffes de mousse grasses
+    //     des Ruines / les coins fondus cuivre des Halls).
+    g.fillStyle(palette.accent, 0.60); // accent = argent-nacre
+    g.fillEllipse(xG + 5, yT + 1, 12, 3.5);
+    g.fillEllipse(xG + largeur - 5, yT + 1, 12, 3.5);
+    g.fillStyle(0xf0f8ff, 0.45);
+    g.fillCircle(xG + 4, yT, 1.2);
+    g.fillCircle(xG + largeur - 4, yT, 1.2);
+
+    // (8) CRISTAL MNÉSIQUE ACTIF / FOSSILISÉ — équivalent fleur des Ruines /
+    //     braise des Halls, mais bi-ton mémoire vivante vs fossilisée
+    //     (gradient narratif étage 5 → 6).
+    if (Math.random() < 0.35) {
+        const xC = xG + 10 + Math.random() * (largeur - 20);
+        const actif = Math.random() < ratioCristalActif;
+        if (actif) {
+            // Mémoire encore vivante — pointe cristal violet ADD pulse lent
+            const cristal = scene.add.graphics();
+            cristal.setDepth(DEPTH.PLATEFORMES + 1);
+            cristal.setBlendMode(Phaser.BlendModes.ADD);
+            // Halo violet diffus (la mémoire rayonne)
+            cristal.fillStyle(palette.racine, 0.50);
+            cristal.fillCircle(xC, yT - 3, 6);
+            // Cœur cristallin pointu (forme losange suggérée par deux triangles)
+            cristal.fillStyle(0xe0c8ff, 0.85);
+            cristal.fillTriangle(xC, yT - 7, xC - 1.8, yT - 2, xC + 1.8, yT - 2);
+            cristal.fillTriangle(xC, yT + 1, xC - 1.8, yT - 2, xC + 1.8, yT - 2);
+            // Éclat blanc central
+            cristal.fillStyle(0xffffff, 0.70);
+            cristal.fillCircle(xC, yT - 3, 0.8);
+            // Battement géologique — très lent (3-4 s)
+            scene.tweens.add({
+                targets: cristal,
+                alpha: { from: 0.50, to: 1.0 },
+                duration: 2800 + Math.random() * 1400,
+                ease: 'Sine.InOut',
+                yoyo: true,
+                repeat: -1
+            });
+        } else {
+            // Mémoire fossilisée — cristal mort gris-bleu mat (pas d'ADD)
+            //   silhouette losange émoussée + fissure traversante
+            g.fillStyle(palette.accent, 0.75);
+            g.fillTriangle(xC, yT - 5, xC - 1.5, yT - 1, xC + 1.5, yT - 1);
+            g.fillTriangle(xC, yT, xC - 1.5, yT - 1, xC + 1.5, yT - 1);
+            g.fillStyle(palette.pierreSombre, 0.55);
+            g.lineStyle(0.6, palette.pierreSombre, 0.65);
+            g.beginPath();
+            g.moveTo(xC - 1, yT - 4);
+            g.lineTo(xC + 0.8, yT - 1);
+            g.strokePath();
+        }
+    }
+
+    // (9) Luminescence cristalline — équivalent de la mousse luminescente des
+    //     Ruines / braise luminescente des Halls, mais en ADD nacré blanc-violet.
+    //     Sur les plateformes "vives" uniquement (utilise ratioCristalActif pour
+    //     garder le narratif "mémoire qui s'éteint au seuil du Voile").
+    if (Math.random() < ratioCristalActif) {
+        const luminescence = scene.add.graphics();
+        luminescence.setDepth(DEPTH.PLATEFORMES + 1);
+        luminescence.setBlendMode(Phaser.BlendModes.ADD);
+        const nbLum = 1 + (Math.random() < 0.5 ? 1 : 0);
+        for (let i = 0; i < nbLum; i++) {
+            const xL = xG + 12 + Math.random() * Math.max(8, largeur - 24);
+            luminescence.fillStyle(palette.racine, 0.28);
+            luminescence.fillEllipse(xL, yT + 1, 16, 5);
+            luminescence.fillStyle(0xe8d8ff, 0.50);
+            luminescence.fillEllipse(xL, yT + 1, 7, 2.5);
+        }
+        // Pulse géologique — délibérément plus lent que les Halls (4-6 s)
+        scene.tweens.add({
+            targets: luminescence,
+            alpha: { from: 0.45, to: 1.0 },
+            duration: 4000 + Math.random() * 2000,
             ease: 'Sine.InOut',
             yoyo: true,
             repeat: -1
