@@ -1,21 +1,27 @@
 // CristauxGlaces — composeur parallax spécifique au biome (étages 5-6).
 //
-// Direction : "Sanctuaire Suspendu". Le joueur sort des Halls Cendrés (cathédrale
-// en flammes au sol) et monte dans un pic acéré au-dessus du monde. Les Sources
-// stockaient ici leurs mémoires importantes dans des cristaux mnésiques. Le
-// froid n'est pas saisonnier — c'est un ARRÊT DU TEMPS. Silence dense, lumière
-// cristalline qui filtre des pics lointains, abîme noir-bleuté visible sous le
-// pic suspendu. Bi-ton signature : cristaux mnésiques actifs violet-blanc ↔
-// cristaux fossilisés argent-nacre mat.
+// Direction : "La Cité Divine sur la Glace" — Olympe cristalline. Le joueur
+// sort des Halls Cendrés (cathédrale en flammes au sol) et entre dans une
+// CITÉ MAJESTUEUSE bâtie sur des plateaux flottants de marbre gelé, reliés
+// par des ponts cristallins. La cité est INTACTE, figée hors du temps —
+// marbre lustré, temples grecs hellénistiques à l'horizon, habitants
+// statufiés dans leur dernière pose. Au cœur, un ARBRE CRISTALLIN GÉANT
+// (Yggdrasil glacé) dont les branches pulsent de mémoire violet (sève
+// mnésique qui circule).
 //
-// Préfiguration discrète du Voile Inversé via les accents POURPRE pâle sur les
-// cristaux mnésiques (équivalent narratif des racines pourpres des Ruines
-// basses qui annonçaient le Reflux à l'autre extrémité du chemin).
+// Lumière : midi cristallin pur, blanc-cyan éblouissant. La cité capte le
+// soleil divin haut, ombres tranchées. Bi-ton signature : cristaux mnésiques
+// actifs violet-blanc (sacré) ↔ cristaux fossilisés argent-nacre.
+//
+// Préfiguration MINIMALE du Voile Inversé : le violet n'apparaît QUE sur les
+// cristaux mnésiques (couleur sacrée des mémoires des Sources), aucune
+// fissure violette dans le marbre divin. La corruption viendra en 7-8.
 //
 // 14+ couches du fond vers l'avant :
-//   BG    pics cristallins sommet  (sF 0.10, silhouettes acérées au-dessus, drift très lent)
+//   BG    branches géantes arbre   (sF 0.10, branches Yggdrasil depuis le haut + veines violet ADD)
 //   BG    flocons en suspension    (sF 0.20, cendre figée qui dérive vers le bas)
-//   BG    aiguilles cristallines   (sF 0.15, 2 rangées de pics superposés en silhouette)
+//   BG    temples grecs lointains  (sF 0.15, 2 rangées hellénistiques bleu pâle, centre libre)
+//   BG    arbre cristallin centre  (sF 0.15, tronc + premières branches + sève mnésique violet)
 //   BG    voile horizon            (sF 0.0,  bleu glacé laiteux)
 //   BG    silhouettes mnésiques    (sF 0.30, reliquaires, obélisques, statues, piliers)
 //   BG    brume glacée 3 bandes    (sF 0.20, bandes horizontales bleu-violet)
@@ -53,109 +59,210 @@ function teinterPlusSombre(c, amount) {
 }
 
 // ============================================================
-// COUCHE 1 — AIGUILLES CRISTALLINES 2 RANGÉES (scrollFactor 0.15)
+// COUCHE 1 — TEMPLES GRECS LOINTAINS (scrollFactor 0.15)
 // ============================================================
 //
-// Équivalent thématique des arches funéraires des Halls / montagnes des Ruines :
-// la "ligne d'horizon" est formée par des pics cristallins en silhouettes
-// superposées. Deux rangées, pyramides acérées + bases minéralisées (la pierre
-// du pic affleure entre les aiguilles).
+// La "ligne d'horizon" de la cité divine est formée par des silhouettes de
+// temples grecs hellénistiques (équivalent narratif des arches funéraires des
+// Halls). Quatre types tirés aléatoirement : temple à péristyle, tholos
+// rotonde, statue ailée colossale, stoa longue galerie. Silhouettes bleues
+// pâles (vs noires des funéraires) — la cité est intacte, lumineuse,
+// "perceptible" même à l'horizon.
 
-function peindreAiguilleCristalline(scene, x, ySol, largeur, hauteur, couleurBase, alpha, rng) {
+function couleurSilhouetteTemple() {
+    return 0x4a5a78; // bleu-gris pâle — la cité capte la lumière même à distance
+}
+
+function peindreTemplePeristyle(scene, x, ySol, hauteur, alpha, rng) {
     const g = scene.add.graphics();
+    const w = hauteur * 1.6 + rng() * 30;
+    const couleur = couleurSilhouetteTemple();
     const yTop = ySol - hauteur;
 
-    g.fillStyle(couleurBase, alpha);
+    g.fillStyle(couleur, alpha);
+    // Stylobate (socle à 3 marches)
+    g.fillRect(x - w / 2 - 4, ySol - 4, w + 8, 4);
+    g.fillRect(x - w / 2 - 2, ySol - 8, w + 4, 4);
+    g.fillRect(x - w / 2, ySol - 12, w, 4);
 
-    // Forme principale : pic acéré (triangle dissymétrique) + base évasée
-    g.beginPath();
-    g.moveTo(x - largeur / 2, ySol);
-    // Base élargie irrégulière à gauche
-    g.lineTo(x - largeur / 2 + 6, ySol - hauteur * 0.18);
-    g.lineTo(x - largeur * 0.18, ySol - hauteur * 0.45);
-    // Sommet acéré (légèrement décalé pour asymétrie naturelle)
-    const xSommet = x + (rng() - 0.5) * largeur * 0.15;
-    g.lineTo(xSommet, yTop);
-    // Descend à droite
-    g.lineTo(x + largeur * 0.22, ySol - hauteur * 0.42);
-    g.lineTo(x + largeur / 2 - 6, ySol - hauteur * 0.16);
-    g.lineTo(x + largeur / 2, ySol);
-    g.closePath();
-    g.fillPath();
-
-    // Facette éclairée (face droite plus claire — lumière qui rentre d'en haut)
-    const couleurFacette = teinterPlusClair(couleurBase, 0.08);
-    g.fillStyle(couleurFacette, alpha * 0.75);
-    g.beginPath();
-    g.moveTo(xSommet, yTop);
-    g.lineTo(x + largeur * 0.22, ySol - hauteur * 0.42);
-    g.lineTo(x + largeur / 2 - 6, ySol - hauteur * 0.16);
-    g.lineTo(x + largeur / 2, ySol);
-    g.lineTo(xSommet + 1, ySol);
-    g.closePath();
-    g.fillPath();
-
-    // Fracture verticale subtile (la glace se fissure)
-    if (rng() < 0.6) {
-        g.lineStyle(1, teinterPlusSombre(couleurBase, 0.25), alpha * 0.6);
-        const xF = x + (rng() - 0.5) * largeur * 0.2;
-        g.beginPath();
-        g.moveTo(xF, yTop + hauteur * 0.15);
-        g.lineTo(xF + (rng() - 0.5) * 3, yTop + hauteur * 0.55);
-        g.lineTo(xF + (rng() - 0.5) * 4, yTop + hauteur * 0.85);
-        g.strokePath();
+    // Colonnes (péristyle frontal — 6 colonnes)
+    const nbColonnes = 6;
+    const epColonne = w / 20;
+    const espace = (w - nbColonnes * epColonne) / (nbColonnes - 1);
+    const hauteurColonne = hauteur * 0.55;
+    for (let c = 0; c < nbColonnes; c++) {
+        const xC = x - w / 2 + c * (epColonne + espace);
+        g.fillRect(xC, ySol - 12 - hauteurColonne, epColonne, hauteurColonne);
     }
 
-    // Petit cristal mnésique au sommet (très rare — 1 aiguille sur 4 environ)
-    if (rng() < 0.25) {
-        const cristal = scene.add.graphics();
-        cristal.setBlendMode(Phaser.BlendModes.ADD);
-        cristal.fillStyle(0xb898e8, 0.45);
-        cristal.fillCircle(xSommet, yTop + 2, 4);
-        cristal.fillStyle(0xe0c8ff, 0.7);
-        cristal.fillCircle(xSommet, yTop + 2, 1.5);
-        cristal.setScrollFactor(0.15, 0);
-        cristal.setDepth(DEPTH.SILHOUETTES - 2);
-        scene.tweens.add({
-            targets: cristal,
-            alpha: { from: 0.5, to: 1.0 },
-            duration: 4000 + rng() * 2000,
-            ease: 'Sine.InOut',
-            yoyo: true,
-            repeat: -1
-        });
-    }
+    // Entablement (bande horizontale au-dessus des colonnes)
+    g.fillRect(x - w / 2 - 2, ySol - 12 - hauteurColonne - 8, w + 4, 8);
+
+    // Fronton triangulaire
+    g.beginPath();
+    g.moveTo(x - w / 2 - 4, ySol - 12 - hauteurColonne - 8);
+    g.lineTo(x, yTop);
+    g.lineTo(x + w / 2 + 4, ySol - 12 - hauteurColonne - 8);
+    g.closePath();
+    g.fillPath();
 
     return g;
 }
 
-function poserAiguillesCristallines(scene, dims, rng, palette) {
+function peindreTholos(scene, x, ySol, hauteur, alpha, rng) {
+    const g = scene.add.graphics();
+    const w = hauteur * 1.2 + rng() * 20;
+    const couleur = couleurSilhouetteTemple();
+    const yTop = ySol - hauteur;
+
+    g.fillStyle(couleur, alpha);
+    // Socle circulaire (ellipse plate)
+    g.fillEllipse(x, ySol - 4, w + 16, 10);
+    // Plateforme rectangle
+    g.fillRect(x - w / 2, ySol - 12, w, 8);
+
+    // Colonnes du tour (8 colonnes vues en silhouette — espacées en arc)
+    const hauteurColonne = hauteur * 0.50;
+    const nbColonnes = 8;
+    for (let c = 0; c < nbColonnes; c++) {
+        // Distribution courbée : les colonnes centrales sont plus rapprochées
+        const t = (c - (nbColonnes - 1) / 2) / nbColonnes;
+        const xC = x + t * w * Math.cos(Math.abs(t) * 1.2);
+        const epColonne = 3 + rng() * 0.5;
+        g.fillRect(xC - epColonne / 2, ySol - 12 - hauteurColonne, epColonne, hauteurColonne);
+    }
+
+    // Entablement circulaire (ellipse au-dessus des colonnes)
+    g.fillEllipse(x, ySol - 12 - hauteurColonne - 4, w + 6, 8);
+
+    // Coupole (demi-ellipse au sommet)
+    g.fillEllipse(x, ySol - 12 - hauteurColonne - 8 - hauteur * 0.18, w * 0.85, hauteur * 0.36);
+
+    return g;
+}
+
+function peindreStatueAilee(scene, x, ySol, hauteur, alpha, rng) {
+    const g = scene.add.graphics();
+    const w = 36 + rng() * 16;
+    const yTop = ySol - hauteur;
+    const couleur = couleurSilhouetteTemple();
+
+    g.fillStyle(couleur, alpha);
+    // Socle haut
+    g.fillRect(x - w / 2, ySol - hauteur * 0.18, w, hauteur * 0.18);
+
+    // Corps trapézoïdal (robe longue)
+    g.beginPath();
+    g.moveTo(x - w * 0.35, ySol - hauteur * 0.18);
+    g.lineTo(x - w * 0.25, yTop + hauteur * 0.30);
+    g.lineTo(x + w * 0.25, yTop + hauteur * 0.30);
+    g.lineTo(x + w * 0.35, ySol - hauteur * 0.18);
+    g.closePath();
+    g.fillPath();
+
+    // Tête
+    g.fillCircle(x, yTop + hauteur * 0.22, w * 0.10);
+
+    // Ailes déployées (deux triangles latéraux)
+    g.beginPath();
+    g.moveTo(x - w * 0.25, yTop + hauteur * 0.35);
+    g.lineTo(x - w * 0.95, yTop + hauteur * 0.15);
+    g.lineTo(x - w * 0.85, yTop + hauteur * 0.50);
+    g.lineTo(x - w * 0.25, yTop + hauteur * 0.50);
+    g.closePath();
+    g.fillPath();
+
+    g.beginPath();
+    g.moveTo(x + w * 0.25, yTop + hauteur * 0.35);
+    g.lineTo(x + w * 0.95, yTop + hauteur * 0.15);
+    g.lineTo(x + w * 0.85, yTop + hauteur * 0.50);
+    g.lineTo(x + w * 0.25, yTop + hauteur * 0.50);
+    g.closePath();
+    g.fillPath();
+
+    return g;
+}
+
+function peindreStoa(scene, x, ySol, hauteur, alpha, rng) {
+    const g = scene.add.graphics();
+    const w = hauteur * 2.2 + rng() * 40;
+    const couleur = couleurSilhouetteTemple();
+
+    g.fillStyle(couleur, alpha);
+    // Stylobate plat
+    g.fillRect(x - w / 2, ySol - 6, w, 6);
+
+    // Colonnes (longue galerie — 10-12 colonnes)
+    const nbColonnes = 10 + Math.floor(rng() * 3);
+    const epColonne = 3;
+    const espace = (w - nbColonnes * epColonne) / (nbColonnes - 1);
+    const hauteurColonne = hauteur * 0.65;
+    for (let c = 0; c < nbColonnes; c++) {
+        const xC = x - w / 2 + c * (epColonne + espace);
+        g.fillRect(xC, ySol - 6 - hauteurColonne, epColonne, hauteurColonne);
+    }
+
+    // Entablement long
+    g.fillRect(x - w / 2 - 2, ySol - 6 - hauteurColonne - 6, w + 4, 6);
+
+    // Toit plat (légèrement débordant)
+    g.fillRect(x - w / 2 - 4, ySol - 6 - hauteurColonne - 10, w + 8, 4);
+
+    return g;
+}
+
+function poserTemplesGrecsLointains(scene, dims, rng, palette) {
     const objets = [];
     const ySol = GAME_HEIGHT - 60;
     const largeurEtendue = dims.largeur * 1.6;
     const decalageX = -dims.largeur * 0.3;
 
-    // Deux rangées superposées. Plus lointaine = plus pâle et basse, plus
-    // proche = plus opaque et acérée.
+    // Deux rangées superposées. Plus lointaine = plus pâle, plus proche =
+    // plus opaque. Espace au centre laissé libre pour l'arbre cristallin
+    // central (qui prend toute la verticalité sur ~ 25 % de largeur).
+    const xCentre = dims.largeur / 2;
+    const exclusionCentre = 200;
+
     const rangees = [
-        { nb: 6, hMin: 130, hMax: 200, lMin: 130, lMax: 220, alpha: 0.55, teinte: 0x202c40, yOffset: 4 },
-        { nb: 5, hMin: 180, hMax: 280, lMin: 160, lMax: 260, alpha: 0.85, teinte: 0x0e1422, yOffset: 14 }
+        { nb: 6, hMin: 130, hMax: 200, alpha: 0.45, teinteShift: 0.10, yOffset: 4 },
+        { nb: 5, hMin: 180, hMax: 280, alpha: 0.75, teinteShift: 0.0,  yOffset: 14 }
+    ];
+
+    const types = [
+        { fn: peindreTemplePeristyle, poids: 0.30 },
+        { fn: peindreTholos,          poids: 0.25 },
+        { fn: peindreStatueAilee,     poids: 0.20 },
+        { fn: peindreStoa,            poids: 0.25 }
     ];
 
     for (const rangee of rangees) {
         const pas = largeurEtendue / rangee.nb;
         for (let i = 0; i < rangee.nb; i++) {
-            const x = decalageX + pas * i + (rng() - 0.5) * pas * 0.3;
+            let x = decalageX + pas * i + (rng() - 0.5) * pas * 0.3;
+            // Évite le centre (réservé à l'arbre cristallin)
+            if (Math.abs(x - xCentre) < exclusionCentre) {
+                x = xCentre + (x < xCentre ? -exclusionCentre - 20 : exclusionCentre + 20);
+            }
             const h = rangee.hMin + rng() * (rangee.hMax - rangee.hMin);
-            const l = rangee.lMin + rng() * (rangee.lMax - rangee.lMin);
-            const a = peindreAiguilleCristalline(scene, x, ySol + rangee.yOffset, l, h, rangee.teinte, rangee.alpha, rng);
+            // Tirage pondéré du type
+            let choix = rng();
+            let fnPeinte = types[types.length - 1].fn;
+            let cumul = 0;
+            for (const t of types) {
+                cumul += t.poids;
+                if (choix < cumul) { fnPeinte = t.fn; break; }
+            }
+            // L'alpha plus bas de la rangée arrière (0.45 vs 0.75) crée
+            // suffisamment de perspective atmosphérique — pas besoin de tint
+            // sur le Graphics.
+            const a = fnPeinte(scene, x, ySol + rangee.yOffset, h, rangee.alpha, rng);
             a.setScrollFactor(0.15, 0);
             a.setDepth(DEPTH.SILHOUETTES - 2);
             objets.push(a);
         }
     }
 
-    // Bande de brume cristalline haute entre les aiguilles et le ciel
+    // Bande de brume cristalline haute entre les temples et le ciel
     // (atmospheric haze froid) — drift ultra-lent yoyo.
     const brume = scene.add.graphics();
     brume.fillStyle(0x4a6890, 0.22);
@@ -177,6 +284,213 @@ function poserAiguillesCristallines(scene, dims, rng, palette) {
         yoyo: true
     });
     objets.push(brume);
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 1' — ARBRE CRISTALLIN GÉANT CENTRAL (scrollFactor 0.15)
+// ============================================================
+//
+// La vision phare du biome. Yggdrasil cristallin : tronc blanc translucide
+// massif au centre de l'horizon, branches qui pulsent de mémoire violet
+// (sève mnésique qui circule). Visible de toutes les salles, grossit à
+// mesure qu'on progresse vers le boss étage 6 (canopée englobante).
+//
+// Cette fonction pose UNIQUEMENT le tronc et les premières branches ; les
+// branches qui dépassent depuis le haut sont posées séparément en couche 0
+// (poserBranchesArbreSommets) pour bien donner le sentiment "l'arbre est
+// PLUS GRAND que l'écran".
+
+function poserArbreCristallinCentre(scene, dims, rng, palette) {
+    const objets = [];
+    const xCentre = dims.largeur / 2;
+    const ySol = GAME_HEIGHT - 60;
+
+    // === TRONC MASSIF ===
+    const g = scene.add.graphics();
+    const hauteurTronc = 360; // depuis ySol vers le haut, sort par le haut du canvas
+    const largeurBase = 140;
+    const largeurMid = 90;
+    const largeurHaut = 50;
+    const yMid = ySol - hauteurTronc * 0.45;
+    const yHaut = ySol - hauteurTronc;
+
+    // Forme : tronc effilé organique (3 segments avec courbes douces)
+    const couleurTronc = 0xc8d8f0;
+    const couleurOmbre = 0x6a8aa8;
+    const couleurClair = 0xe8f4ff;
+
+    g.fillStyle(couleurTronc, 0.92);
+    g.beginPath();
+    g.moveTo(xCentre - largeurBase / 2, ySol);
+    g.lineTo(xCentre - largeurMid / 2 - 4, yMid);
+    g.lineTo(xCentre - largeurHaut / 2, yHaut);
+    g.lineTo(xCentre + largeurHaut / 2, yHaut);
+    g.lineTo(xCentre + largeurMid / 2 + 4, yMid);
+    g.lineTo(xCentre + largeurBase / 2, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // Ombre interne (face gauche moins éclairée)
+    g.fillStyle(couleurOmbre, 0.45);
+    g.beginPath();
+    g.moveTo(xCentre - largeurBase / 2, ySol);
+    g.lineTo(xCentre - largeurMid / 2 - 4, yMid);
+    g.lineTo(xCentre - largeurHaut / 2, yHaut);
+    g.lineTo(xCentre - largeurHaut / 6, yHaut);
+    g.lineTo(xCentre - largeurMid / 4, yMid);
+    g.lineTo(xCentre - largeurBase / 4, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // Highlight face droite (lumière qui glisse sur le cristal)
+    g.fillStyle(couleurClair, 0.55);
+    g.beginPath();
+    g.moveTo(xCentre + largeurBase / 4, ySol);
+    g.lineTo(xCentre + largeurMid / 4, yMid);
+    g.lineTo(xCentre + largeurHaut / 6, yHaut);
+    g.lineTo(xCentre + largeurHaut / 2 - 2, yHaut);
+    g.lineTo(xCentre + largeurMid / 2 + 2, yMid);
+    g.lineTo(xCentre + largeurBase / 2 - 4, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // Stries verticales (la glace est striée comme du marbre veiné)
+    g.lineStyle(1, couleurOmbre, 0.35);
+    for (let s = 0; s < 5; s++) {
+        const xS = xCentre - largeurBase / 2 + (s + 1) * largeurBase / 6 + (rng() - 0.5) * 4;
+        g.beginPath();
+        g.moveTo(xS, ySol);
+        g.lineTo(xS + (rng() - 0.5) * 6, yMid);
+        g.lineTo(xS + (rng() - 0.5) * 4, yHaut);
+        g.strokePath();
+    }
+
+    // Racines visibles à la base (cristaux qui plongent dans le marbre)
+    g.fillStyle(couleurTronc, 0.85);
+    for (let r = 0; r < 5; r++) {
+        const offset = -largeurBase / 2 - 14 + r * (largeurBase + 28) / 4;
+        const xR = xCentre + offset;
+        g.beginPath();
+        g.moveTo(xR, ySol - 4);
+        g.lineTo(xR - 8 + (rng() - 0.5) * 4, ySol + 10);
+        g.lineTo(xR + 6, ySol);
+        g.closePath();
+        g.fillPath();
+    }
+
+    g.setScrollFactor(0.15, 0);
+    g.setDepth(DEPTH.SILHOUETTES - 1); // un cran devant les temples
+    objets.push(g);
+
+    // === VEINES MNÉSIQUES VIOLETTES — sève qui circule dans le tronc ===
+    // Couche ADD séparée pour blend mode + animation pulse circulante
+    const veines = scene.add.graphics();
+    veines.setBlendMode(Phaser.BlendModes.ADD);
+    const couleurSeve = 0xb898e8;
+    const couleurCoeur = 0xe0c8ff;
+
+    // 3 grandes veines principales qui montent en sinuosité
+    for (let v = 0; v < 3; v++) {
+        const xDepart = xCentre + (v - 1) * 30;
+        veines.lineStyle(4, couleurSeve, 0.20);
+        veines.beginPath();
+        veines.moveTo(xDepart, ySol);
+        veines.lineTo(xDepart + (rng() - 0.5) * 12, yMid);
+        veines.lineTo(xDepart + (rng() - 0.5) * 8, yHaut);
+        veines.strokePath();
+
+        // Cœur vif
+        veines.lineStyle(1.5, couleurCoeur, 0.65);
+        veines.beginPath();
+        veines.moveTo(xDepart, ySol);
+        veines.lineTo(xDepart + (rng() - 0.5) * 12, yMid);
+        veines.lineTo(xDepart + (rng() - 0.5) * 8, yHaut);
+        veines.strokePath();
+    }
+
+    veines.setScrollFactor(0.15, 0);
+    veines.setDepth(DEPTH.SILHOUETTES);
+    objets.push(veines);
+
+    // Pulse géologique très lent — la sève mnésique remonte (3-5 s)
+    scene.tweens.add({
+        targets: veines,
+        alpha: { from: 0.55, to: 1.0 },
+        duration: 3500 + rng() * 1500,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
+
+    // === PREMIÈRES BRANCHES (en V depuis le haut du tronc) ===
+    // Deux grosses branches partent à ~ 1/3 du haut du tronc et s'élèvent
+    // en diagonales vers les coins supérieurs.
+    const yBranche = ySol - hauteurTronc * 0.75;
+    const branches = scene.add.graphics();
+    branches.fillStyle(couleurTronc, 0.88);
+
+    // Branche gauche
+    branches.beginPath();
+    branches.moveTo(xCentre - largeurHaut / 2 - 2, yBranche);
+    branches.lineTo(xCentre - 80, yBranche - 40);
+    branches.lineTo(xCentre - 160, yBranche - 90);
+    branches.lineTo(xCentre - 165, yBranche - 78);
+    branches.lineTo(xCentre - 95, yBranche - 30);
+    branches.lineTo(xCentre - largeurHaut / 2 - 4, yBranche + 12);
+    branches.closePath();
+    branches.fillPath();
+
+    // Branche droite
+    branches.beginPath();
+    branches.moveTo(xCentre + largeurHaut / 2 + 2, yBranche);
+    branches.lineTo(xCentre + 80, yBranche - 40);
+    branches.lineTo(xCentre + 160, yBranche - 90);
+    branches.lineTo(xCentre + 165, yBranche - 78);
+    branches.lineTo(xCentre + 95, yBranche - 30);
+    branches.lineTo(xCentre + largeurHaut / 2 + 4, yBranche + 12);
+    branches.closePath();
+    branches.fillPath();
+
+    branches.setScrollFactor(0.15, 0);
+    branches.setDepth(DEPTH.SILHOUETTES - 1);
+    objets.push(branches);
+
+    // Petites veines violettes ADD sur les branches
+    const veinesBranches = scene.add.graphics();
+    veinesBranches.setBlendMode(Phaser.BlendModes.ADD);
+    veinesBranches.lineStyle(2, couleurSeve, 0.30);
+    veinesBranches.beginPath();
+    veinesBranches.moveTo(xCentre - largeurHaut / 2, yBranche);
+    veinesBranches.lineTo(xCentre - 80, yBranche - 38);
+    veinesBranches.lineTo(xCentre - 155, yBranche - 85);
+    veinesBranches.moveTo(xCentre + largeurHaut / 2, yBranche);
+    veinesBranches.lineTo(xCentre + 80, yBranche - 38);
+    veinesBranches.lineTo(xCentre + 155, yBranche - 85);
+    veinesBranches.strokePath();
+    veinesBranches.lineStyle(0.8, couleurCoeur, 0.65);
+    veinesBranches.beginPath();
+    veinesBranches.moveTo(xCentre - largeurHaut / 2, yBranche);
+    veinesBranches.lineTo(xCentre - 80, yBranche - 38);
+    veinesBranches.lineTo(xCentre - 155, yBranche - 85);
+    veinesBranches.moveTo(xCentre + largeurHaut / 2, yBranche);
+    veinesBranches.lineTo(xCentre + 80, yBranche - 38);
+    veinesBranches.lineTo(xCentre + 155, yBranche - 85);
+    veinesBranches.strokePath();
+    veinesBranches.setScrollFactor(0.15, 0);
+    veinesBranches.setDepth(DEPTH.SILHOUETTES);
+    objets.push(veinesBranches);
+
+    // Pulse décalé (4-6 s, plus lent que le tronc — la sève s'éloigne)
+    scene.tweens.add({
+        targets: veinesBranches,
+        alpha: { from: 0.40, to: 1.0 },
+        duration: 4500 + rng() * 1800,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
 
     return objets;
 }
@@ -530,68 +844,94 @@ function poserCristauxMnesiquesSurPied(scene, dims, rng, palette) {
 }
 
 // ============================================================
-// COUCHE 0 — PICS CRISTALLINS SOMMETS (scrollFactor 0.10)
+// COUCHE 0 — BRANCHES GÉANTES DE L'ARBRE CRISTALLIN (scrollFactor 0.10)
 // ============================================================
 //
-// Équivalent thématique du plafond voûté cassé des Halls / nuages des Ruines :
-// fragments cristallins qui dépassent depuis le haut de l'écran, comme si on
-// voyait les sommets de pics encore plus hauts. Donne l'identité "on est au
-// sommet du monde". Drift très lent (imperceptible — la glace ne bouge pas).
+// Les branches supérieures de l'arbre Yggdrasil cristallin qui dépassent
+// depuis le haut de l'écran — signifie "l'arbre est PLUS GRAND que la salle,
+// il monte vers le ciel divin". Posées en parallax 0.10 pour qu'elles bougent
+// moins que les temples (perspective : ce qui est au-dessus est plus loin).
+//
+// 3 branches majeures + pulses violet ADD circulant (sève mnésique). Drift
+// imperceptible (la glace est figée).
 
-function poserPicsSommets(scene, dims, rng, palette) {
+function poserBranchesArbreSommets(scene, dims, rng, palette) {
     const objets = [];
-    const largeurEtendue = dims.largeur * 1.6;
-    const decalageX = -dims.largeur * 0.3;
+    const xCentre = dims.largeur / 2;
+    const yHaut = -30;
 
-    // 3 fragments de pics qui dépassent du haut.
-    const nbFragments = 3;
-    const couleurFragment = 0x0a1020; // très sombre, presque noir-bleu
+    // Couleurs cohérentes avec le tronc central
+    const couleurBranche = 0xc8d8f0;
+    const couleurOmbre = 0x6a8aa8;
+    const couleurClair = 0xe8f4ff;
+    const couleurSeve = 0xb898e8;
+    const couleurCoeur = 0xe0c8ff;
 
-    for (let i = 0; i < nbFragments; i++) {
+    // Definitions des 3 branches majeures (positions, courbures)
+    const branches = [
+        { xDepart: xCentre - 100, xBout: xCentre - 280, yBout: yHaut + 130, epaisseurBase: 28, epaisseurBout: 8 },
+        { xDepart: xCentre + 30,  xBout: xCentre + 80,  yBout: yHaut + 180, epaisseurBase: 32, epaisseurBout: 10 },
+        { xDepart: xCentre + 140, xBout: xCentre + 320, yBout: yHaut + 110, epaisseurBase: 24, epaisseurBout: 7 }
+    ];
+
+    for (const br of branches) {
         const g = scene.add.graphics();
-        const xBase = decalageX + (i + 0.3) * (largeurEtendue / nbFragments) + (rng() - 0.5) * 60;
-        const largeurPic = 200 + rng() * 220;
-        const profondeurPic = 70 + rng() * 50; // combien le pic descend depuis le haut
-        const yHaut = -30;
 
-        // Forme : pic acéré asymétrique vu d'en bas — polygone avec sommet
-        // central + bases dentelées.
-        g.fillStyle(couleurFragment, 0.92);
+        // Forme : tronçon allongé entre xDepart (en haut, sortie de l'écran)
+        // et xBout (en bas, dans le canvas). Quadrilatère effilé.
+        const dx = br.xBout - br.xDepart;
+        const dy = br.yBout - yHaut;
+        const longueur = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        const perpX = -Math.sin(angle);
+        const perpY = Math.cos(angle);
+
+        const x1G = br.xDepart + perpX * br.epaisseurBase / 2;
+        const y1G = yHaut + perpY * br.epaisseurBase / 2;
+        const x1D = br.xDepart - perpX * br.epaisseurBase / 2;
+        const y1D = yHaut - perpY * br.epaisseurBase / 2;
+        const x2G = br.xBout + perpX * br.epaisseurBout / 2;
+        const y2G = br.yBout + perpY * br.epaisseurBout / 2;
+        const x2D = br.xBout - perpX * br.epaisseurBout / 2;
+        const y2D = br.yBout - perpY * br.epaisseurBout / 2;
+
+        g.fillStyle(couleurBranche, 0.90);
         g.beginPath();
-        g.moveTo(xBase - largeurPic / 2, yHaut);
-        // Descend à gauche en zigzag (pic cristallin acéré)
-        g.lineTo(xBase - largeurPic / 2 + 14, yHaut + profondeurPic * 0.4);
-        g.lineTo(xBase - largeurPic / 3, yHaut + profondeurPic * 0.55);
-        g.lineTo(xBase - largeurPic / 4, yHaut + profondeurPic * 0.75);
-        // Pointe centrale
-        g.lineTo(xBase, yHaut + profondeurPic);
-        g.lineTo(xBase + largeurPic / 4, yHaut + profondeurPic * 0.7);
-        g.lineTo(xBase + largeurPic / 3, yHaut + profondeurPic * 0.5);
-        g.lineTo(xBase + largeurPic / 2 - 14, yHaut + profondeurPic * 0.35);
-        g.lineTo(xBase + largeurPic / 2, yHaut);
+        g.moveTo(x1G, y1G);
+        g.lineTo(x2G, y2G);
+        g.lineTo(x2D, y2D);
+        g.lineTo(x1D, y1D);
         g.closePath();
         g.fillPath();
 
-        // Facettes claires (lumière qui glisse sur la glace)
-        g.fillStyle(teinterPlusClair(couleurFragment, 0.06), 0.7);
+        // Face éclairée (côté droit de la branche)
+        g.fillStyle(couleurClair, 0.50);
         g.beginPath();
-        g.moveTo(xBase, yHaut + profondeurPic);
-        g.lineTo(xBase + largeurPic / 4, yHaut + profondeurPic * 0.7);
-        g.lineTo(xBase + largeurPic / 3, yHaut + profondeurPic * 0.5);
-        g.lineTo(xBase + largeurPic / 2 - 14, yHaut + profondeurPic * 0.35);
-        g.lineTo(xBase + largeurPic / 2, yHaut);
-        g.lineTo(xBase + 2, yHaut);
+        g.moveTo(br.xDepart, yHaut);
+        g.lineTo(x2G, y2G);
+        g.lineTo(br.xBout, br.yBout);
+        g.lineTo(x1G, y1G);
         g.closePath();
         g.fillPath();
 
-        // Fractures internes (lignes cristallines)
-        const couleurFracture = teinterPlusSombre(couleurFragment, 0.3);
-        g.lineStyle(1, couleurFracture, 0.6);
-        for (let n = 0; n < 3; n++) {
-            const nx = xBase - largeurPic / 3 + n * largeurPic / 3;
+        // Petite pointe cristalline au bout (la branche se termine en cristal)
+        g.fillStyle(couleurBranche, 0.92);
+        g.beginPath();
+        g.moveTo(br.xBout, br.yBout);
+        g.lineTo(br.xBout - perpX * 6, br.yBout - perpY * 6);
+        g.lineTo(br.xBout + Math.cos(angle) * 14, br.yBout + Math.sin(angle) * 14);
+        g.lineTo(br.xBout + perpX * 6, br.yBout + perpY * 6);
+        g.closePath();
+        g.fillPath();
+
+        // Stries cristallines longitudinales
+        g.lineStyle(1, couleurOmbre, 0.35);
+        for (let s = 0; s < 3; s++) {
+            const t1 = 0.2 + s * 0.25;
+            const t2 = 0.4 + s * 0.25;
             g.beginPath();
-            g.moveTo(nx, yHaut);
-            g.lineTo(nx + (rng() - 0.5) * 6, yHaut + profondeurPic * 0.45);
+            g.moveTo(br.xDepart + dx * t1 + (rng() - 0.5) * 3, yHaut + dy * t1);
+            g.lineTo(br.xDepart + dx * t2 + (rng() - 0.5) * 3, yHaut + dy * t2);
             g.strokePath();
         }
 
@@ -599,10 +939,54 @@ function poserPicsSommets(scene, dims, rng, palette) {
         g.setDepth(DEPTH.CIEL + 2);
         objets.push(g);
 
-        // Drift très lent yoyo (à peine perceptible — la glace est immobile)
+        // === Veine mnésique ADD sur cette branche ===
+        const veine = scene.add.graphics();
+        veine.setBlendMode(Phaser.BlendModes.ADD);
+        // Halo flou
+        veine.lineStyle(4, couleurSeve, 0.22);
+        veine.beginPath();
+        veine.moveTo(br.xDepart, yHaut);
+        veine.lineTo(br.xBout, br.yBout);
+        veine.strokePath();
+        // Cœur
+        veine.lineStyle(1.5, couleurCoeur, 0.65);
+        veine.beginPath();
+        veine.moveTo(br.xDepart, yHaut);
+        veine.lineTo(br.xBout, br.yBout);
+        veine.strokePath();
+        // Éclat au bout de la branche (cristal final)
+        veine.fillStyle(couleurCoeur, 0.85);
+        veine.fillCircle(br.xBout, br.yBout, 3);
+        veine.fillStyle(0xffffff, 0.70);
+        veine.fillCircle(br.xBout, br.yBout, 1.2);
+
+        veine.setScrollFactor(0.10, 0);
+        veine.setDepth(DEPTH.CIEL + 3);
+        objets.push(veine);
+
+        // Pulse géologique très lent — chaque branche a un tempo propre
+        // (donne une impression que la sève coule indépendamment dans chaque)
+        scene.tweens.add({
+            targets: veine,
+            alpha: { from: 0.45, to: 1.0 },
+            duration: 4000 + rng() * 2500,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Drift imperceptible (la branche est rigide, à peine vivante)
         scene.tweens.add({
             targets: g,
-            x: '+=' + (20 + rng() * 18),
+            x: '+=' + (8 + rng() * 6),
+            duration: 130000 + rng() * 50000,
+            ease: 'Linear',
+            repeat: -1,
+            yoyo: true
+        });
+        scene.tweens.add({
+            targets: veine,
+            x: '+=' + (8 + rng() * 6),
             duration: 130000 + rng() * 50000,
             ease: 'Linear',
             repeat: -1,
@@ -1717,18 +2101,24 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
 
     // === BACKGROUND (du plus lointain au plus proche) ===
 
-    // Couche 0 — pics cristallins sommets (fragments au-dessus de l'écran)
-    const pics = poserPicsSommets(scene, dims, rng, palette);
+    // Couche 0 — branches géantes de l'arbre Yggdrasil cristallin qui
+    // dépassent depuis le haut. En salle de boss, elles s'illuminent davantage
+    // (le sanctuaire au sommet de l'arbre se rapproche).
+    const branches = poserBranchesArbreSommets(scene, dims, rng, palette);
     if (estSalleBoss) {
-        for (const p of pics) p.setAlpha(1.0);
+        for (const b of branches) b.setAlpha(Math.min(1, (b.alpha ?? 1) * 1.15));
     }
-    objets.push(...pics);
+    objets.push(...branches);
 
     // Couche 0.5 — flocons ambiants en suspension qui descendent
     objets.push(...poserFloconsEnSuspension(scene, dims, rng));
 
-    // Couche 1 — aiguilles cristallines 2 rangées + brume haute
-    objets.push(...poserAiguillesCristallines(scene, dims, rng, palette));
+    // Couche 1 — temples grecs hellénistiques en silhouettes lointaines
+    objets.push(...poserTemplesGrecsLointains(scene, dims, rng, palette));
+
+    // Couche 1' — arbre cristallin géant au centre (tronc + premières branches
+    // + sève mnésique violet). La vision phare du biome.
+    objets.push(...poserArbreCristallinCentre(scene, dims, rng, palette));
 
     // Couche 2 — voile d'horizon : en salle de boss il s'épaissit
     const voile = poserVoileHorizonCG(scene);
