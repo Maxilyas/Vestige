@@ -217,18 +217,19 @@ function poserTemplesGrecsLointains(scene, dims, rng, palette) {
     const largeurEtendue = dims.largeur * 1.6;
     const decalageX = -dims.largeur * 0.3;
 
-    // Deux rangées superposées. Hauteurs majorées (×1.5) pour que les temples
-    // soient vraiment imposants à l'horizon. Espace au centre laissé libre
-    // pour l'arbre cristallin (large 280 px). Plus de structures par rangée
-    // pour densifier la skyline (vue de cité dense).
+    // Refonte 5'.13 : moins d'éléments, beaucoup plus tangibles. Deux rangées
+    // mais avec très peu de structures par rangée (3+3 vs 8+7 avant) et alpha
+    // proche de 1 (0.92-0.95) pour vraies couleurs opaques au lieu de brouillard
+    // gris. Le fond de cité doit montrer de VRAIS temples détaillés, pas une
+    // skyline empilée illisible.
     const xCentre = dims.largeur / 2;
-    const exclusionCentre = 280;
+    const exclusionCentre = 320;
 
     const rangees = [
-        // Rangée arrière : skyline lointaine, plus de structures (8 au lieu de 6)
-        { nb: 8, hMin: 190, hMax: 280, alpha: 0.50, teinteShift: 0.10, yOffset: 4 },
-        // Rangée avant : plus grande encore, plus opaque
-        { nb: 7, hMin: 260, hMax: 380, alpha: 0.80, teinteShift: 0.0,  yOffset: 14 }
+        // Rangée arrière : 3 grands temples très opaques (vs 8 silhouettes pâles)
+        { nb: 3, hMin: 240, hMax: 320, alpha: 0.92, teinteShift: 0.05, yOffset: 4 },
+        // Rangée avant : 3 temples encore plus grands, presque opaques complets
+        { nb: 3, hMin: 320, hMax: 440, alpha: 0.95, teinteShift: 0.0,  yOffset: 14 }
     ];
 
     const types = [
@@ -411,10 +412,33 @@ function peindreTempleMonumental(scene, x, ySol, hauteur, alpha, rng) {
     g.closePath();
     g.fillPath();
 
-    // Acrotère central (petite figure au sommet)
+    // Mini-figurines sculptées sur le fronton (signature sculpture grecque) :
+    // 3 silhouettes humanoïdes alignées dans le tympan, ombres + reflets
+    const yFigurines = yFronton - 8;
+    const xCentreF = x;
+    g.fillStyle(couleurOmbre, alpha * 0.85);
+    // Figurine centrale (assise, plus grande — divinité trônante)
+    g.fillEllipse(xCentreF, yFigurines - 3, 7, 9);
+    g.fillCircle(xCentreF, yFigurines - 8, 2.5);
+    g.fillRect(xCentreF - 4, yFigurines - 1, 8, 3); // socle/trône
+    // Figurine gauche (debout, plus petite — fidèle ou prêtre)
+    g.fillEllipse(xCentreF - 16, yFigurines - 1, 4, 7);
+    g.fillCircle(xCentreF - 16, yFigurines - 6, 1.8);
+    // Figurine droite (debout)
+    g.fillEllipse(xCentreF + 16, yFigurines - 1, 4, 7);
+    g.fillCircle(xCentreF + 16, yFigurines - 6, 1.8);
+    // Petits reflets clairs sur les figurines (face droite éclairée)
+    g.fillStyle(couleurClair, alpha * 0.55);
+    g.fillEllipse(xCentreF + 2, yFigurines - 4, 2, 5);
+    g.fillEllipse(xCentreF - 14, yFigurines - 2, 1.2, 4);
+    g.fillEllipse(xCentreF + 18, yFigurines - 2, 1.2, 4);
+
+    // Acrotère central (petite figure au sommet — urne ou statue miniature)
     g.fillStyle(couleur, alpha);
-    g.fillCircle(x, yTop + 2, 4);
-    g.fillRect(x - 1, yTop - 2, 2, 6);
+    g.fillCircle(x, yTop + 2, 5);
+    g.fillRect(x - 1.5, yTop - 4, 3, 8);
+    g.fillStyle(couleurClair, alpha * 0.7);
+    g.fillCircle(x + 1.5, yTop + 1, 2);
 
     return g;
 }
@@ -650,27 +674,27 @@ function poserCiteMoyenPlan(scene, dims, rng, palette) {
     const objets = [];
     const ySol = GAME_HEIGHT - 40;
     const xCentre = dims.largeur / 2;
-    const exclusionCentre = 320; // l'arbre prend le centre — large exclusion
+    const exclusionCentre = 360; // l'arbre prend le centre — large exclusion
 
-    // 3 structures par salle : une à gauche, une à droite, une "secondaire"
-    // (statue colossale ou petit temple). Placement seedé pour variabilité.
+    // Refonte 5'.13 :
+    //   - Retiré peindreStatueColossale (sceptres verticaux moches devant les
+    //     colonnes, manque de lisibilité)
+    //   - 2 structures par salle MAX (vs 3) pour aérer le tableau
+    //   - Opacité 0.96+ (vs 0.88-0.98) — vraies couleurs opaques
+    //   - Ombre portée au sol pour ancrer chaque structure dans la cité
     const types = [
-        { fn: peindreTempleMonumental,   poids: 0.45, hMin: 280, hMax: 380 },
-        { fn: peindreStatueColossale,    poids: 0.30, hMin: 320, hMax: 420 },
-        { fn: peindrePortiqueMonumental, poids: 0.25, hMin: 260, hMax: 360 }
+        { fn: peindreTempleMonumental,   poids: 0.55, hMin: 320, hMax: 420 },
+        { fn: peindrePortiqueMonumental, poids: 0.45, hMin: 290, hMax: 380 }
     ];
 
-    // Tirage 3 structures
+    // 2 structures : une à gauche, une à droite — placement symétrique
+    // mais avec jitter seedé pour variation
     const positions = [
-        { x: 180 + rng() * 80, prio: 'gauche' },
-        { x: dims.largeur - 180 - rng() * 80, prio: 'droite' },
-        // 3e structure : soit plus à l'extérieur (si la salle est large)
-        // soit on la skip si trop proche du centre
-        { x: rng() < 0.5 ? 80 + rng() * 60 : dims.largeur - 80 - rng() * 60, prio: 'bonus' }
+        { x: 200 + rng() * 80 },
+        { x: dims.largeur - 200 - rng() * 80 }
     ];
 
     for (const pos of positions) {
-        // Vérif exclusion centre
         if (Math.abs(pos.x - xCentre) < exclusionCentre) continue;
         // Tirage type pondéré
         let choix = rng();
@@ -681,19 +705,31 @@ function poserCiteMoyenPlan(scene, dims, rng, palette) {
             if (choix < cumul) { typeChoisi = t; break; }
         }
         const hauteur = typeChoisi.hMin + rng() * (typeChoisi.hMax - typeChoisi.hMin);
-        const alpha = 0.88 + rng() * 0.10;
+        const alpha = 0.96 + rng() * 0.03;
+
+        // Ombre portée au sol (ancrage visuel — la structure projette une
+        // ombre élargie devant elle, simule la lumière haute du midi divin)
+        const ombre = scene.add.graphics();
+        ombre.fillStyle(0x0a1224, 0.55);
+        ombre.fillEllipse(pos.x, ySol + 4, hauteur * 1.3, 14);
+        ombre.fillStyle(0x0a1224, 0.30);
+        ombre.fillEllipse(pos.x, ySol + 4, hauteur * 1.7, 20);
+        ombre.setScrollFactor(0.40, 0);
+        ombre.setDepth(DEPTH.SILHOUETTES);
+        objets.push(ombre);
+
         const obj = typeChoisi.fn(scene, pos.x, ySol, hauteur, alpha, rng);
         obj.setScrollFactor(0.40, 0);
         obj.setDepth(DEPTH.SILHOUETTES + 1);
         objets.push(obj);
 
-        // Petit halo lumineux derrière la structure (lumière divine qui filtre
-        // entre les colonnes — détail signature cité Olympe)
+        // Halo lumineux derrière la structure (lumière divine qui filtre
+        // entre les colonnes) — opacité augmentée pour plus de présence
         const halo = scene.add.graphics();
         halo.setBlendMode(Phaser.BlendModes.ADD);
-        halo.fillStyle(0xd0e0ff, 0.10);
-        halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 1.4, hauteur * 0.9);
-        halo.fillStyle(0xe8f0ff, 0.06);
+        halo.fillStyle(0xd0e0ff, 0.15);
+        halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 1.5, hauteur * 1.0);
+        halo.fillStyle(0xe8f0ff, 0.10);
         halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 0.9, hauteur * 0.6);
         halo.setScrollFactor(0.40, 0);
         halo.setDepth(DEPTH.SILHOUETTES);
@@ -2912,8 +2948,12 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     if (estSalleBoss) for (const v of voile) v.setAlpha(1.5);
     objets.push(...voile);
 
-    // Couche 3 — silhouettes mnésiques (reliquaires, obélisques, statues, piliers)
-    objets.push(...poserSilhouettesMnesiques(scene, dims, rng, palette));
+    // Couche 3 — silhouettes mnésiques (reliquaires, obélisques, statues,
+    // piliers) — DÉSACTIVÉE en 5'.13 : créait du bruit visuel au sol
+    // (petits éléments empilés qui rivalisaient avec les vrais temples
+    // monumentaux). La cité est portée par 2 grandes structures moyen plan
+    // + 6 temples lointains opaques, c'est suffisant.
+    // objets.push(...poserSilhouettesMnesiques(scene, dims, rng, palette));
 
     // Couche 4 — brume glacée basse : plus dense en salle de boss
     const brumeBasse = poserBrumeGlacee(scene, dims, rng, palette);
