@@ -723,25 +723,11 @@ function poserCiteMoyenPlan(scene, dims, rng, palette) {
         obj.setDepth(DEPTH.SILHOUETTES + 1);
         objets.push(obj);
 
-        // Halo lumineux derrière la structure (lumière divine qui filtre
-        // entre les colonnes) — opacité augmentée pour plus de présence
-        const halo = scene.add.graphics();
-        halo.setBlendMode(Phaser.BlendModes.ADD);
-        halo.fillStyle(0xd0e0ff, 0.15);
-        halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 1.5, hauteur * 1.0);
-        halo.fillStyle(0xe8f0ff, 0.10);
-        halo.fillEllipse(pos.x, ySol - hauteur * 0.55, hauteur * 0.9, hauteur * 0.6);
-        halo.setScrollFactor(0.40, 0);
-        halo.setDepth(DEPTH.SILHOUETTES);
-        scene.tweens.add({
-            targets: halo,
-            alpha: { from: 0.7, to: 1.0 },
-            duration: 5000 + rng() * 2500,
-            ease: 'Sine.InOut',
-            yoyo: true,
-            repeat: -1
-        });
-        objets.push(halo);
+        // Halo lumineux derrière chaque structure — RETIRÉ (5'.14)
+        // Les halos ADD blancs derrière chaque temple créaient des "taches
+        // lumineuses" qui se superposaient à l'arbre et à la skyline. Sans
+        // halos, les structures se lisent comme de vrais bâtiments solides
+        // posés sur le marbre.
     }
 
     return objets;
@@ -1024,27 +1010,22 @@ function poserArbreCristallinCentre(scene, dims, rng, palette) {
     const yMid = ySol - hauteurTronc * 0.45;
     const yHaut = ySol - hauteurTronc;
 
-    // === HALO LUMINEUX GLOBAL (aura sacrée derrière l'arbre) ===
+    // === HALO LUMINEUX GLOBAL — RÉDUIT À MINIMUM (5'.14) ===
+    // L'ancien halo (4 couches concentriques + cœur) saturait le ciel
+    // derrière l'arbre d'un brouillard cyan-violet qui floutait tout.
+    // Conservation d'une simple lueur très subtile pour ne pas perdre
+    // l'aura sacrée mais sans brouiller le ciel.
     const halo = scene.add.graphics();
     halo.setBlendMode(Phaser.BlendModes.ADD);
-    // 4 couches concentriques pour halo flou diffus
-    for (let l = 0; l < 4; l++) {
-        const rad = (largeurBase * 0.9 + 80) * (1 - l * 0.15);
-        const ratioH = 1.5; // halo plus haut que large (suit la forme arbre)
-        halo.fillStyle(COULEUR_ARBRE.aura, 0.04 + l * 0.025);
-        halo.fillEllipse(xCentre, ySol - hauteurTronc * 0.55, rad, rad * ratioH);
-    }
-    // Cœur du halo (plus chaud)
-    halo.fillStyle(COULEUR_ARBRE.seve, 0.06);
-    halo.fillEllipse(xCentre, ySol - hauteurTronc * 0.5, largeurBase * 0.6, largeurBase * 1.4);
+    halo.fillStyle(COULEUR_ARBRE.aura, 0.05);
+    halo.fillEllipse(xCentre, ySol - hauteurTronc * 0.55, largeurBase * 0.85, hauteurTronc * 0.65);
     halo.setScrollFactor(0.15, 0);
-    halo.setDepth(DEPTH.SILHOUETTES - 3); // derrière tout l'arbre
+    halo.setDepth(DEPTH.SILHOUETTES - 3);
     objets.push(halo);
 
-    // Respiration très lente du halo (5-7 s)
     scene.tweens.add({
         targets: halo,
-        alpha: { from: 0.65, to: 1.0 },
+        alpha: { from: 0.55, to: 1.0 },
         duration: 5500 + rng() * 1500,
         ease: 'Sine.InOut',
         yoyo: true,
@@ -2943,22 +2924,21 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     // à scrollFactor 0.40. Le joueur sent qu'il est DANS la cité, pas devant.
     objets.push(...poserCiteMoyenPlan(scene, dims, rng, palette));
 
-    // Couche 2 — voile d'horizon : en salle de boss il s'épaissit
-    const voile = poserVoileHorizonCG(scene);
-    if (estSalleBoss) for (const v of voile) v.setAlpha(1.5);
-    objets.push(...voile);
-
-    // Couche 3 — silhouettes mnésiques (reliquaires, obélisques, statues,
-    // piliers) — DÉSACTIVÉE en 5'.13 : créait du bruit visuel au sol
-    // (petits éléments empilés qui rivalisaient avec les vrais temples
-    // monumentaux). La cité est portée par 2 grandes structures moyen plan
-    // + 6 temples lointains opaques, c'est suffisant.
+    // === COUCHES ALPHA D'AMBIANCE — DÉSACTIVÉES (5'.14) ===
+    // Le voile d'horizon (haze blanc-cyan plein écran), la brume glacée basse
+    // (3 bandes alpha empilées) et les silhouettes mnésiques au sol créaient
+    // ensemble un BROUILLARD GRIS qui rendait le rendu illisible. Toutes
+    // retirées pour un rendu plus net et tangible (objectif "film like").
+    //
+    // const voile = poserVoileHorizonCG(scene);
+    // if (estSalleBoss) for (const v of voile) v.setAlpha(1.5);
+    // objets.push(...voile);
+    //
     // objets.push(...poserSilhouettesMnesiques(scene, dims, rng, palette));
-
-    // Couche 4 — brume glacée basse : plus dense en salle de boss
-    const brumeBasse = poserBrumeGlacee(scene, dims, rng, palette);
-    if (estSalleBoss) for (const b of brumeBasse) b.setAlpha(b.alpha * 1.4);
-    objets.push(...brumeBasse);
+    //
+    // const brumeBasse = poserBrumeGlacee(scene, dims, rng, palette);
+    // if (estSalleBoss) for (const b of brumeBasse) b.setAlpha(b.alpha * 1.4);
+    // objets.push(...brumeBasse);
 
     // Couche 5 — cristaux mnésiques sur pied (densité variable, gradient étage 5→6)
     // Mood boss : tous les cristaux vacillent (les dernières mémoires s'éteignent
@@ -2972,12 +2952,16 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
     // Couche 6 — sol-glace fendue + veines cristallines ADD
     objets.push(...poserSolGlaceFendue(scene, dims, rng, palette));
 
-    // Couche 7 — silhouettes témoins (pas en salle de boss : les Témoins ont déserté)
-    if (!estSalleBoss) {
-        objets.push(...poserSilhouettesTemoins(scene, dims, rng, palette));
-    }
+    // Couche 7 — silhouettes témoins — DÉSACTIVÉE (5'.14)
+    // Les figures debout alpha 0.22 qui apparaissaient/disparaissaient au sol
+    // ajoutaient des silhouettes fantomatiques qui rivalisaient avec les
+    // temples et l'arbre. Retirées pour un fond plus tangible.
+    // if (!estSalleBoss) {
+    //     objets.push(...poserSilhouettesTemoins(scene, dims, rng, palette));
+    // }
 
-    // Couche 8 — rayons cristallins (filtration violet-blanc subtile)
+    // Couche 8 — rayons cristallins (filtration violet-blanc subtile, opacité
+    // réduite en 5'.14 pour ne plus saturer l'écran de faisceaux ADD)
     objets.push(...poserRayonsCristallins(scene, dims, rng));
 
     // === MILIEU — flocons lointains + brume volumétrique sol ===
@@ -3003,8 +2987,11 @@ export function composerParallaxCristauxGlaces(scene, dims, monde, rng) {
 
     // === FOREGROUND (au-dessus des plateformes, sous les entités) ===
 
-    // Bokeh foreground cristaux (formes très floutées violet-bleu)
-    objets.push(...poserBokehCristaux(scene, dims, rng));
+    // Bokeh foreground cristaux — DÉSACTIVÉ (5'.14)
+    // Les grosses formes ADD violet-bleu floues passaient devant les
+    // structures et brouillaient leur lecture. Retirées pour un foreground
+    // propre.
+    // objets.push(...poserBokehCristaux(scene, dims, rng));
 
     // Stalactites pendantes depuis le haut (1-2). Étage 6 = un peu plus de
     // stalactites (le pic se fragilise au seuil du Voile).
