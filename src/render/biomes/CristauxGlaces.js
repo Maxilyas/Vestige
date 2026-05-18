@@ -3344,46 +3344,90 @@ function poserSkylineTresLointaine(scene, dims, rng, palette) {
     const g = scene.add.graphics();
     const largeurEtendue = dims.largeur * 1.6;
     const decalageX = -dims.largeur * 0.3;
-    const ySol = GAME_HEIGHT - 50;
-    const couleur = 0x0e1424; // bleu très sombre presque noir
-    const couleurClair = 0x1a2438; // discret highlight horizon
+    // Phase 5'.18 — surélevée à GAME_HEIGHT - 150 (vs -50) pour qu'elle soit
+    // visible au-dessus du sol, comme une vraie skyline urbaine à l'horizon.
+    const ySol = GAME_HEIGHT - 150;
+    const couleur = 0x0e1424;
+    const couleurClair = 0x1a2438;
+    const couleurMontagne = 0x080c1a; // encore plus sombre, suggère relief lointain
 
+    // Profil de collines lointaines en arrière (suggère un relief sous la cité)
+    g.fillStyle(couleurMontagne, 1);
+    g.beginPath();
+    g.moveTo(decalageX, ySol);
+    const nbBosses = 8;
+    for (let i = 0; i <= nbBosses; i++) {
+        const x = decalageX + (i / nbBosses) * largeurEtendue;
+        const yB = ySol - 8 - Math.sin(i * 0.8) * 12 - rng() * 8;
+        g.lineTo(x, yB);
+    }
+    g.lineTo(decalageX + largeurEtendue, ySol);
+    g.closePath();
+    g.fillPath();
+
+    // Skyline : 24 éléments en slots ESPACÉS (largeurEtendue / 24 ≈ 65 px)
+    // Hauteurs et types variés
     g.fillStyle(couleur, 1);
-
-    // Bandes basses suggérant une étendue urbaine très lointaine
-    const nbElements = 28;
-    for (let i = 0; i < nbElements; i++) {
-        const x = decalageX + (i / nbElements) * largeurEtendue + (rng() - 0.5) * 18;
-        const h = 8 + rng() * 18;
-        const w = 12 + rng() * 22;
+    const nbSlots = 24;
+    const pas = largeurEtendue / nbSlots;
+    for (let i = 0; i < nbSlots; i++) {
+        if (rng() < 0.15) continue; // gap aléatoire pour respirer
+        const x = decalageX + (i + 0.5) * pas + (rng() - 0.5) * 12;
         const choix = rng();
-        if (choix < 0.4) {
-            // Petit cube (maison lointaine)
+        if (choix < 0.30) {
+            // Maison cubique
+            const w = 14 + rng() * 18;
+            const h = 16 + rng() * 22;
+            g.fillStyle(couleur, 1);
             g.fillRect(x - w / 2, ySol - h, w, h);
-            // Toit triangulaire bas
             g.beginPath();
             g.moveTo(x - w / 2 - 1, ySol - h);
-            g.lineTo(x, ySol - h - 3);
+            g.lineTo(x, ySol - h - 4);
             g.lineTo(x + w / 2 + 1, ySol - h);
             g.closePath();
             g.fillPath();
-        } else if (choix < 0.7) {
-            // Petit dôme rond
-            g.fillRect(x - w / 2, ySol - h * 0.6, w, h * 0.6);
-            g.fillEllipse(x, ySol - h * 0.6, w * 0.9, h * 0.4);
-        } else {
-            // Petite tour étroite
+        } else if (choix < 0.55) {
+            // Dôme rond (petit temple lointain)
+            const w = 16 + rng() * 14;
+            const h = 18 + rng() * 14;
+            g.fillRect(x - w / 2, ySol - h * 0.55, w, h * 0.55);
+            g.fillEllipse(x, ySol - h * 0.55, w * 0.95, h * 0.5);
+        } else if (choix < 0.80) {
+            // Tour haute (signature variation skyline)
             const wT = 5 + rng() * 4;
-            g.fillRect(x - wT / 2, ySol - h * 1.5, wT, h * 1.5);
-            g.fillRect(x - wT / 2 - 1, ySol - h * 1.5 - 3, wT + 2, 3);
+            const hT = 35 + rng() * 30; // BEAUCOUP plus haute (vs 8-30 avant)
+            g.fillRect(x - wT / 2, ySol - hT, wT, hT);
+            // Petit toit conique
+            g.beginPath();
+            g.moveTo(x - wT / 2 - 1, ySol - hT);
+            g.lineTo(x, ySol - hT - 6);
+            g.lineTo(x + wT / 2 + 1, ySol - hT);
+            g.closePath();
+            g.fillPath();
+            // Petite croix/girouette
+            g.fillRect(x - 0.5, ySol - hT - 9, 1, 3);
+        } else {
+            // Grand temple avec fronton (rare, plus large)
+            const w = 28 + rng() * 16;
+            const h = 22 + rng() * 14;
+            g.fillRect(x - w / 2, ySol - h, w, h);
+            // Fronton bas
+            g.beginPath();
+            g.moveTo(x - w / 2 - 3, ySol - h);
+            g.lineTo(x, ySol - h - 6);
+            g.lineTo(x + w / 2 + 3, ySol - h);
+            g.closePath();
+            g.fillPath();
         }
     }
 
-    // Bande horizon claire 1 px (ligne d'horizon — donne l'effet profondeur)
-    g.fillStyle(couleurClair, 0.6);
+    // 2 lignes d'horizon discrètes — perspective atmosphérique très propre
+    g.fillStyle(couleurClair, 0.7);
     g.fillRect(decalageX, ySol - 0.5, largeurEtendue, 1);
+    g.fillStyle(couleurClair, 0.35);
+    g.fillRect(decalageX, ySol - 12, largeurEtendue, 0.6);
 
-    g.setScrollFactor(0.05, 0);
+    g.setScrollFactor(0.04, 0);
     g.setDepth(DEPTH.SILHOUETTES - 4);
     objets.push(g);
 
@@ -3402,32 +3446,42 @@ function poserSkylineTresLointaine(scene, dims, rng, palette) {
 function poserCiteLointaineSimple(scene, dims, rng, palette) {
     const objets = [];
     const g = scene.add.graphics();
+    const fenetres = scene.add.graphics();
+    fenetres.setBlendMode(Phaser.BlendModes.ADD);
     const largeurEtendue = dims.largeur * 1.6;
     const decalageX = -dims.largeur * 0.3;
-    const ySol = GAME_HEIGHT - 50;
+    // Phase 5'.18 — surélevée à GAME_HEIGHT - 120 (vs -50)
+    const ySol = GAME_HEIGHT - 120;
     const xCentre = dims.largeur / 2;
-    const exclusionCentre = 200; // pour la tour cristalline
-    const couleur = 0x1a2a44;       // bleu nuit (plus clair que skyline lointaine)
-    const couleurClair = 0x2a3e5e;  // highlight face droite
-    const couleurOmbre = 0x0a1224;  // ombre
+    const exclusionCentre = 200;
+    const couleur = 0x1a2a44;
+    const couleurClair = 0x2a3e5e;
+    const couleurOmbre = 0x0a1224;
+    const couleurFenetre = 0xffcc66; // jaune-orange chaud (lumière intérieure)
 
     g.fillStyle(couleur, 1);
 
-    // 12 positions réparties (en excluant le centre pour la tour)
+    // Phase 5'.18 — slots fixes avec espacement garanti (vs aléa)
+    // 12 slots de ~95 px chacun, distance min 60 px entre 2 bâtiments
     const nb = 12;
+    const pas = largeurEtendue / nb;
     const positions = [];
     for (let i = 0; i < nb; i++) {
-        const xRaw = decalageX + (i / nb) * largeurEtendue + (rng() - 0.5) * 30;
+        const xRaw = decalageX + (i + 0.5) * pas + (rng() - 0.5) * 18;
         if (Math.abs(xRaw - xCentre) < exclusionCentre) continue;
         positions.push(xRaw);
     }
 
-    for (const x of positions) {
-        const choix = rng();
+    for (let idx = 0; idx < positions.length; idx++) {
+        const x = positions[idx];
+        // Phase 5'.18 — variation forte de hauteurs : tous les 5e bâtiments
+        // est une GRANDE TOUR (130-180 px) pour briser la monotonie
+        const estGrandeTour = (idx % 5 === 4);
+        const choix = estGrandeTour ? 0.95 : rng() * 0.90;
         if (choix < 0.30) {
-            // Maison cubique avec toit triangulaire
-            const w = 30 + rng() * 24;
-            const h = 35 + rng() * 28;
+            // Maison cubique avec toit triangulaire — plus haute qu'avant
+            const w = 36 + rng() * 28;
+            const h = 55 + rng() * 35; // 55-90 (vs 35-63 avant)
             // Corps
             g.fillStyle(couleur, 1);
             g.fillRect(x - w / 2, ySol - h, w, h);
@@ -3435,113 +3489,174 @@ function poserCiteLointaineSimple(scene, dims, rng, palette) {
             g.fillStyle(couleurOmbre, 1);
             g.beginPath();
             g.moveTo(x - w / 2 - 4, ySol - h);
-            g.lineTo(x, ySol - h - h * 0.4);
+            g.lineTo(x, ySol - h - h * 0.40);
             g.lineTo(x + w / 2 + 4, ySol - h);
             g.closePath();
             g.fillPath();
             // Highlight face droite
             g.fillStyle(couleurClair, 0.5);
             g.fillRect(x + w / 2 - 3, ySol - h + 4, 3, h - 4);
-            // Petite porte sombre
+            // Porte sombre
             g.fillStyle(couleurOmbre, 1);
-            g.fillRect(x - 3, ySol - 10, 6, 10);
-            // Petite fenêtre
-            if (rng() < 0.6) g.fillRect(x + w * 0.25, ySol - h + 10, 4, 5);
-        } else if (choix < 0.55) {
-            // Temple à fronton (péristyle simple)
-            const w = 50 + rng() * 30;
-            const h = 50 + rng() * 30;
+            g.fillRect(x - 4, ySol - 14, 8, 14);
+            // FENÊTRES LUMINEUSES (Phase 5'.18) — 2-3 carrés chauds ADD
+            const nbFen = 1 + Math.floor(rng() * 3);
+            for (let f = 0; f < nbFen; f++) {
+                if (rng() < 0.70) {
+                    const xF = x - w * 0.30 + (f / nbFen) * w * 0.60;
+                    const yF = ySol - h + h * 0.25 + (f % 2) * h * 0.30;
+                    fenetres.fillStyle(couleurFenetre, 0.85);
+                    fenetres.fillRect(xF - 1.5, yF - 1.5, 3, 3);
+                    fenetres.fillStyle(0xffffff, 0.65);
+                    fenetres.fillRect(xF - 0.5, yF - 0.5, 1, 1);
+                }
+            }
+        } else if (choix < 0.50) {
+            // Temple à fronton — hauteurs majorées (75-115 vs 50-80)
+            const w = 60 + rng() * 35;
+            const h = 75 + rng() * 40;
             const hCol = h * 0.65;
             // Stylobate
             g.fillStyle(couleurOmbre, 1);
             g.fillRect(x - w / 2 - 2, ySol - 4, w + 4, 4);
             g.fillRect(x - w / 2, ySol - 7, w, 3);
-            // Colonnes (4-5 silhouettes verticales)
+            // Colonnes (5-6 silhouettes verticales)
             g.fillStyle(couleur, 1);
-            const nbCol = 4 + Math.floor(rng() * 2);
-            const epCol = 3;
+            const nbCol = 5 + Math.floor(rng() * 2);
+            const epCol = 3.5;
             const espCol = (w - nbCol * epCol) / (nbCol - 1);
             for (let c = 0; c < nbCol; c++) {
                 const xC = x - w / 2 + c * (epCol + espCol);
                 g.fillRect(xC, ySol - 7 - hCol, epCol, hCol);
             }
-            // Highlight sur dernière colonne (face droite)
+            // Highlight sur dernière colonne
             g.fillStyle(couleurClair, 0.5);
             g.fillRect(x + w / 2 - epCol + 0.5, ySol - 7 - hCol + 3, 1, hCol - 6);
             // Entablement
             g.fillStyle(couleur, 1);
-            g.fillRect(x - w / 2 - 2, ySol - 7 - hCol - 5, w + 4, 5);
-            // Fronton triangulaire
+            g.fillRect(x - w / 2 - 2, ySol - 7 - hCol - 6, w + 4, 6);
+            // Fronton
             g.beginPath();
-            g.moveTo(x - w / 2 - 4, ySol - 7 - hCol - 5);
+            g.moveTo(x - w / 2 - 4, ySol - 7 - hCol - 6);
             g.lineTo(x, ySol - h - 2);
-            g.lineTo(x + w / 2 + 4, ySol - 7 - hCol - 5);
+            g.lineTo(x + w / 2 + 4, ySol - 7 - hCol - 6);
             g.closePath();
             g.fillPath();
             // Acrotère central
             g.fillStyle(couleurClair, 1);
-            g.fillCircle(x, ySol - h - 1, 2);
-        } else if (choix < 0.75) {
-            // Tholos (rotonde)
-            const w = 35 + rng() * 20;
-            const h = 30 + rng() * 20;
+            g.fillCircle(x, ySol - h - 1, 2.5);
+            // FENÊTRE LUMINEUSE entre les colonnes (sanctuaire éclairé)
+            fenetres.fillStyle(couleurFenetre, 0.55);
+            fenetres.fillRect(x - w * 0.20, ySol - 7 - hCol * 0.5, w * 0.40, hCol * 0.30);
+        } else if (choix < 0.70) {
+            // Tholos (rotonde) — plus haute (55-85 vs 30-50)
+            const w = 38 + rng() * 24;
+            const h = 55 + rng() * 30;
             g.fillStyle(couleurOmbre, 1);
             g.fillEllipse(x, ySol - 3, w + 8, 6);
-            // Tambour cylindrique
             g.fillStyle(couleur, 1);
-            g.fillRect(x - w / 2, ySol - 4 - h * 0.55, w, h * 0.55);
-            // Coupole demi-cercle
-            g.fillEllipse(x, ySol - 4 - h * 0.55, w * 0.9, h * 0.5);
+            g.fillRect(x - w / 2, ySol - 4 - h * 0.60, w, h * 0.60);
+            // Coupole
+            g.fillEllipse(x, ySol - 4 - h * 0.60, w * 0.95, h * 0.55);
             // Highlight droite
-            g.fillStyle(couleurClair, 0.4);
-            g.fillRect(x + w / 2 - 4, ySol - 4 - h * 0.5, 4, h * 0.5);
-        } else if (choix < 0.90) {
-            // Statue sur piédestal
-            const w = 14 + rng() * 8;
-            const h = 50 + rng() * 25;
+            g.fillStyle(couleurClair, 0.45);
+            g.fillRect(x + w / 2 - 4, ySol - 4 - h * 0.55, 4, h * 0.55);
+            // Lanterne au sommet ADD
+            fenetres.fillStyle(couleurFenetre, 0.75);
+            fenetres.fillCircle(x, ySol - 4 - h * 0.60 - h * 0.25, 2);
+        } else if (choix < 0.85) {
+            // Statue sur piédestal — plus grande (70-105 vs 50-75)
+            const w = 16 + rng() * 10;
+            const h = 70 + rng() * 35;
             // Piédestal
             g.fillStyle(couleurOmbre, 1);
-            g.fillRect(x - w / 2 - 2, ySol - 5, w + 4, 5);
-            g.fillRect(x - w / 2, ySol - h * 0.30, w, h * 0.30 - 5);
-            // Statue (silhouette ovale allongée avec tête)
+            g.fillRect(x - w / 2 - 3, ySol - 6, w + 6, 6);
+            g.fillRect(x - w / 2, ySol - h * 0.32, w, h * 0.32 - 6);
+            // Statue (silhouette ovale + tête)
             g.fillStyle(couleur, 1);
-            g.fillEllipse(x, ySol - h * 0.60, w * 0.55, h * 0.55);
-            g.fillCircle(x, ySol - h * 0.92, w * 0.20);
-            // Highlight face droite
+            g.fillEllipse(x, ySol - h * 0.62, w * 0.60, h * 0.58);
+            g.fillCircle(x, ySol - h * 0.93, w * 0.22);
+            // Highlight droite
             g.fillStyle(couleurClair, 0.5);
-            g.fillEllipse(x + w * 0.10, ySol - h * 0.55, w * 0.15, h * 0.40);
-        } else {
-            // Cyprès cristallin (silhouette verticale fine type cyprès grec)
-            const w = 8 + rng() * 4;
-            const h = 60 + rng() * 30;
+            g.fillEllipse(x + w * 0.12, ySol - h * 0.58, w * 0.18, h * 0.42);
+        } else if (choix < 0.92) {
+            // Cyprès cristallin
+            const w = 10 + rng() * 5;
+            const h = 80 + rng() * 40;
             g.fillStyle(couleurOmbre, 1);
-            // Tronc fin à la base
-            g.fillRect(x - 1.5, ySol - 6, 3, 6);
-            // Forme de cyprès (losange allongé)
+            g.fillRect(x - 1.5, ySol - 8, 3, 8);
             g.fillStyle(couleur, 1);
             g.beginPath();
             g.moveTo(x, ySol - h);
             g.lineTo(x - w / 2, ySol - h * 0.65);
-            g.lineTo(x - w * 0.30, ySol - 6);
-            g.lineTo(x + w * 0.30, ySol - 6);
+            g.lineTo(x - w * 0.30, ySol - 8);
+            g.lineTo(x + w * 0.30, ySol - 8);
             g.lineTo(x + w / 2, ySol - h * 0.65);
             g.closePath();
             g.fillPath();
-            // Highlight droite
             g.fillStyle(couleurClair, 0.45);
             g.beginPath();
             g.moveTo(x, ySol - h);
             g.lineTo(x + w / 2, ySol - h * 0.65);
-            g.lineTo(x + w * 0.30, ySol - 6);
-            g.lineTo(x, ySol - 6);
+            g.lineTo(x + w * 0.30, ySol - 8);
+            g.lineTo(x, ySol - 8);
             g.closePath();
             g.fillPath();
+        } else {
+            // GRANDE TOUR / BEFFROI (Phase 5'.18 — signature variation hauteur)
+            const wT = 14 + rng() * 8;
+            const hT = 140 + rng() * 50; // 140-190 px, brise la skyline plate
+            // Corps
+            g.fillStyle(couleur, 1);
+            g.fillRect(x - wT / 2, ySol - hT, wT, hT);
+            // Highlight face droite
+            g.fillStyle(couleurClair, 0.55);
+            g.fillRect(x + wT / 2 - 3, ySol - hT + 4, 3, hT - 8);
+            // Bandes horizontales (étages)
+            g.fillStyle(couleurOmbre, 1);
+            for (let s = 1; s < 5; s++) {
+                g.fillRect(x - wT / 2 - 1, ySol - hT * (s / 5), wT + 2, 2);
+            }
+            // Toit conique
+            g.fillStyle(couleurOmbre, 1);
+            g.beginPath();
+            g.moveTo(x - wT / 2 - 4, ySol - hT);
+            g.lineTo(x, ySol - hT - 12);
+            g.lineTo(x + wT / 2 + 4, ySol - hT);
+            g.closePath();
+            g.fillPath();
+            // Pic au sommet (croix / antenne)
+            g.fillRect(x - 0.5, ySol - hT - 18, 1, 6);
+            g.fillRect(x - 2, ySol - hT - 15, 4, 1);
+            // FENÊTRES sur la tour (3-4 étages éclairés)
+            for (let e = 1; e <= 4; e++) {
+                if (rng() < 0.65) {
+                    const yF = ySol - hT * (e / 5) + hT / 10;
+                    fenetres.fillStyle(couleurFenetre, 0.85);
+                    fenetres.fillRect(x - 1.5, yF - 1, 3, 2.5);
+                    fenetres.fillStyle(0xffffff, 0.55);
+                    fenetres.fillCircle(x, yF + 0.2, 0.6);
+                }
+            }
         }
     }
 
-    g.setScrollFactor(0.15, 0);
+    g.setScrollFactor(0.18, 0); // Phase 5'.18 : étalé de 0.15 vs tour à 0.10
     g.setDepth(DEPTH.SILHOUETTES - 2);
+    fenetres.setScrollFactor(0.18, 0);
+    fenetres.setDepth(DEPTH.SILHOUETTES - 1);
     objets.push(g);
+    objets.push(fenetres);
+
+    // Pulse géologique TRÈS lent pour toutes les fenêtres (1 seul tween partagé)
+    scene.tweens.add({
+        targets: fenetres,
+        alpha: { from: 0.70, to: 1.0 },
+        duration: 6000 + rng() * 3000,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
 
     return objets;
 }
@@ -3642,7 +3757,7 @@ function poserTourCristallineCentrale(scene, dims, rng, palette) {
     g.closePath();
     g.fillPath();
 
-    g.setScrollFactor(0.15, 0);
+    g.setScrollFactor(0.10, 0); // Phase 5'.18 — étagé (cité lointaine 0.18)
     g.setDepth(DEPTH.SILHOUETTES - 1);
     objets.push(g);
 
@@ -3664,7 +3779,7 @@ function poserTourCristallineCentrale(scene, dims, rng, palette) {
         lueur.fillStyle(0xffffff, 0.85);
         lueur.fillCircle(xCentre, yA, 1.2);
     }
-    lueur.setScrollFactor(0.15, 0);
+    lueur.setScrollFactor(0.10, 0); // Phase 5'.18 — étagé
     lueur.setDepth(DEPTH.SILHOUETTES);
     objets.push(lueur);
 
@@ -3691,19 +3806,23 @@ function poserTourCristallineCentrale(scene, dims, rng, palette) {
 function poserCiteMoyenPlanSimple(scene, dims, rng, palette) {
     const objets = [];
     const g = scene.add.graphics();
-    const ySol = GAME_HEIGHT - 40;
+    const fenetres = scene.add.graphics();
+    fenetres.setBlendMode(Phaser.BlendModes.ADD);
+    // Phase 5'.18 — surélevée à GAME_HEIGHT - 80 (vs -40)
+    const ySol = GAME_HEIGHT - 80;
     const xCentre = dims.largeur / 2;
-    const exclusionCentre = 280; // tour cristalline + un peu de marge
+    const exclusionCentre = 320;
     const couleur = 0x2a3e5e;
     const couleurClair = 0x4a6890;
     const couleurOmbre = 0x141c2c;
+    const couleurFenetre = 0xffcc66;
 
-    // 3 positions : 2 latérales + 1 plus extérieure si possible
-    const positions = [];
-    positions.push(160 + rng() * 60);
-    positions.push(dims.largeur - 160 - rng() * 60);
-    const xBonus = rng() < 0.5 ? 40 + rng() * 50 : dims.largeur - 40 - rng() * 50;
-    positions.push(xBonus);
+    // Phase 5'.18 — Slots fixes garantis avec distance min 200 px entre structures
+    // 2 structures latérales seulement (vs 3 avec risque de chevauchement)
+    const positions = [
+        180 + rng() * 50,                            // gauche
+        dims.largeur - 180 - rng() * 50              // droite
+    ];
 
     for (const x of positions) {
         if (Math.abs(x - xCentre) < exclusionCentre) continue;
@@ -3759,7 +3878,7 @@ function poserCiteMoyenPlanSimple(scene, dims, rng, palette) {
             // Acrotère central
             g.fillStyle(couleurClair, 1);
             g.fillCircle(x, yF - h * 0.20 - 2, 3);
-            // Highlight fronton (triangle décoratif intérieur — 1 forme simple)
+            // Triangle décoratif intérieur
             g.fillStyle(couleurOmbre, 1);
             g.beginPath();
             g.moveTo(x - w * 0.18, yF - 4);
@@ -3767,6 +3886,16 @@ function poserCiteMoyenPlanSimple(scene, dims, rng, palette) {
             g.lineTo(x + w * 0.18, yF - 4);
             g.closePath();
             g.fillPath();
+            // FENÊTRES LUMINEUSES entre les colonnes (sanctuaire éclairé)
+            const nbFen = 3;
+            for (let f = 0; f < nbFen; f++) {
+                const xF = x - w * 0.30 + (f / (nbFen - 1)) * w * 0.60;
+                const yFen = yColBas - hCol * 0.50;
+                fenetres.fillStyle(couleurFenetre, 0.85);
+                fenetres.fillRect(xF - 2, yFen - 4, 4, 8);
+                fenetres.fillStyle(0xffffff, 0.55);
+                fenetres.fillCircle(xF, yFen, 1);
+            }
         } else {
             // Bâtiment monumental avec entrée arc
             // Socle plat
@@ -3797,13 +3926,36 @@ function poserCiteMoyenPlanSimple(scene, dims, rng, palette) {
                 g.fillStyle(couleurOmbre, 1);
                 g.fillRect(x + side * w * 0.30 - wFen / 2, ySol - h + h * 0.30, wFen, hFen);
                 g.fillRect(x + side * w * 0.30 - wFen / 2, ySol - h + h * 0.60, wFen, hFen);
+                // FENÊTRES LUMINEUSES ADD à l'intérieur (Phase 5'.18)
+                fenetres.fillStyle(couleurFenetre, 0.85);
+                fenetres.fillRect(x + side * w * 0.30 - wFen / 2 + 1, ySol - h + h * 0.30 + 1, wFen - 2, hFen - 2);
+                fenetres.fillRect(x + side * w * 0.30 - wFen / 2 + 1, ySol - h + h * 0.60 + 1, wFen - 2, hFen - 2);
+                fenetres.fillStyle(0xffffff, 0.45);
+                fenetres.fillCircle(x + side * w * 0.30, ySol - h + h * 0.40, 1);
+                fenetres.fillCircle(x + side * w * 0.30, ySol - h + h * 0.70, 1);
             }
+            // Porte aussi éclairée
+            fenetres.fillStyle(couleurFenetre, 0.55);
+            fenetres.fillRect(x - wPorte / 2 + 1, ySol - 8 - hPorte + 2, wPorte - 2, hPorte * 0.5);
         }
     }
 
-    g.setScrollFactor(0.30, 0);
+    g.setScrollFactor(0.32, 0);
     g.setDepth(DEPTH.SILHOUETTES + 1);
+    fenetres.setScrollFactor(0.32, 0);
+    fenetres.setDepth(DEPTH.SILHOUETTES + 2);
     objets.push(g);
+    objets.push(fenetres);
+
+    // 1 seul tween partagé pour pulse de toutes les fenêtres
+    scene.tweens.add({
+        targets: fenetres,
+        alpha: { from: 0.75, to: 1.0 },
+        duration: 5500 + rng() * 2500,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
 
     return objets;
 }
