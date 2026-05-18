@@ -312,135 +312,298 @@ function couleurStructureMoyenPlan() {
     return 0x2a3a5a; // bleu profond — la cité s'assombrit en se rapprochant du joueur
 }
 
+// Phase 5'.16 — Helper cariatide : statue colonne humanoïde qui porte
+// l'entablement. Signature temples grecs (Érechthéion).
+function peindreCariatide(g, x, yBas, hauteur, couleur, couleurClair, couleurOmbre, alpha) {
+    const w = hauteur * 0.16;
+    const yHaut = yBas - hauteur;
+    // Socle de la cariatide
+    g.fillStyle(couleurOmbre, alpha);
+    g.fillRect(x - w / 2 - 1, yBas - 4, w + 2, 4);
+    // Robe longue trapézoïdale (silhouette féminine drapée)
+    g.fillStyle(couleur, alpha);
+    g.beginPath();
+    g.moveTo(x - w / 2 - 1, yBas - 4);
+    g.lineTo(x - w * 0.35, yBas - hauteur * 0.45);
+    g.lineTo(x - w * 0.30, yHaut + hauteur * 0.25);
+    g.lineTo(x + w * 0.30, yHaut + hauteur * 0.25);
+    g.lineTo(x + w * 0.35, yBas - hauteur * 0.45);
+    g.lineTo(x + w / 2 + 1, yBas - 4);
+    g.closePath();
+    g.fillPath();
+    // Plis verticaux de la robe (3 lignes d'ombre)
+    g.lineStyle(0.8, couleurOmbre, alpha * 0.85);
+    for (let p = 0; p < 3; p++) {
+        const xP = x - w * 0.30 + (p + 0.5) * (w * 0.60 / 3);
+        g.beginPath();
+        g.moveTo(xP, yBas - hauteur * 0.10);
+        g.lineTo(xP, yBas - hauteur * 0.55);
+        g.strokePath();
+    }
+    // Highlight vertical (face droite éclairée)
+    g.fillStyle(couleurClair, alpha * 0.55);
+    g.fillRect(x + w * 0.15, yBas - hauteur * 0.55, 1.5, hauteur * 0.40);
+    // Torse (rectangle plus étroit)
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w * 0.22, yHaut + hauteur * 0.12, w * 0.44, hauteur * 0.18);
+    // Tête (ovale)
+    g.fillStyle(couleur, alpha);
+    g.fillEllipse(x, yHaut + hauteur * 0.08, w * 0.30, hauteur * 0.10);
+    // Coiffure / diadème (bande au-dessus de la tête)
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w * 0.22, yHaut + hauteur * 0.02, w * 0.44, 2);
+    // Bras levés portant l'entablement (deux rectangles verticaux étirés)
+    g.fillStyle(couleur, alpha);
+    g.fillRect(x - w * 0.40, yHaut + hauteur * 0.10, 3, hauteur * 0.18);
+    g.fillRect(x + w * 0.40 - 3, yHaut + hauteur * 0.10, 3, hauteur * 0.18);
+    // Capital simple sur la tête (bloc carré, supporte l'architrave)
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w / 2, yHaut, w, 4);
+}
+
+// Phase 5'.16 — Helper colonne corinthienne détaillée (ornements, marbre
+// veiné, chapiteau à feuilles acanthe).
+function peindreColonneDetaillee(g, xC, yColBas, hauteurColonne, epColonne, couleur, couleurClair, couleurOmbre, alpha, rng) {
+    const yColHaut = yColBas - hauteurColonne;
+    // Base double moulurée
+    g.fillStyle(couleurOmbre, alpha);
+    g.fillRect(xC - 2, yColBas - 4, epColonne + 4, 4);
+    g.fillStyle(couleur, alpha);
+    g.fillRect(xC - 1, yColBas - 7, epColonne + 2, 3);
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(xC, yColBas - 10, epColonne, 3);
+    // Fût
+    g.fillStyle(couleur, alpha);
+    g.fillRect(xC, yColBas - hauteurColonne, epColonne, hauteurColonne - 10);
+    // Cannelures multiples (5 stries)
+    g.lineStyle(0.8, couleurOmbre, alpha * 0.85);
+    for (let s = 1; s < 5; s++) {
+        const xS = xC + (s / 5) * epColonne;
+        g.beginPath();
+        g.moveTo(xS, yColBas - hauteurColonne + 4);
+        g.lineTo(xS, yColBas - 12);
+        g.strokePath();
+    }
+    // Marbre veiné : 1-2 veines diagonales subtiles sur le fût
+    g.lineStyle(0.6, couleurClair, alpha * 0.40);
+    g.beginPath();
+    g.moveTo(xC + epColonne * 0.2, yColBas - hauteurColonne * 0.75);
+    g.lineTo(xC + epColonne * 0.85, yColBas - hauteurColonne * 0.55);
+    g.lineTo(xC + epColonne * 0.4, yColBas - hauteurColonne * 0.30);
+    g.strokePath();
+    // Highlight vertical face droite
+    g.fillStyle(couleurClair, alpha * 0.55);
+    g.fillRect(xC + epColonne - 2, yColBas - hauteurColonne + 6, 2, hauteurColonne - 16);
+    // Chapiteau corinthien à 3 niveaux + feuilles acanthe stylisées
+    g.fillStyle(couleur, alpha);
+    g.fillRect(xC - 2, yColHaut - 4, epColonne + 4, 4);
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(xC - 4, yColHaut - 9, epColonne + 8, 5);
+    g.fillStyle(couleur, alpha);
+    g.fillRect(xC - 3, yColHaut - 12, epColonne + 6, 3);
+    // 2 volutes acanthe (petits cercles asymétriques aux coins)
+    g.fillStyle(couleur, alpha);
+    g.fillCircle(xC - 2, yColHaut - 7, 2);
+    g.fillCircle(xC + epColonne + 2, yColHaut - 7, 2);
+    // Feuille acanthe centrale (triangle inversé avec stries)
+    g.fillStyle(couleurOmbre, alpha);
+    g.beginPath();
+    g.moveTo(xC + epColonne / 2, yColHaut - 4);
+    g.lineTo(xC, yColHaut + 1);
+    g.lineTo(xC + epColonne, yColHaut + 1);
+    g.closePath();
+    g.fillPath();
+    g.lineStyle(0.5, couleurClair, alpha * 0.5);
+    g.beginPath();
+    g.moveTo(xC + epColonne / 2, yColHaut - 4);
+    g.lineTo(xC + epColonne / 2, yColHaut + 1);
+    g.strokePath();
+}
+
 function peindreTempleMonumental(scene, x, ySol, hauteur, alpha, rng) {
+    const objets = [];
     const g = scene.add.graphics();
     const couleur = couleurStructureMoyenPlan();
-    const couleurClair = teinterPlusClair(couleur, 0.15);
+    const couleurClair = teinterPlusClair(couleur, 0.18);
     const couleurOmbre = teinterPlusSombre(couleur, 0.20);
+    const couleurProfond = teinterPlusSombre(couleur, 0.40);
     const w = hauteur * 1.4;
     const yTop = ySol - hauteur;
 
-    g.fillStyle(couleur, alpha);
-
-    // === STYLOBATE : 4 marches (signature "monumental") ===
-    for (let m = 0; m < 4; m++) {
-        const ext = m * 3;
-        const yM = ySol - m * 5;
-        const wM = w + 12 + ext * 2;
-        g.fillStyle(m % 2 === 0 ? couleur : couleurOmbre, alpha);
-        g.fillRect(x - wM / 2, yM - 5, wM, 5);
+    // === ESCALIER MONUMENTAL (Phase 5'.16) : 7 marches profondes ===
+    // Vrai escalier de temple grec, débordant largement de la façade.
+    const nbMarches = 7;
+    const hMarche = 4;
+    const debordementMax = 24;
+    for (let m = 0; m < nbMarches; m++) {
+        const yM = ySol - m * hMarche;
+        const debord = debordementMax * (1 - m / nbMarches);
+        const wM = w + 12 + debord * 2;
+        // Face de la marche (sombre — verticale)
+        g.fillStyle(couleurProfond, alpha);
+        g.fillRect(x - wM / 2, yM - hMarche, wM, hMarche);
+        // Top de la marche (clair — éclairé par le haut)
+        g.fillStyle(couleurClair, alpha);
+        g.fillRect(x - wM / 2, yM - hMarche, wM, 1);
+        // Ombre sous la marche (donne du volume)
+        g.fillStyle(couleurOmbre, alpha * 0.75);
+        g.fillRect(x - wM / 2 + 1, yM - 0.5, wM - 2, 0.8);
     }
 
-    // === COLONNES INDIVIDUELLES (8 colonnes corinthiennes) ===
-    const nbColonnes = 8;
-    const hauteurColonne = hauteur * 0.62;
-    const yColBas = ySol - 20;
+    // === COLONNES + CARIATIDES (Phase 5'.16) ===
+    // 8 supports : 2 cariatides au centre (positions 3 et 4) + 6 colonnes
+    // détaillées. Signature temples Sources hybrides : culte + architecture.
+    const nbSupports = 8;
+    const hauteurColonne = hauteur * 0.58;
+    const yColBas = ySol - nbMarches * hMarche - 4;
     const yColHaut = yColBas - hauteurColonne;
     const epColonne = 9 + rng() * 2;
-    const espaceColonne = (w - nbColonnes * epColonne) / (nbColonnes - 1);
+    const espaceColonne = (w - nbSupports * epColonne) / (nbSupports - 1);
 
-    for (let c = 0; c < nbColonnes; c++) {
+    for (let c = 0; c < nbSupports; c++) {
         const xC = x - w / 2 + c * (epColonne + espaceColonne);
-        // Base (cube élargi)
-        g.fillStyle(couleurOmbre, alpha);
-        g.fillRect(xC - 1, yColBas - 4, epColonne + 2, 4);
-        // Fût (rectangle vertical, cannelé subtilement)
-        g.fillStyle(couleur, alpha);
-        g.fillRect(xC, yColBas - hauteurColonne, epColonne, hauteurColonne - 4);
-        // Stries verticales sur le fût (cannelures classiques)
-        g.lineStyle(0.8, couleurOmbre, alpha * 0.85);
-        for (let s = 1; s < 4; s++) {
-            const xS = xC + (s / 4) * epColonne;
-            g.beginPath();
-            g.moveTo(xS, yColBas - hauteurColonne + 2);
-            g.lineTo(xS, yColBas - 6);
-            g.strokePath();
+        if (c === 3 || c === 4) {
+            // Cariatide centrée
+            peindreCariatide(g, xC + epColonne / 2, yColBas, hauteurColonne, couleur, couleurClair, couleurOmbre, alpha);
+        } else {
+            peindreColonneDetaillee(g, xC, yColBas, hauteurColonne, epColonne, couleur, couleurClair, couleurOmbre, alpha, rng);
         }
-        // Chapiteau (chapeau élargi corinthien — 3 niveaux)
-        g.fillStyle(couleur, alpha);
-        g.fillRect(xC - 2, yColHaut - 4, epColonne + 4, 4);
-        g.fillStyle(couleurClair, alpha);
-        g.fillRect(xC - 3, yColHaut - 8, epColonne + 6, 4);
-        // Petit ornement (feuille acanthe stylisée — triangle inversé)
-        g.fillStyle(couleurOmbre, alpha);
-        g.beginPath();
-        g.moveTo(xC + epColonne / 2, yColHaut - 4);
-        g.lineTo(xC - 1, yColHaut);
-        g.lineTo(xC + epColonne + 1, yColHaut);
-        g.closePath();
-        g.fillPath();
-        // Highlight vertical sur le fût (face droite éclairée)
-        g.fillStyle(couleurClair, alpha * 0.55);
-        g.fillRect(xC + epColonne - 2, yColBas - hauteurColonne + 4, 2, hauteurColonne - 12);
     }
 
-    // === ENTABLEMENT (architrave + frise + corniche) ===
+    // === ENTABLEMENT TRÈS DÉTAILLÉ ===
     const yEnt = yColHaut - 8;
-    // Architrave (bande basse)
+    // Architrave 3 lignes (signature classique)
     g.fillStyle(couleur, alpha);
-    g.fillRect(x - w / 2 - 4, yEnt - 7, w + 8, 7);
-    // Frise (bande médiane plus claire avec motifs suggérés)
+    g.fillRect(x - w / 2 - 4, yEnt - 8, w + 8, 8);
+    g.lineStyle(0.6, couleurClair, alpha * 0.7);
+    g.beginPath();
+    g.moveTo(x - w / 2 - 4, yEnt - 4);
+    g.lineTo(x + w / 2 + 4, yEnt - 4);
+    g.moveTo(x - w / 2 - 4, yEnt - 7);
+    g.lineTo(x + w / 2 + 4, yEnt - 7);
+    g.strokePath();
+
+    // FRISE NARRATIVE (Phase 5'.16) — bande médiane avec mini-figurines en
+    // bas-relief en succession continue (vs simples triglyphes avant)
     g.fillStyle(couleurClair, alpha);
-    g.fillRect(x - w / 2 - 4, yEnt - 14, w + 8, 7);
-    // Triglyphes (rectangles verticaux sombres sur la frise — toutes les ~30 px)
-    g.fillStyle(couleurOmbre, alpha);
-    const nbTriglyphes = Math.floor((w + 8) / 26);
-    for (let t = 0; t < nbTriglyphes; t++) {
-        const xT = x - w / 2 - 4 + (t + 0.5) * ((w + 8) / nbTriglyphes);
-        g.fillRect(xT - 2, yEnt - 14, 4, 7);
+    g.fillRect(x - w / 2 - 4, yEnt - 18, w + 8, 10);
+    // Mini-procession : alternance figure dressée + ornement
+    const yFrise = yEnt - 13;
+    const nbElements = Math.floor((w + 8) / 14);
+    for (let f = 0; f < nbElements; f++) {
+        const xF = x - w / 2 - 4 + (f + 0.5) * ((w + 8) / nbElements);
+        if (f % 3 === 0) {
+            // Mini-figure debout (silhouette ovale + tête)
+            g.fillStyle(couleurOmbre, alpha);
+            g.fillEllipse(xF, yFrise, 3, 6);
+            g.fillCircle(xF, yFrise - 4, 1.4);
+        } else if (f % 3 === 1) {
+            // Ornement losange (motif méandre)
+            g.fillStyle(couleurOmbre, alpha);
+            g.beginPath();
+            g.moveTo(xF, yFrise - 3);
+            g.lineTo(xF + 2.5, yFrise);
+            g.lineTo(xF, yFrise + 3);
+            g.lineTo(xF - 2.5, yFrise);
+            g.closePath();
+            g.fillPath();
+        } else {
+            // Triglyphe (3 traits verticaux serrés)
+            g.fillStyle(couleurOmbre, alpha);
+            g.fillRect(xF - 2, yFrise - 4, 1, 8);
+            g.fillRect(xF, yFrise - 4, 1, 8);
+            g.fillRect(xF + 2, yFrise - 4, 1, 8);
+        }
     }
-    // Corniche (bande haute en débord)
+    // Reflet sur la frise (face droite éclairée)
+    g.fillStyle(couleurClair, alpha * 0.4);
+    g.fillRect(x - w / 2 - 4, yEnt - 18, w + 8, 1.5);
+
+    // Corniche en débord avec moulures
     g.fillStyle(couleur, alpha);
-    g.fillRect(x - w / 2 - 8, yEnt - 20, w + 16, 6);
+    g.fillRect(x - w / 2 - 10, yEnt - 24, w + 20, 6);
+    g.fillStyle(couleurClair, alpha);
+    g.fillRect(x - w / 2 - 12, yEnt - 26, w + 24, 2);
 
     // === FRONTON TRIANGULAIRE ===
-    const yFronton = yEnt - 20;
+    const yFronton = yEnt - 26;
     g.fillStyle(couleur, alpha);
     g.beginPath();
-    g.moveTo(x - w / 2 - 8, yFronton);
+    g.moveTo(x - w / 2 - 12, yFronton);
     g.lineTo(x, yTop + 4);
-    g.lineTo(x + w / 2 + 8, yFronton);
+    g.lineTo(x + w / 2 + 12, yFronton);
     g.closePath();
     g.fillPath();
 
-    // Triangle décoratif intérieur (suggère sculpture / bas-relief)
-    g.fillStyle(couleurOmbre, alpha * 0.7);
+    // VITRAIL MNÉSIQUE central — grande ouverture cintrée au cœur du fronton
+    // avec cristaux ADD violet visibles à travers (Phase 5'.16)
+    const xVitrail = x;
+    const yVitrail = yFronton - 12;
+    const rVitrail = Math.min(14, (yFronton - yTop - 8) / 2);
+    g.fillStyle(couleurProfond, alpha);
+    g.fillCircle(xVitrail, yVitrail, rVitrail);
+    // Croix interne (vitrail à 4 sections)
+    g.lineStyle(1.2, couleur, alpha);
     g.beginPath();
-    g.moveTo(x - w * 0.32, yFronton - 4);
-    g.lineTo(x, yTop + 18);
-    g.lineTo(x + w * 0.32, yFronton - 4);
-    g.closePath();
-    g.fillPath();
+    g.moveTo(xVitrail - rVitrail, yVitrail);
+    g.lineTo(xVitrail + rVitrail, yVitrail);
+    g.moveTo(xVitrail, yVitrail - rVitrail);
+    g.lineTo(xVitrail, yVitrail + rVitrail);
+    g.strokePath();
+    g.lineStyle(0.6, couleurClair, alpha * 0.7);
+    g.strokeCircle(xVitrail, yVitrail, rVitrail);
 
-    // Mini-figurines sculptées sur le fronton (signature sculpture grecque) :
-    // 3 silhouettes humanoïdes alignées dans le tympan, ombres + reflets
-    const yFigurines = yFronton - 8;
-    const xCentreF = x;
-    g.fillStyle(couleurOmbre, alpha * 0.85);
-    // Figurine centrale (assise, plus grande — divinité trônante)
-    g.fillEllipse(xCentreF, yFigurines - 3, 7, 9);
-    g.fillCircle(xCentreF, yFigurines - 8, 2.5);
-    g.fillRect(xCentreF - 4, yFigurines - 1, 8, 3); // socle/trône
-    // Figurine gauche (debout, plus petite — fidèle ou prêtre)
-    g.fillEllipse(xCentreF - 16, yFigurines - 1, 4, 7);
-    g.fillCircle(xCentreF - 16, yFigurines - 6, 1.8);
-    // Figurine droite (debout)
-    g.fillEllipse(xCentreF + 16, yFigurines - 1, 4, 7);
-    g.fillCircle(xCentreF + 16, yFigurines - 6, 1.8);
-    // Petits reflets clairs sur les figurines (face droite éclairée)
+    // Bas-relief sculpté de chaque côté du vitrail (mini-figurines plus
+    // grosses : divinité + adorateurs)
+    g.fillStyle(couleurOmbre, alpha * 0.95);
+    // Figurine assise gauche (divinité regardant le centre)
+    g.fillEllipse(x - w * 0.20, yFronton - 7, 6, 9);
+    g.fillCircle(x - w * 0.20, yFronton - 13, 2.2);
+    // Figurine debout plus à gauche
+    g.fillEllipse(x - w * 0.32, yFronton - 5, 4, 8);
+    g.fillCircle(x - w * 0.32, yFronton - 11, 1.8);
+    // Symétriques à droite
+    g.fillEllipse(x + w * 0.20, yFronton - 7, 6, 9);
+    g.fillCircle(x + w * 0.20, yFronton - 13, 2.2);
+    g.fillEllipse(x + w * 0.32, yFronton - 5, 4, 8);
+    g.fillCircle(x + w * 0.32, yFronton - 11, 1.8);
+    // Reflets sur les figurines
     g.fillStyle(couleurClair, alpha * 0.55);
-    g.fillEllipse(xCentreF + 2, yFigurines - 4, 2, 5);
-    g.fillEllipse(xCentreF - 14, yFigurines - 2, 1.2, 4);
-    g.fillEllipse(xCentreF + 18, yFigurines - 2, 1.2, 4);
+    g.fillEllipse(x - w * 0.19, yFronton - 8, 2, 6);
+    g.fillEllipse(x + w * 0.21, yFronton - 8, 2, 6);
 
-    // Acrotère central (petite figure au sommet — urne ou statue miniature)
+    // Acrotère central avec statuette + 2 acrotères d'angle
     g.fillStyle(couleur, alpha);
     g.fillCircle(x, yTop + 2, 5);
-    g.fillRect(x - 1.5, yTop - 4, 3, 8);
+    g.fillRect(x - 1.5, yTop - 6, 3, 10);
     g.fillStyle(couleurClair, alpha * 0.7);
     g.fillCircle(x + 1.5, yTop + 1, 2);
+    // Acrotères d'angle (plus petits)
+    g.fillRect(x - w / 2 - 12, yFronton - 5, 4, 5);
+    g.fillRect(x + w / 2 + 8, yFronton - 5, 4, 5);
 
-    return g;
+    // === LUEUR ADD AU VITRAIL (cristaux mnésiques visibles) ===
+    const vitrail = scene.add.graphics();
+    vitrail.setBlendMode(Phaser.BlendModes.ADD);
+    vitrail.fillStyle(0xb898e8, 0.55);
+    vitrail.fillCircle(xVitrail, yVitrail, rVitrail * 0.7);
+    vitrail.fillStyle(0xe0c8ff, 0.85);
+    vitrail.fillCircle(xVitrail, yVitrail, rVitrail * 0.35);
+    vitrail.fillStyle(0xffffff, 0.85);
+    vitrail.fillCircle(xVitrail, yVitrail, rVitrail * 0.12);
+    vitrail.setDepth(DEPTH.SILHOUETTES + 2);
+    scene.tweens.add({
+        targets: vitrail,
+        alpha: { from: 0.55, to: 1.0 },
+        duration: 3500 + rng() * 1500,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
+    objets.push(g);
+    objets.push(vitrail);
+
+    return objets;
 }
 
 function peindreStatueColossale(scene, x, ySol, hauteur, alpha, rng) {
@@ -718,10 +881,20 @@ function poserCiteMoyenPlan(scene, dims, rng, palette) {
         ombre.setDepth(DEPTH.SILHOUETTES);
         objets.push(ombre);
 
-        const obj = typeChoisi.fn(scene, pos.x, ySol, hauteur, alpha, rng);
-        obj.setScrollFactor(0.40, 0);
-        obj.setDepth(DEPTH.SILHOUETTES + 1);
-        objets.push(obj);
+        // peindreTempleMonumental retourne un tableau (graphics + vitrail
+        // ADD), peindrePortiqueMonumental retourne un Graphics — on gère
+        // les deux cas uniformément.
+        const result = typeChoisi.fn(scene, pos.x, ySol, hauteur, alpha, rng);
+        const partsArr = Array.isArray(result) ? result : [result];
+        for (const part of partsArr) {
+            part.setScrollFactor(0.40, 0);
+            // Le vitrail (avec blend ADD) doit être au-dessus, sinon les
+            // détails graphics + ombre portée + temple s'empilent normalement
+            if (!part.depth || part.depth < DEPTH.SILHOUETTES + 1) {
+                part.setDepth(DEPTH.SILHOUETTES + 1);
+            }
+            objets.push(part);
+        }
 
         // Halo lumineux derrière chaque structure — RETIRÉ (5'.14)
         // Les halos ADD blancs derrière chaque temple créaient des "taches
