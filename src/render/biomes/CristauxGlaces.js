@@ -750,14 +750,21 @@ function poserCiteMoyenPlan(scene, dims, rng, palette) {
 // Couleurs cohérentes avec les branches sommets (couche 0).
 
 const COULEUR_ARBRE = {
-    tronc:      0xc8d8f0,
-    ombre:      0x5a7aa0,
-    clair:      0xe8f4ff,
-    reflet:     0xf8fcff,
-    seve:       0xb898e8,
-    coeur:      0xe0c8ff,
-    aura:       0x9080e0,
-    feuille:    0xd8c0ff
+    // 8 tons du plus sombre au plus clair pour sculpter le volume (Phase 5'.15)
+    noirBleute:    0x141c2c,   // noeuds noueux, creux profonds, contours fissures
+    ombreProfonde: 0x3a4a68,   // ombres internes derrière noeuds
+    ombre:         0x6a8aa8,   // ombre normale face cachée
+    tronc:         0xa0b8d0,   // teinte de base intermédiaire (tons médians)
+    troncClair:    0xc8d8f0,   // teinte claire (ancienne base)
+    clair:         0xe8f4ff,   // face très éclairée
+    reflet:        0xf8fcff,   // reflets vifs / facettes brillantes
+    blanc:         0xffffff,   // highlights purs / scintillements
+
+    seve:          0xb898e8,
+    coeur:         0xe0c8ff,
+    aura:          0x9080e0,
+    feuille:       0xd8c0ff,
+    noyau:         0x8060c8    // cœur des rosaces violet plus profond
 };
 
 // --- Helpers internes ---
@@ -774,36 +781,206 @@ function peindreFacetteEcorce(g, x, y, w, h, couleur, alpha) {
     g.fillPath();
 }
 
-function peindreGrappeCristaux(scene, x, y, tailleBase, rng) {
-    // Grappe de 5-8 petits cristaux mnésiques pendants ADD aux extrémités
-    // de branches. Pulsent doucement décalés.
+// Phase 5'.15 — Noeud noueux dans l'écorce (signature arbre ancien type
+// Arbre Blanc de Gondor). Forme ovale sombre avec petit cœur plus clair
+// (suggère un "œil" gravé par le temps dans le bois cristallin).
+function peindreNoeudNoueux(g, x, y, taille, rng) {
+    // Halo sombre externe (forme ovale légèrement asymétrique)
+    g.fillStyle(COULEUR_ARBRE.noirBleute, 0.85);
+    g.fillEllipse(x, y, taille * 1.3, taille);
+    // Anneau intermédiaire ombre profonde
+    g.fillStyle(COULEUR_ARBRE.ombreProfonde, 0.95);
+    g.fillEllipse(x + (rng() - 0.5) * 1, y + (rng() - 0.5) * 1, taille * 0.95, taille * 0.7);
+    // Cœur sombre
+    g.fillStyle(COULEUR_ARBRE.noirBleute, 1.0);
+    g.fillEllipse(x, y, taille * 0.55, taille * 0.4);
+    // Petit reflet clair sur le bord supérieur du noeud (lumière tombe dessus)
+    g.fillStyle(COULEUR_ARBRE.clair, 0.75);
+    g.fillEllipse(x - taille * 0.15, y - taille * 0.25, taille * 0.45, taille * 0.15);
+    // Petite ride autour (cercle concentrique d'ombre légère, suggère bois noueux)
+    g.lineStyle(0.8, COULEUR_ARBRE.ombre, 0.55);
+    g.strokeEllipse(x, y, taille * 1.6, taille * 1.2);
+}
+
+// Phase 5'.15 — Rosace cristalline ornementale gravée dans le tronc.
+// Signature "arbre sacré" : grand cercle 18-25 px avec étoile à rayons
+// cristallins. Inspiration : rosaces gothiques + sceaux runiques.
+function peindreRosaceCristalline(scene, x, y, taille, rng) {
     const objets = [];
     const g = scene.add.graphics();
+
+    // Cercle externe (couronne, fond sombre)
+    g.fillStyle(COULEUR_ARBRE.ombreProfonde, 0.95);
+    g.fillCircle(x, y, taille);
+    // Anneau plus clair
+    g.fillStyle(COULEUR_ARBRE.ombre, 0.85);
+    g.fillCircle(x, y, taille * 0.85);
+    // Fond intérieur sombre
+    g.fillStyle(COULEUR_ARBRE.noirBleute, 1.0);
+    g.fillCircle(x, y, taille * 0.7);
+
+    // Étoile à 8 rayons cristallins (croix + diagonale)
+    g.fillStyle(COULEUR_ARBRE.coeur, 0.92);
+    for (let r = 0; r < 8; r++) {
+        const angle = (r / 8) * Math.PI * 2;
+        const xR = x + Math.cos(angle) * taille * 0.65;
+        const yR = y + Math.sin(angle) * taille * 0.65;
+        // Petit losange à chaque pointe
+        g.beginPath();
+        g.moveTo(x + Math.cos(angle) * taille * 0.35, y + Math.sin(angle) * taille * 0.35);
+        g.lineTo(xR + Math.cos(angle + Math.PI / 2) * 1.5, yR + Math.sin(angle + Math.PI / 2) * 1.5);
+        g.lineTo(x + Math.cos(angle) * taille * 0.78, y + Math.sin(angle) * taille * 0.78);
+        g.lineTo(xR + Math.cos(angle - Math.PI / 2) * 1.5, yR + Math.sin(angle - Math.PI / 2) * 1.5);
+        g.closePath();
+        g.fillPath();
+    }
+    g.setScrollFactor(0.15, 0);
+    g.setDepth(DEPTH.SILHOUETTES);
+    objets.push(g);
+
+    // Cœur ADD violet pulsant au centre
+    const coeur = scene.add.graphics();
+    coeur.setBlendMode(Phaser.BlendModes.ADD);
+    coeur.fillStyle(COULEUR_ARBRE.seve, 0.65);
+    coeur.fillCircle(x, y, taille * 0.45);
+    coeur.fillStyle(COULEUR_ARBRE.coeur, 0.85);
+    coeur.fillCircle(x, y, taille * 0.25);
+    coeur.fillStyle(COULEUR_ARBRE.blanc, 0.95);
+    coeur.fillCircle(x, y, taille * 0.10);
+    coeur.setScrollFactor(0.15, 0);
+    coeur.setDepth(DEPTH.SILHOUETTES + 1);
+    objets.push(coeur);
+    scene.tweens.add({
+        targets: coeur,
+        alpha: { from: 0.55, to: 1.0 },
+        scale: { from: 0.92, to: 1.08 },
+        duration: 2800 + rng() * 1400,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
+
+    return objets;
+}
+
+// Phase 5'.15 — Scintillement sporadique : petit éclat blanc ADD qui
+// apparaît, brille, et disparaît cycliquement. Décalages aléatoires pour
+// que l'arbre semble vivant et scintillant comme un cristal naturel.
+function peindreScintillement(scene, x, y, taille, rng) {
+    const g = scene.add.graphics();
     g.setBlendMode(Phaser.BlendModes.ADD);
+    // Étoile 4 branches
+    g.fillStyle(COULEUR_ARBRE.blanc, 1.0);
+    g.fillCircle(x, y, taille * 0.4);
+    g.lineStyle(taille * 0.25, COULEUR_ARBRE.blanc, 0.95);
+    g.beginPath();
+    g.moveTo(x - taille, y);
+    g.lineTo(x + taille, y);
+    g.moveTo(x, y - taille);
+    g.lineTo(x, y + taille);
+    g.strokePath();
+    // Halo doux
+    g.fillStyle(COULEUR_ARBRE.reflet, 0.40);
+    g.fillCircle(x, y, taille * 1.2);
 
-    const nbCristaux = 5 + Math.floor(rng() * 4);
+    g.setScrollFactor(0.15, 0);
+    g.setDepth(DEPTH.SILHOUETTES + 1);
+    g.setAlpha(0);
+
+    // Cycle aléatoire : invisible → brillant → invisible → pause longue
+    const delaiInitial = rng() * 4000;
+    const lancerCycle = () => {
+        scene.tweens.add({
+            targets: g,
+            alpha: { from: 0, to: 1 },
+            duration: 300,
+            ease: 'Sine.Out',
+            yoyo: true,
+            hold: 200,
+            onComplete: () => {
+                scene.time.delayedCall(2500 + Math.random() * 4000, lancerCycle);
+            }
+        });
+    };
+    scene.time.delayedCall(delaiInitial, lancerCycle);
+
+    return [g];
+}
+
+function peindreGrappeCristaux(scene, x, y, tailleBase, rng) {
+    // Phase 5'.15 — Grappe DENSE de 12-18 cristaux mnésiques pendants ADD
+    // aux extrémités de branches (vs 5-8 avant). Variation de tailles, halo
+    // global de la grappe, mini-branchettes qui portent les cristaux.
+    const objets = [];
+
+    // === MINI-BRANCHETTES (qui portent les cristaux comme des feuilles) ===
+    const branchettes = scene.add.graphics();
+    const nbBranchettes = 6 + Math.floor(rng() * 4);
+    for (let b = 0; b < nbBranchettes; b++) {
+        const angle = (b / nbBranchettes) * Math.PI - Math.PI / 2 + (rng() - 0.5) * 0.5;
+        const longueur = tailleBase * (0.5 + rng() * 0.6);
+        const x2 = x + Math.cos(angle) * longueur;
+        const y2 = y + Math.sin(angle) * longueur * 0.85 + tailleBase * 0.15;
+        // Trait fin teinté tronc
+        branchettes.lineStyle(1.5, COULEUR_ARBRE.tronc, 0.85);
+        branchettes.beginPath();
+        branchettes.moveTo(x, y);
+        branchettes.lineTo(x2, y2);
+        branchettes.strokePath();
+        // Reflet
+        branchettes.lineStyle(0.6, COULEUR_ARBRE.clair, 0.65);
+        branchettes.beginPath();
+        branchettes.moveTo(x, y);
+        branchettes.lineTo(x2, y2);
+        branchettes.strokePath();
+    }
+    branchettes.setScrollFactor(0.15, 0);
+    branchettes.setDepth(DEPTH.SILHOUETTES - 1);
+    objets.push(branchettes);
+
+    // === HALO GLOBAL DE LA GRAPPE (donne du volume à l'ensemble) ===
+    const haloGrappe = scene.add.graphics();
+    haloGrappe.setBlendMode(Phaser.BlendModes.ADD);
+    haloGrappe.fillStyle(COULEUR_ARBRE.aura, 0.18);
+    haloGrappe.fillEllipse(x, y + tailleBase * 0.25, tailleBase * 2.6, tailleBase * 2.0);
+    haloGrappe.fillStyle(COULEUR_ARBRE.seve, 0.22);
+    haloGrappe.fillEllipse(x, y + tailleBase * 0.25, tailleBase * 1.8, tailleBase * 1.4);
+    haloGrappe.setScrollFactor(0.15, 0);
+    haloGrappe.setDepth(DEPTH.SILHOUETTES - 1);
+    objets.push(haloGrappe);
+
+    // === CRISTAUX (12-18) ===
+    const g = scene.add.graphics();
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    const nbCristaux = 12 + Math.floor(rng() * 7);
     for (let i = 0; i < nbCristaux; i++) {
-        const angle = (i / nbCristaux) * Math.PI - Math.PI / 2 + (rng() - 0.5) * 0.4;
-        const dist = tailleBase * (0.4 + rng() * 0.7);
-        const cx = x + Math.cos(angle) * dist;
-        const cy = y + Math.sin(angle) * dist * 0.7 + tailleBase * 0.3; // tendance vers le bas (cristaux pendent)
-        const taille = 2 + rng() * 2.5;
+        // Distribution sphérique avec tendance vers le bas (gravité)
+        const u = rng();
+        const v = rng();
+        const angle = u * Math.PI * 2;
+        const r = v * tailleBase * 1.1;
+        const cx = x + Math.cos(angle) * r;
+        const cy = y + Math.sin(angle) * r * 0.75 + tailleBase * 0.30;
+        const taille = 1.5 + rng() * 3;
 
-        // Halo violet
+        // Halo violet doux
         g.fillStyle(COULEUR_ARBRE.seve, 0.45);
         g.fillCircle(cx, cy, taille * 2.5);
-        // Cœur cristallin (losange)
-        g.fillStyle(COULEUR_ARBRE.coeur, 0.85);
+        // Cœur cristallin (losange pendant)
+        g.fillStyle(COULEUR_ARBRE.coeur, 0.88);
         g.beginPath();
-        g.moveTo(cx, cy - taille);
+        g.moveTo(cx, cy - taille * 1.1);
         g.lineTo(cx + taille * 0.6, cy);
-        g.lineTo(cx, cy + taille);
+        g.lineTo(cx, cy + taille * 1.4);
         g.lineTo(cx - taille * 0.6, cy);
         g.closePath();
         g.fillPath();
         // Éclat blanc central
-        g.fillStyle(0xffffff, 0.85);
-        g.fillCircle(cx, cy, taille * 0.35);
+        g.fillStyle(COULEUR_ARBRE.blanc, 0.92);
+        g.fillCircle(cx - taille * 0.15, cy - taille * 0.3, taille * 0.35);
+        // Petit point clair vif sur le bord (effet cristal réfléchissant)
+        g.fillStyle(COULEUR_ARBRE.blanc, 0.75);
+        g.fillCircle(cx - taille * 0.3, cy - taille * 0.4, taille * 0.18);
     }
 
     g.setScrollFactor(0.15, 0);
@@ -815,6 +992,14 @@ function peindreGrappeCristaux(scene, x, y, tailleBase, rng) {
         targets: g,
         alpha: { from: 0.55, to: 1.0 },
         duration: 3000 + rng() * 2500,
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1
+    });
+    scene.tweens.add({
+        targets: haloGrappe,
+        alpha: { from: 0.40, to: 1.0 },
+        duration: 4500 + rng() * 2000,
         ease: 'Sine.InOut',
         yoyo: true,
         repeat: -1
@@ -1074,58 +1259,104 @@ function poserArbreCristallinCentre(scene, dims, rng, palette) {
     g.closePath();
     g.fillPath();
 
-    // === ÉCORCE TEXTURÉE : facettes cristallines ===
-    // Distribuer 30-40 facettes losanges de tailles variables sur le tronc
-    const nbFacettes = 36;
+    // === ÉCORCE TEXTURÉE : facettes cristallines + multi-tons (Phase 5'.15) ===
+    // 60 facettes losanges sur 5 tons de couleur (vs 36 sur 2 tons avant)
+    // pour vraiment sculpter le volume comme un cristal naturel
+    const nbFacettes = 60;
+    const tonsClair = [COULEUR_ARBRE.clair, COULEUR_ARBRE.reflet, COULEUR_ARBRE.blanc];
+    const tonsOmbre = [COULEUR_ARBRE.ombre, COULEUR_ARBRE.ombreProfonde, COULEUR_ARBRE.tronc];
     for (let i = 0; i < nbFacettes; i++) {
         const tH = rng();
-        // Largeur locale du tronc à cette hauteur
         let largeurLocale;
         if (tH < 0.45) {
-            // Section basse : interpole largeurBase → largeurMid
             const tt = tH / 0.45;
             largeurLocale = largeurBase * (1 - tt) + largeurMid * tt;
         } else {
-            // Section haute : largeurMid → largeurHaut
             const tt = (tH - 0.45) / 0.55;
             largeurLocale = largeurMid * (1 - tt) + largeurHaut * tt;
         }
         const y = ySol - hauteurTronc * tH;
-        const xOffset = (rng() - 0.5) * largeurLocale * 0.7;
+        const xOffset = (rng() - 0.5) * largeurLocale * 0.85;
         const x = xCentre + xOffset;
-        const facetteW = 4 + rng() * 12;
-        const facetteH = 6 + rng() * 18;
-        // Couleur selon position (gauche = ombre, droite = clair)
-        const couleur = xOffset < 0 ? COULEUR_ARBRE.ombre : COULEUR_ARBRE.reflet;
-        const alpha = 0.18 + rng() * 0.18;
+        const facetteW = 3 + rng() * 14;
+        const facetteH = 5 + rng() * 20;
+        // Tirage couleur : tons clairs si côté droit, ombre si côté gauche
+        const pool = xOffset < 0 ? tonsOmbre : tonsClair;
+        const couleur = pool[Math.floor(rng() * pool.length)];
+        const alpha = 0.20 + rng() * 0.25;
         peindreFacetteEcorce(g, x, y, facetteW, facetteH, couleur, alpha);
     }
 
-    // === RELIEFS EN BAS-RELIEF (lignes verticales avec ombre/highlight) ===
-    // 8 stries longitudinales qui suggèrent des cannelures cristallines
-    for (let s = 0; s < 8; s++) {
-        const offset = -largeurBase / 2 + (s + 1) * largeurBase / 9;
+    // === RELIEFS BAS-RELIEF : 12 stries longitudinales (vs 8) avec multi-tons ===
+    for (let s = 0; s < 12; s++) {
+        const offset = -largeurBase / 2 + (s + 1) * largeurBase / 13;
         const tBas = offset;
         const tHaut = offset * (largeurHaut / largeurBase);
-        // Ligne d'ombre
-        g.lineStyle(1.5, COULEUR_ARBRE.ombre, 0.45);
+        // Ligne ombre profonde (creux)
+        g.lineStyle(2, COULEUR_ARBRE.ombreProfonde, 0.45);
         g.beginPath();
         g.moveTo(xCentre + tBas, ySol);
         g.lineTo(xCentre + (tBas + tHaut) * 0.5, yMid);
         g.lineTo(xCentre + tHaut, yHaut);
         g.strokePath();
-        // Ligne de highlight juste à côté (1 px plus à droite)
-        g.lineStyle(0.7, COULEUR_ARBRE.reflet, 0.55);
+        // Ligne ombre moyenne
+        g.lineStyle(1, COULEUR_ARBRE.ombre, 0.65);
         g.beginPath();
-        g.moveTo(xCentre + tBas + 1.5, ySol);
-        g.lineTo(xCentre + (tBas + tHaut) * 0.5 + 1.5, yMid);
-        g.lineTo(xCentre + tHaut + 1.5, yHaut);
+        g.moveTo(xCentre + tBas + 0.5, ySol);
+        g.lineTo(xCentre + (tBas + tHaut) * 0.5 + 0.5, yMid);
+        g.lineTo(xCentre + tHaut + 0.5, yHaut);
         g.strokePath();
+        // Ligne highlight (relief)
+        g.lineStyle(0.8, COULEUR_ARBRE.reflet, 0.70);
+        g.beginPath();
+        g.moveTo(xCentre + tBas + 2, ySol);
+        g.lineTo(xCentre + (tBas + tHaut) * 0.5 + 2, yMid);
+        g.lineTo(xCentre + tHaut + 2, yHaut);
+        g.strokePath();
+        // Ligne reflet pur (sommets de cannelures)
+        g.lineStyle(0.4, COULEUR_ARBRE.blanc, 0.55);
+        g.beginPath();
+        g.moveTo(xCentre + tBas + 2.6, ySol);
+        g.lineTo(xCentre + (tBas + tHaut) * 0.5 + 2.6, yMid);
+        g.lineTo(xCentre + tHaut + 2.6, yHaut);
+        g.strokePath();
+    }
+
+    // === NOEUDS NOUEUX (signature arbre ancien type Arbre Blanc de Gondor) ===
+    // 7-9 noeuds répartis sur le tronc à différentes hauteurs et positions.
+    const nbNoeuds = 7 + Math.floor(rng() * 3);
+    for (let n = 0; n < nbNoeuds; n++) {
+        const tH = 0.15 + rng() * 0.70;
+        let largeurLocale;
+        if (tH < 0.45) {
+            const tt = tH / 0.45;
+            largeurLocale = largeurBase * (1 - tt) + largeurMid * tt;
+        } else {
+            const tt = (tH - 0.45) / 0.55;
+            largeurLocale = largeurMid * (1 - tt) + largeurHaut * tt;
+        }
+        const xOffset = (rng() - 0.5) * largeurLocale * 0.65;
+        const xN = xCentre + xOffset;
+        const yN = ySol - hauteurTronc * tH;
+        const taille = 5 + rng() * 6;
+        peindreNoeudNoueux(g, xN, yN, taille, rng);
     }
 
     g.setScrollFactor(0.15, 0);
     g.setDepth(DEPTH.SILHOUETTES - 1);
     objets.push(g);
+
+    // === ROSACES CRISTALLINES SUR LE TRONC (signature arbre sacré) ===
+    // 3 grandes rosaces ornementales gravées dans l'écorce — comme des
+    // "yeux" sacrés à différentes hauteurs. Cercles 14-22 px avec étoile à
+    // 8 rayons cristallins + cœur ADD violet pulsant.
+    const yRosaces = [0.30, 0.50, 0.70];
+    for (const yT of yRosaces) {
+        const taille = 14 + rng() * 8;
+        const xR = xCentre + (rng() - 0.5) * 15;
+        const yR = ySol - hauteurTronc * yT;
+        objets.push(...peindreRosaceCristalline(scene, xR, yR, taille, rng));
+    }
 
     // === VEINES MNÉSIQUES INTERNES (ADD, pulse géologique) ===
     const veines = scene.add.graphics();
@@ -1161,29 +1392,32 @@ function poserArbreCristallinCentre(scene, dims, rng, palette) {
         repeat: -1
     });
 
-    // === BRANCHES MAJEURES (8 rayonnantes depuis 3 hauteurs différentes) ===
-    // Niveau 1 : 2 branches à 1/3 du sommet, courtes et trapues
-    // Niveau 2 : 2 branches à 1/2 du sommet, longueur moyenne, plus diagonales
-    // Niveau 3 : 2 branches à 2/3 du sommet, longues et hautes (canopée)
-    // Bonus : 2 sous-branches mineures qui sortent depuis les principales
+    // === BRANCHES MAJEURES (Phase 5'.15 : 14 rayonnantes sur 4 niveaux) ===
+    // Densification vs 8 avant. Chaque branche principale porte
+    // SYSTÉMATIQUEMENT 2 sous-branches (vs 50 % de chance) + grappe dense.
     const branchesDef = [
-        // [yT (ratio), xBoutOffset, yBoutOffset, epBase, epBout]
-        // Niveau 1 (bas)
-        { yT: 0.35, dx: -130, dy: -30, epBase: 38, epBout: 14 },
-        { yT: 0.35, dx: 130,  dy: -30, epBase: 38, epBout: 14 },
-        // Niveau 2 (mid)
-        { yT: 0.55, dx: -200, dy: -90, epBase: 30, epBout: 10 },
-        { yT: 0.55, dx: 200,  dy: -90, epBase: 30, epBout: 10 },
-        // Niveau 3 (haut canopée)
-        { yT: 0.75, dx: -230, dy: -150, epBase: 24, epBout: 8 },
-        { yT: 0.75, dx: 230,  dy: -150, epBase: 24, epBout: 8 },
-        // Niveau 3 bis (canopée verticale)
-        { yT: 0.78, dx: -90,  dy: -160, epBase: 20, epBout: 7 },
-        { yT: 0.78, dx: 90,   dy: -160, epBase: 20, epBout: 7 }
+        // [yT (ratio), dx, dy, epBase, epBout]
+        // Niveau 1 (bas) — 4 branches courtes trapues
+        { yT: 0.30, dx: -150, dy: -10,  epBase: 40, epBout: 14 },
+        { yT: 0.30, dx: 150,  dy: -10,  epBase: 40, epBout: 14 },
+        { yT: 0.38, dx: -110, dy: -50,  epBase: 36, epBout: 13 },
+        { yT: 0.38, dx: 110,  dy: -50,  epBase: 36, epBout: 13 },
+        // Niveau 2 (mid) — 4 branches diagonales moyennes
+        { yT: 0.50, dx: -220, dy: -80,  epBase: 32, epBout: 11 },
+        { yT: 0.50, dx: 220,  dy: -80,  epBase: 32, epBout: 11 },
+        { yT: 0.58, dx: -170, dy: -130, epBase: 28, epBout: 10 },
+        { yT: 0.58, dx: 170,  dy: -130, epBase: 28, epBout: 10 },
+        // Niveau 3 (haut canopée) — 4 branches longues vers les coins hauts
+        { yT: 0.70, dx: -240, dy: -160, epBase: 26, epBout: 9 },
+        { yT: 0.70, dx: 240,  dy: -160, epBase: 26, epBout: 9 },
+        { yT: 0.76, dx: -130, dy: -190, epBase: 22, epBout: 8 },
+        { yT: 0.76, dx: 130,  dy: -190, epBase: 22, epBout: 8 },
+        // Niveau 4 (canopée verticale, plus fines)
+        { yT: 0.82, dx: -60,  dy: -200, epBase: 20, epBout: 7 },
+        { yT: 0.82, dx: 60,   dy: -200, epBase: 20, epBout: 7 }
     ];
 
     for (const br of branchesDef) {
-        // Largeur du tronc à cette hauteur
         let largeurLocale;
         if (br.yT < 0.45) {
             const tt = br.yT / 0.45;
@@ -1204,17 +1438,18 @@ function poserArbreCristallinCentre(scene, dims, rng, palette) {
         );
         objets.push(...branchObjs);
 
-        // Sous-branche (50% de chance)
-        if (rng() < 0.5) {
-            const tSousB = 0.55 + rng() * 0.20;
+        // 2 SOUS-BRANCHES systématiques (vs 50 % de chance + 1 sous-branche)
+        for (let sb = 0; sb < 2; sb++) {
+            const tSousB = 0.45 + sb * 0.25 + rng() * 0.10;
             const xSousDepart = xDepart + br.dx * tSousB * facteurEtage;
             const ySousDepart = yDepart + br.dy * tSousB * facteurEtage;
-            const dxSous = br.dx * 0.45 + (rng() - 0.5) * 30;
-            const dySous = br.dy * 0.45 - (10 + rng() * 25);
+            // Direction de la sous-branche : alterner vers le haut + biais
+            const dxSous = br.dx * 0.40 * (sb === 0 ? 1 : 0.7) + (rng() - 0.5) * 35;
+            const dySous = br.dy * 0.30 - (15 + rng() * 30 + sb * 10);
             const xSousBout = xSousDepart + dxSous;
             const ySousBout = ySousDepart + dySous;
             const epSousBase = br.epBout * 0.85;
-            const epSousBout = 4 + rng() * 2;
+            const epSousBout = 3 + rng() * 2;
             const sousBranch = peindreBrancheArbre(
                 scene, xSousDepart, ySousDepart, xSousBout, ySousBout,
                 epSousBase, epSousBout, rng, DEPTH.SILHOUETTES - 1
@@ -1222,23 +1457,43 @@ function poserArbreCristallinCentre(scene, dims, rng, palette) {
             objets.push(...sousBranch);
 
             // Grappe au bout de la sous-branche
-            objets.push(...peindreGrappeCristaux(scene, xSousBout, ySousBout, 14, rng));
+            objets.push(...peindreGrappeCristaux(scene, xSousBout, ySousBout, 12, rng));
         }
 
-        // Grappe au bout de la branche principale
-        objets.push(...peindreGrappeCristaux(scene, xBout, yBout, 18, rng));
+        // Grappe au bout de la branche principale (plus grosse)
+        objets.push(...peindreGrappeCristaux(scene, xBout, yBout, 20, rng));
     }
 
-    // === RACINES MAJESTUEUSES (10 racines avec ramifications) ===
-    const nbRacines = 10;
+    // === RACINES MAJESTUEUSES (15 racines avec ramifications) ===
+    const nbRacines = 15;
     for (let r = 0; r < nbRacines; r++) {
         const t = (r + 0.5) / nbRacines;
-        const offsetX = -largeurBase / 2 - 30 + t * (largeurBase + 60);
+        const offsetX = -largeurBase / 2 - 40 + t * (largeurBase + 80);
         const xR = xCentre + offsetX;
-        // Direction : pointe vers l'extérieur
         const direction = offsetX < 0 ? -1 : 1;
-        const longueur = 26 + rng() * 28;
+        const longueur = 28 + rng() * 36;
         objets.push(...peindreRacineArbre(scene, xR, ySol - 4, longueur, direction, rng));
+    }
+
+    // === SCINTILLEMENTS SPORADIQUES SUR L'ARBRE (Phase 5'.15) ===
+    // 8-12 éclats blancs distribués qui apparaissent/disparaissent
+    // cycliquement — donne vie au cristal, comme un diamant naturel qui
+    // capte la lumière sous différents angles.
+    const nbScintillements = 8 + Math.floor(rng() * 5);
+    for (let s = 0; s < nbScintillements; s++) {
+        const tH = 0.15 + rng() * 0.75;
+        let largeurLocale;
+        if (tH < 0.45) {
+            const tt = tH / 0.45;
+            largeurLocale = largeurBase * (1 - tt) + largeurMid * tt;
+        } else {
+            const tt = (tH - 0.45) / 0.55;
+            largeurLocale = largeurMid * (1 - tt) + largeurHaut * tt;
+        }
+        const xS = xCentre + (rng() - 0.5) * largeurLocale * 0.9;
+        const yS = ySol - hauteurTronc * tH;
+        const tailleS = 2.5 + rng() * 2;
+        objets.push(...peindreScintillement(scene, xS, yS, tailleS, rng));
     }
 
     // === CRISTAUX EXCROISSANCES SUR LE TRONC (mémoires affleurantes) ===
