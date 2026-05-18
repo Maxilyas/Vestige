@@ -9,11 +9,13 @@
 import { poserSilhouettesLointaines } from '../Parallaxe.js';
 import { composerParallaxRuinesBasses } from './RuinesBasses.js';
 import { composerParallaxHallsCendres } from './HallsCendres.js';
+import { composerParallaxCristauxGlaces } from './CristauxGlaces.js';
 
 const COMPOSERS = {
     ruines_basses: composerParallaxRuinesBasses,
-    halls_cendres: composerParallaxHallsCendres
-    // cristaux_glaces, voile_inverse, coeur_reflux — à venir
+    halls_cendres: composerParallaxHallsCendres,
+    cristaux_glaces: composerParallaxCristauxGlaces
+    // voile_inverse, coeur_reflux — à venir
 };
 
 /**
