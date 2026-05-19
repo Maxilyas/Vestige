@@ -227,6 +227,58 @@ export const BIOMES = {
             ambiance: 0x4a2a6a,
             accent: 0xc080ff
         },
+        // Phase 5'.19 — palette enrichie peinte par-dessus PALETTE_PRESENT au runtime.
+        // Direction artistique : "La Cité Déchirée" — c'est LA MÊME Olympe cristalline
+        // que Cristaux Glacés (continuité explicite : skyline reconnaissable, tour
+        // centrale toujours là), mais le Reflux a percé le Voile. La cité divine
+        // se fragmente : des morceaux flottent à des angles impossibles, la tour
+        // est fendue verticalement, des lacérations noir-rougeoyant traversent
+        // le ciel et laissent voir l'au-delà.
+        // Le violet pâle des cristaux mnésiques (préfiguration en 5-6) devient ici
+        // la couleur dominante — saturé, malade, spectral. La nacre argentée
+        // se corrompt en nacre verdâtre. Le givre devient suintement.
+        // Préfigure le Cœur du Reflux (9-10) via des touches cramoisi qui filtrent
+        // par les déchirures (équivalent narratif du violet sur cristaux en 5-6).
+        paletteBiome: {
+            // Ciel : la nuit cosmique des Cristaux a été déchirée. Haut = violet
+            // profond spectral, mid = magenta désaturé (le Reflux qui suinte
+            // à travers le Voile), bas = noir rougeoyant (l'au-delà visible).
+            fond: '#0a0414',
+            fondGradientHaut: '#1e0a30',
+            fondGradientMid:  '#582a5e',
+            fondGradientBas:  '#180410',
+
+            // Plateformes : marbre minéralisé corrompu, teinte aubergine.
+            // Top highlight = nacre malade (vert-violet luminescent, vs givre
+            // bleu pâle des Cristaux). Ornement = cristal mnésique saturé
+            // magenta-rose (vs violet pâle des Cristaux — la mémoire saigne).
+            plateforme:          0x382048,
+            plateformeContour:   0x9876b0,
+            plateformeOrnement:  0xd068d8,
+
+            // Pierre 3 tons aubergine — volume painterly des structures corrompues
+            pierre:        0x4a2e62,
+            pierreSombre:  0x180a20,
+            pierreClaire:  0x7a4a92,
+
+            // Signature biome — réinterprète les slots mousse/racine/accent :
+            //   `mousse` → suintement (croûtes magenta luminescentes, vs givre
+            //              blanc-bleu des Cristaux — la mémoire suinte)
+            //   `racine` → déchirure (rose-cramoisi vif, vs cristal violet pâle
+            //              des Cristaux — la corruption traverse)
+            //   `accent` → nacre malade (vert spectral réfléchissant, vs nacre
+            //              argentée des Cristaux — métal corrompu)
+            mousse:  0xc060d8,
+            racine:  0xff5078,
+            accent:  0x8ad8a0,
+
+            // Atmosphère : brume violette dense saturée (vs brume glacée bleue
+            // des Cristaux) + particules magenta-blanc qui dérivent (souvent
+            // vers le haut — gravité inversée par instants, préfigure
+            // inverseur_gravite)
+            brume:     0x582a70,
+            particule: 0xf0a8e8
+        },
         ennemisPool: [
             'colosse_voile',  'colosse_voile',  'colosse_voile',
             'larme_tisseuse', 'larme_tisseuse', 'larme_tisseuse',
