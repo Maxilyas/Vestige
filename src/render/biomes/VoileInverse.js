@@ -18,15 +18,17 @@
 //   - tour fendue verticalement, lueur magenta saturée (vs violet pâle)
 //   - les bâtiments lointains s'inclinent légèrement
 //
-// Couches (5'.20 — partiel, sera complété en 5'.21-23) :
-//   BG    skyline corrompue        (sF 0.04, profil + 24 silhouettes + 2 fragments flottants)
-//   BG    cité lointaine fragmentée (sF 0.18, ~12 structures + 2-3 fragments inclinés)
-//   BG    tour cristalline fendue  (sF 0.10, polygone fendu vertical + lueur magenta)
+// Couches actuelles :
+//   BG    skyline corrompue + terre lointaine (sF 0.04)
+//   BG    cité lointaine fragmentée           (sF 0.18)
+//   BG    tour cristalline fendue             (sF 0.10, focal)
+//   BG    déchirures verticales du Voile      (sF 0.08, dynamiques)
 //
-// Couches à venir :
-//   5'.21 plateformes flicker (corruption mnésique)
-//   5'.22 déchirures verticales dynamiques (Voile qui se déchire)
+// Couche à venir :
 //   5'.23 atmosphère (particules vers le haut, brume saturée)
+//
+// Phase 5'.21 (plateformes flicker fantômes) tentée puis retirée
+// (rejetée user : trop bruyant en moyen plan).
 
 import { DEPTH, paletteCouranteScene } from '../PainterlyRenderer.js';
 import { GAME_HEIGHT, GAME_WIDTH } from '../../config.js';
@@ -738,6 +740,141 @@ function poserTourFendue(scene, dims, rng, palette) {
 }
 
 // ============================================================
+// COUCHE 4 — DÉCHIRURES VERTICALES DU VOILE (scrollFactor 0.08)
+// ============================================================
+//
+// LE concept signature du biome. 5 lacérations verticales dans le ciel
+// qui laissent voir l'au-delà (noir cramoisi profond) avec un halo
+// magenta ADD sur les bords + cœur blanc-rose saturé. Chaque déchirure
+// est légèrement inclinée et "respire" via un scaleX qui s'élargit et
+// se ferme très lentement (10-16s aller-retour).
+//
+// Forme : polyline irrégulière en 8 nœuds avec largeur ±20% par nœud +
+// jitter X subtil — vend un vrai bord déchiré (pas une bande propre).
+//
+// Couvre seulement le ciel supérieur (y=30 à y=GAME_HEIGHT - 160) :
+//   - évite le HUD du haut
+//   - s'arrête au-dessus de la skyline / cité (sinon couvert)
+//   - exclusion centrale de 100 px pour ne pas masquer la tour fendue
+//     (qui est déjà la déchirure principale, conceptuellement)
+
+function poserDechiruresVoile(scene, dims, rng) {
+    const objets = [];
+    const largeurEtendue = dims.largeur * 1.6;
+    const decalageX = -dims.largeur * 0.3;
+    const yHaut = 30;
+    const yBas = GAME_HEIGHT - 160;
+    const hauteurTot = yBas - yHaut;
+    const xCentre = dims.largeur / 2;
+    const exclusionCentre = 100;
+    const nb = 5;
+
+    for (let i = 0; i < nb; i++) {
+        // Position X uniforme + jitter, repoussée hors du centre
+        let xBase = decalageX + ((i + 0.5) / nb) * largeurEtendue
+                    + (rng() - 0.5) * 80;
+        if (Math.abs(xBase - xCentre) < exclusionCentre) {
+            xBase += (xBase < xCentre ? -1 : 1) * exclusionCentre;
+        }
+        // Inclinaison subtile ±8° (la plupart presque verticales)
+        const inclinaison = (rng() - 0.5) * 0.28;
+        const largeurBase = 3 + rng() * 4;     // 3-7 px de base
+
+        // Pré-calcul des nœuds de polyline (8 nœuds, largeur ±20%, jitter X ±1.5px)
+        const nbNoeuds = 8;
+        const pas = hauteurTot / (nbNoeuds - 1);
+        const noeuds = [];
+        for (let n = 0; n < nbNoeuds; n++) {
+            const yN = yHaut + n * pas;
+            const wN = largeurBase * (0.7 + rng() * 0.6);
+            const jitter = (rng() - 0.5) * 3;
+            noeuds.push({ y: yN, demiW: wN / 2, jitter });
+        }
+
+        // === FOND noir cramoisi (l'au-delà visible à travers la déchirure) ===
+        const gFond = scene.add.graphics();
+        gFond.fillStyle(0x140204, 1);
+        gFond.beginPath();
+        gFond.moveTo(-noeuds[0].demiW + noeuds[0].jitter, noeuds[0].y);
+        for (let n = 1; n < nbNoeuds; n++) {
+            gFond.lineTo(-noeuds[n].demiW + noeuds[n].jitter, noeuds[n].y);
+        }
+        for (let n = nbNoeuds - 1; n >= 0; n--) {
+            gFond.lineTo(noeuds[n].demiW + noeuds[n].jitter, noeuds[n].y);
+        }
+        gFond.closePath();
+        gFond.fillPath();
+        gFond.setPosition(xBase, 0);
+        gFond.setRotation(inclinaison);
+        gFond.setScrollFactor(0.08, 0);
+        gFond.setDepth(DEPTH.SILHOUETTES - 6);
+        objets.push(gFond);
+
+        // === HALO magenta ADD (bord rougeoyant) ===
+        const gHalo = scene.add.graphics();
+        gHalo.setBlendMode(Phaser.BlendModes.ADD);
+        // Bande légèrement plus large que le fond, en magenta
+        gHalo.fillStyle(0xff3060, 0.50);
+        gHalo.beginPath();
+        gHalo.moveTo(-noeuds[0].demiW - 2 + noeuds[0].jitter, noeuds[0].y);
+        for (let n = 1; n < nbNoeuds; n++) {
+            gHalo.lineTo(-noeuds[n].demiW - 2 + noeuds[n].jitter, noeuds[n].y);
+        }
+        for (let n = nbNoeuds - 1; n >= 0; n--) {
+            gHalo.lineTo(noeuds[n].demiW + 2 + noeuds[n].jitter, noeuds[n].y);
+        }
+        gHalo.closePath();
+        gHalo.fillPath();
+        // Cœur blanc-rose central plus saturé (la lumière de l'au-delà)
+        gHalo.fillStyle(0xffc0d8, 0.70);
+        for (let n = 0; n < nbNoeuds - 1; n++) {
+            // Trait vertical fin segment par segment (suit le jitter)
+            const yA = noeuds[n].y;
+            const yB = noeuds[n + 1].y;
+            const xA = noeuds[n].jitter;
+            const xB = noeuds[n + 1].jitter;
+            gHalo.beginPath();
+            gHalo.moveTo(xA - 0.6, yA);
+            gHalo.lineTo(xB - 0.6, yB);
+            gHalo.lineTo(xB + 0.6, yB);
+            gHalo.lineTo(xA + 0.6, yA);
+            gHalo.closePath();
+            gHalo.fillPath();
+        }
+        gHalo.setPosition(xBase, 0);
+        gHalo.setRotation(inclinaison);
+        gHalo.setScrollFactor(0.08, 0);
+        gHalo.setDepth(DEPTH.SILHOUETTES - 5);
+        objets.push(gHalo);
+
+        // === DYNAMIQUE — la déchirure s'ouvre et se ferme lentement ===
+        // scaleX oscille entre 0.5 (presque fermée) et 1.7 (béante).
+        // Phaser scale les Graphics autour du setPosition, donc ça
+        // s'ouvre symétriquement autour de xBase.
+        const dureePulse = 10000 + rng() * 6000;
+        scene.tweens.add({
+            targets: [gFond, gHalo],
+            scaleX: { from: 0.5, to: 1.7 },
+            duration: dureePulse,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+        // Pulse alpha rapide du halo (la lumière de l'au-delà vacille)
+        scene.tweens.add({
+            targets: gHalo,
+            alpha: { from: 0.55, to: 1.0 },
+            duration: 2200 + rng() * 1400,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    return objets;
+}
+
+// ============================================================
 // COMPOSER PUBLIC
 // ============================================================
 
@@ -755,8 +892,10 @@ export function composerParallaxVoileInverse(scene, dims, monde, rng) {
     // Couche 3 — tour cristalline fendue (focal)
     objets.push(...poserTourFendue(scene, dims, rng, palette));
 
-    // Les couches suivantes (déchirures Voile dynamiques, atmosphère
-    // inversée) arriveront en 5'.22 et 5'.23.
+    // Couche 4 — déchirures verticales du Voile (5 lacérations dynamiques)
+    objets.push(...poserDechiruresVoile(scene, dims, rng));
+
+    // L'atmosphère inversée arrivera en 5'.23.
 
     return objets;
 }
