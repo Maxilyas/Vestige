@@ -69,6 +69,38 @@ function poserSkylineCorrompue(scene, dims, rng, palette) {
     const couleurClair = 0x5a2870;     // aubergine claire pour reflets
     const couleurMontagne = 0x180820;  // abysse noir-pourpre (un cran plus clair)
 
+    // Phase 5'.20.2 — TERRE LOINTAINE pour ancrer la skyline au sol.
+    // Sans ça, les silhouettes flottaient dans le ciel violet vif (on
+    // voyait "ciel" et "rien sous les bâtiments"). Bande opaque aubergine
+    // qui descend du niveau de la skyline jusqu'au bas de l'écran +
+    // dégradé subtil + 4 fissures verticales magenta (l'au-delà visible
+    // à travers le Voile, cohérent avec le concept biome).
+    const gTerre = scene.add.graphics();
+    const hauteurTerre = GAME_HEIGHT - ySol;
+    // Base aubergine sombre (un cran plus clair que l'abysse pour étager
+    // la profondeur : ciel → abysse → terre → ciel d'avant-plan)
+    gTerre.fillStyle(0x1e0a28, 1);
+    gTerre.fillRect(decalageX, ySol, largeurEtendue, hauteurTerre);
+    // Petit halo plus clair juste sous la ligne d'horizon (suggère
+    // perspective atmosphérique : la terre touche le ciel)
+    gTerre.fillStyle(couleur, 0.30);
+    gTerre.fillRect(decalageX, ySol, largeurEtendue, 12);
+    gTerre.fillStyle(couleur, 0.15);
+    gTerre.fillRect(decalageX, ySol + 12, largeurEtendue, 18);
+    // 4 fissures verticales magenta réparties (l'au-delà saigne à travers)
+    for (let f = 0; f < 4; f++) {
+        const xF = decalageX + ((f + 0.5) / 4) * largeurEtendue + (rng() - 0.5) * 80;
+        const epF = 0.8 + rng() * 0.8;
+        gTerre.fillStyle(0xff5078, 0.45);
+        gTerre.fillRect(xF, ySol + 8, epF, hauteurTerre - 8);
+        // Cœur blanc-rose plus net au centre de chaque fissure
+        gTerre.fillStyle(0xffb0d8, 0.65);
+        gTerre.fillRect(xF + epF * 0.3, ySol + 8, epF * 0.4, hauteurTerre - 8);
+    }
+    gTerre.setScrollFactor(0.04, 0);
+    gTerre.setDepth(DEPTH.SILHOUETTES - 5);
+    objets.push(gTerre);
+
     // Profil de l'abysse au lieu de collines (le sol s'est dissous)
     g.fillStyle(couleurMontagne, 1);
     g.beginPath();
