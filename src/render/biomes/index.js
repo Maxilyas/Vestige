@@ -11,13 +11,14 @@ import { composerParallaxRuinesBasses } from './RuinesBasses.js';
 import { composerParallaxHallsCendres } from './HallsCendres.js';
 import { composerParallaxCristauxGlaces } from './CristauxGlaces.js';
 import { composerParallaxVoileInverse } from './VoileInverse.js';
+import { composerParallaxCoeurReflux } from './CoeurReflux.js';
 
 const COMPOSERS = {
     ruines_basses: composerParallaxRuinesBasses,
     halls_cendres: composerParallaxHallsCendres,
     cristaux_glaces: composerParallaxCristauxGlaces,
-    voile_inverse: composerParallaxVoileInverse
-    // coeur_reflux — à venir
+    voile_inverse: composerParallaxVoileInverse,
+    coeur_reflux: composerParallaxCoeurReflux
 };
 
 /**

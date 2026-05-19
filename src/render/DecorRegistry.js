@@ -374,6 +374,20 @@ const PLANS = {
 // (le composer biome dédié remplacera / complétera ces silhouettes).
 const BIOMES_SILHOUETTE_PURE = new Set(['ruines_basses', 'halls_cendres', 'cristaux_glaces']);
 
+// Biomes INTÉRIEURS : les silhouettes lointaines sont SKIPPÉES entièrement,
+// car le composer biome dédié remplace le fond ouvert par un espace clos
+// (voûte + murs). Toute silhouette de bâtiment/tour/dôme casserait l'illusion
+// d'intérieur.
+const BIOMES_INTERIEUR = new Set(['coeur_reflux']);
+
+// Types architecturaux qui sont des FAÇADES extérieures (bâtiments complets
+// avec toit / fenêtres / dômes), incongrus dans un intérieur clos. Pour les
+// biomes intérieurs, on skip ces types même quand ils sont posés au premier
+// plan (sans flag silhouette) par planHall / planArene / planCrypte etc.
+// On GARDE colonne, statue, racine, mobilier, sol_decore — éléments
+// cohérents en intérieur.
+const TYPES_FACADE_EXTERIEUR = new Set(['batiment', 'tour', 'dome', 'atelier']);
+
 const PEINTRES = {
     colonne: (s, e, m, p) => peindreColonne(s, e.x, e.yBase, e.hauteur, m, p),
     statue: (s, e, m, p) => peindreStatue(s, e.x, e.yBase, e.hauteur ?? 100, m, p),
@@ -460,9 +474,16 @@ export function peindreDecor(scene, archetype, dims, monde, rng, plateformes, op
     }
 
     // 2. Tous les éléments architecturaux + mobilier
+    const estInterieur = monde !== 'miroir' && BIOMES_INTERIEUR.has(biomeId);
     for (const el of elements) {
         const peintre = PEINTRES[el.type];
         if (!peintre) continue;
+        // Biomes intérieurs : skip les silhouettes lointaines ET les types
+        // de façade extérieure (batiment / tour / dome / atelier), même
+        // posés au premier plan. Le composer biome dédié pose son propre
+        // fond intérieur (voûte / murs / pilastres) — ces façades-là
+        // casseraient l'illusion d'enfermement.
+        if (estInterieur && (el.silhouette || TYPES_FACADE_EXTERIEUR.has(el.type))) continue;
         // Propage le biomeId pour que les peintres puissent adapter leur rendu
         // (cf. silhouettePure pour les Ruines basses).
         el.biomeId = biomeId;

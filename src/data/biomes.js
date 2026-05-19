@@ -304,6 +304,60 @@ export const BIOMES = {
             ambiance: 0x3a0a1a,
             accent: 0xff4040
         },
+        // Phase 5'.24 — palette enrichie peinte par-dessus PALETTE_PRESENT au runtime.
+        // Direction artistique : "Chambre du Cœur" — on est PASSÉ À TRAVERS une des
+        // déchirures du Voile (7-8) et on est entré dans la Tour. Plus de ciel, plus
+        // de paysage : INTÉRIEUR clos. Voûte basse de pierre noire-cramoisi visible
+        // en haut, parois latérales suggérées par les ombres des bords, paroi de
+        // fond traversée de veines cramoisi pulsantes (rythme cardiaque ~60 BPM).
+        // Hybride pierre-organique : la coquille minérale du Cœur est traversée
+        // par les veines vivantes du Reflux qui battent à l'unisson.
+        // Le cramoisi qui préfigurait dans les déchirures du Voile devient ici LA
+        // couleur dominante, saturée, oppressante. Aucune préfiguration au-delà :
+        // c'est l'origine, le terminus.
+        paletteBiome: {
+            // Gradient INTÉRIEUR — PIERRE ARDOISE GLACIALE (5'.24.2).
+            // Doctrine révisée : le cramoisi/Reflux reste sur les éléments
+            // PHYSIQUES (sol praticable, plateformes, ornements, ennemis,
+            // veines pulsantes en 5'.25). Le FOND est la coquille minérale
+            // ancienne du Cœur — pierre éternelle, glaciale, désaturée. Le
+            // contraste froid (pierre ardoise) / chaud (cramoisi du Reflux)
+            // sépare narrativement : la pierre est la cohérence figée, le
+            // rouge est l'érosion vivante qui la traverse.
+            fond: '#08080e',
+            fondGradientHaut: '#16162a',  // voûte pierre froide (un cran plus claire)
+            fondGradientMid:  '#2c2a40',  // pierre ardoise éclaircie (lit + lisibilité joueur)
+            fondGradientBas:  '#0a0a14',
+
+            // Plateformes : pierre carbonisée cramoisi sombre. Top highlight =
+            // braise cramoisi (lecture "ici on marche, mais c'est BRÛLANT").
+            // Ornement = incandescence rouge vif (la pierre elle-même rougeoie).
+            plateforme:          0x2a0a14,
+            plateformeContour:   0x7a2030,
+            plateformeOrnement:  0xff3838,
+
+            // Pierre 3 tons cramoisi — volume painterly des structures intérieures
+            pierre:        0x3a121e,
+            pierreSombre:  0x0e0408,
+            pierreClaire:  0x6a2230,
+
+            // Signature biome — réinterprète les slots mousse/racine/accent :
+            //   `mousse` → chair vive (cramoisi sombre rougeoyant, vs suintement
+            //              magenta du Voile — la mémoire est devenue charnelle)
+            //   `racine` → veine incandescente (rouge vif saturé, vs cramoisi
+            //              déchirure du Voile — la corruption A pris)
+            //   `accent` → bronze-sang (jaune-rouge terni, vs nacre malade
+            //              verdâtre du Voile — métal en fusion figé)
+            mousse:  0x4a0a14,
+            racine:  0xff2030,
+            accent:  0xc06030,
+
+            // Atmosphère : brume cramoisi dense saturée (vs brume violette du
+            // Voile) + escarbilles incandescentes orange-rouge (vs magenta-blanc
+            // du Voile — la combustion interne du Cœur, dernier biome)
+            brume:     0x4a0a14,
+            particule: 0xff5020
+        },
         ennemisPool: [
             'veilleur_reflux',  'veilleur_reflux',  'veilleur_reflux',
             'cri_du_reflux',    'cri_du_reflux',    'cri_du_reflux',
