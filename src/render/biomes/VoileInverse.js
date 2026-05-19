@@ -738,6 +738,134 @@ function poserTourFendue(scene, dims, rng, palette) {
 }
 
 // ============================================================
+// COUCHE 4 — PLATEFORMES MNÉSIQUES FANTÔMES (scrollFactor 0.55)
+// ============================================================
+//
+// Plateformes "fantômes" qui flickerent dans le moyen plan — purement
+// visuelles, pas jouables. Préfigurent les ennemis trou_memoire et
+// anti_bond du biome : "à quelles plateformes peut-on faire confiance ?"
+//
+// Chaque plateforme reprend la signature mnésique des Cristaux :
+//   - corps aubergine moyen
+//   - top contour nacre malade verdâtre (palette.accent)
+//   - ornement central magenta (palette.racine)
+// Mais avec un cycle d'alpha indépendant (0.0 → 0.85 → 0.0) avec ease et
+// délai aléatoire : certaines clignotent vite, d'autres lentement,
+// d'autres sont "actives" pendant 4-5s puis disparaissent.
+// 8 plateformes réparties sur largeurEtendue, hauteurs variées entre
+// y = GAME_HEIGHT - 280 et GAME_HEIGHT - 120 (zone moyen plan).
+
+function poserPlateformesFantomes(scene, dims, rng) {
+    const objets = [];
+    const largeurEtendue = dims.largeur * 1.6;
+    const decalageX = -dims.largeur * 0.3;
+    const couleurCorps = 0x2a1842;       // aubergine moyen
+    const couleurContour = 0x8ad8a0;     // nacre malade verdâtre
+    const couleurOrnement = 0xd068d8;    // magenta saturé
+    const couleurOmbre = 0x140822;       // aubergine très sombre
+
+    const nb = 8;
+    for (let i = 0; i < nb; i++) {
+        // Position X — réparties uniformément + jitter pour casser la grille
+        const xCentre = decalageX + ((i + 0.5) / nb) * largeurEtendue
+                        + (rng() - 0.5) * 30;
+        // Hauteur Y — variée entre haut moyen plan (160 px) et bas moyen plan (50 px)
+        const yPlat = GAME_HEIGHT - 120 - rng() * 160;
+        // Largeur 60-120 px (équivalent plateformes jouables)
+        const w = 60 + rng() * 60;
+        const h = 14;
+
+        const g = scene.add.graphics();
+        // Corps aubergine
+        g.fillStyle(couleurCorps, 1);
+        g.fillRect(-w / 2, -h / 2, w, h);
+        // Ombre dessous
+        g.fillStyle(couleurOmbre, 1);
+        g.fillRect(-w / 2, h / 2 - 3, w, 3);
+        // Top contour nacre malade (signature mnésique corrompue)
+        g.fillStyle(couleurContour, 0.85);
+        g.fillRect(-w / 2, -h / 2, w, 2);
+        // Ornement central magenta
+        g.fillStyle(couleurOrnement, 0.85);
+        g.fillCircle(0, 0, 2);
+        // Petits "rivets" magenta aux extrémités du top (souvenir cristaux)
+        g.fillStyle(couleurOrnement, 0.65);
+        g.fillCircle(-w / 2 + 6, -h / 2 + 3, 1.2);
+        g.fillCircle(w / 2 - 6, -h / 2 + 3, 1.2);
+
+        g.setPosition(xCentre, yPlat);
+        g.setScrollFactor(0.55, 0);
+        g.setDepth(0); // entre la cité moyen plan et les entités
+        // Alpha de départ : 0 (la plateforme apparaîtra via le cycle flicker)
+        g.setAlpha(0);
+        objets.push(g);
+
+        // === CYCLE FLICKER ===
+        // 3 patterns au tirage :
+        //   - rapide (0.4s on / 0.3s off, x6 puis 2s pause)
+        //   - moyen (3s on, 1.5s off, en boucle)
+        //   - lent (5s on, 4s off, en boucle)
+        const pattern = rng();
+        const delay = rng() * 4000;
+
+        if (pattern < 0.35) {
+            // Rapide : clignote 3 fois puis pause longue. tweens.chain
+            // (Phaser 3.60+ : remplace tweens.timeline) ne supporte pas
+            // loop:-1, on enroule via onComplete pour rejouer la séquence.
+            // Le délai initial n'est appliqué qu'au premier lancement.
+            let premiereFois = true;
+            const lancerSequenceRapide = () => {
+                scene.tweens.chain({
+                    targets: g,
+                    delay: premiereFois ? delay : 0,
+                    tweens: [
+                        { alpha: 0.85, duration: 90 },
+                        { alpha: 0,    duration: 90 },
+                        { alpha: 0.85, duration: 90 },
+                        { alpha: 0,    duration: 90 },
+                        { alpha: 0.85, duration: 90 },
+                        { alpha: 0,    duration: 90 + 2500 + rng() * 1500 }
+                    ],
+                    onComplete: () => {
+                        premiereFois = false;
+                        lancerSequenceRapide();
+                    }
+                });
+            };
+            lancerSequenceRapide();
+        } else if (pattern < 0.70) {
+            // Moyen : on/off réguliers
+            scene.tweens.add({
+                targets: g,
+                alpha: { from: 0, to: 0.85 },
+                duration: 600 + rng() * 400,
+                hold: 2500 + rng() * 1500,
+                ease: 'Sine.InOut',
+                yoyo: true,
+                repeat: -1,
+                delay,
+                repeatDelay: 1000 + rng() * 1500
+            });
+        } else {
+            // Lent : longue présence puis longue absence
+            scene.tweens.add({
+                targets: g,
+                alpha: { from: 0, to: 0.85 },
+                duration: 1200 + rng() * 800,
+                hold: 4000 + rng() * 2000,
+                ease: 'Sine.InOut',
+                yoyo: true,
+                repeat: -1,
+                delay,
+                repeatDelay: 2500 + rng() * 1500
+            });
+        }
+    }
+
+    return objets;
+}
+
+// ============================================================
 // COMPOSER PUBLIC
 // ============================================================
 
@@ -755,8 +883,11 @@ export function composerParallaxVoileInverse(scene, dims, monde, rng) {
     // Couche 3 — tour cristalline fendue (focal)
     objets.push(...poserTourFendue(scene, dims, rng, palette));
 
-    // Les couches suivantes (plateformes flicker, déchirures Voile,
-    // atmosphère inversée) arriveront en 5'.21, 5'.22, 5'.23.
+    // Couche 4 — plateformes mnésiques fantômes (moyen plan, flicker)
+    objets.push(...poserPlateformesFantomes(scene, dims, rng));
+
+    // Les couches suivantes (déchirures Voile dynamiques, atmosphère
+    // inversée) arriveront en 5'.22 et 5'.23.
 
     return objets;
 }
