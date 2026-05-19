@@ -62,9 +62,12 @@ function poserSkylineCorrompue(scene, dims, rng, palette) {
     const largeurEtendue = dims.largeur * 1.6;
     const decalageX = -dims.largeur * 0.3;
     const ySol = GAME_HEIGHT - 150;
-    const couleur = 0x180a24;          // aubergine très sombre
-    const couleurClair = 0x32184a;     // aubergine claire pour reflets
-    const couleurMontagne = 0x0c0414;  // abysse noir-pourpre
+    // Phase 5'.20.1 — couleurs éclaircies pour décoller du gradient violet
+    // (le fond mid est ~#582a5e, donc l'aubergine très sombre se fondait
+    // dedans). On monte en clarté tout en restant désaturé.
+    const couleur = 0x35184a;          // aubergine moyen (lisible sur le ciel)
+    const couleurClair = 0x5a2870;     // aubergine claire pour reflets
+    const couleurMontagne = 0x180820;  // abysse noir-pourpre (un cran plus clair)
 
     // Profil de l'abysse au lieu de collines (le sol s'est dissous)
     g.fillStyle(couleurMontagne, 1);
@@ -148,8 +151,11 @@ function poserSkylineCorrompue(scene, dims, rng, palette) {
     for (let f = 0; f < nbFragments; f++) {
         const src = positionsSilhouettes[Math.floor(rng() * positionsSilhouettes.length)];
         if (!src) break;
-        const dyHaut = 50 + rng() * 80;            // 50-130 px au-dessus du sol
-        const inclinaison = (rng() - 0.5) * 0.5;   // ±0.25 rad ≈ ±14°
+        // Phase 5'.20.1 — hauteurs et inclinaisons plus marquées pour vraiment
+        // vendre les "angles impossibles" (et pas un flottement timide)
+        const dyHaut = 70 + rng() * 130;                                    // 70-200 px
+        const signe = rng() < 0.5 ? -1 : 1;
+        const inclinaison = signe * (0.18 + rng() * 0.28);                  // ±10° à ±26°
         const fragG = scene.add.graphics();
         fragG.fillStyle(couleur, 0.95);
 
@@ -276,13 +282,16 @@ function poserCiteLointaineFragmentee(scene, dims, rng, palette) {
             cible = scene.add.graphics();
             cibleFen = scene.add.graphics();
             cibleFen.setBlendMode(Phaser.BlendModes.ADD);
-            dyFragment = 80 + rng() * 100;
-            inclinaisonFragment = (rng() - 0.5) * 0.6;
+            // Phase 5'.20.1 — fragments plus marqués
+            dyFragment = 100 + rng() * 130;                                 // 100-230 px
+            const signeF = rng() < 0.5 ? -1 : 1;
+            inclinaisonFragment = signeF * (0.18 + rng() * 0.30);           // ±10° à ±27°
             xLocal = 0;
         }
-        // Petite inclinaison aléatoire ±3° pour les structures non-fragments
-        // (le sol bouge sous la cité)
-        const inclinNonFragment = !estFragment ? (rng() - 0.5) * 0.10 : 0;
+        // Phase 5'.20.1 — inclinaison ±10° pour les structures non-fragments
+        // (avant ±3°, invisible). Seuil 0.04 rad pour garder un mix de
+        // structures droites et penchées (sinon tout penche, ça surcharge).
+        const inclinNonFragment = !estFragment ? (rng() - 0.5) * 0.36 : 0;  // ±10°
 
         const dessiner = (cibleG, cibleF, xRef, yRef) => {
             cibleG.fillStyle(couleur, 1);
@@ -460,7 +469,7 @@ function poserCiteLointaineFragmentee(scene, dims, rng, palette) {
                 yoyo: true,
                 repeat: -1
             });
-        } else if (Math.abs(inclinNonFragment) > 0.01) {
+        } else if (Math.abs(inclinNonFragment) > 0.04) {
             // Structure légèrement inclinée → Graphics dédié pour rotation
             const cibleR = scene.add.graphics();
             const cibleFenR = scene.add.graphics();
