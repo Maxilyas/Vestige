@@ -23,9 +23,8 @@
 //   BG    cité lointaine fragmentée           (sF 0.18)
 //   BG    tour cristalline fendue             (sF 0.10, focal)
 //   BG    déchirures verticales du Voile      (sF 0.08, dynamiques)
-//
-// Couche à venir :
-//   5'.23 atmosphère (particules vers le haut, brume saturée)
+//   MID   particules ascendantes              (sF 0.25, gravité inversée)
+//   MID   brume aubergine basse saturée       (sF 0.30, pulse lent)
 //
 // Phase 5'.21 (plateformes flicker fantômes) tentée puis retirée
 // (rejetée user : trop bruyant en moyen plan).
@@ -875,6 +874,78 @@ function poserDechiruresVoile(scene, dims, rng) {
 }
 
 // ============================================================
+// COUCHE 5 — PARTICULES ASCENDANTES (gravité inversée du Voile)
+// ============================================================
+//
+// Préfigure l'ennemi inverseur_gravite : les particules de poussière du
+// Voile montent au lieu de descendre. Couleur magenta-blanc dérivée des
+// déchirures (l'au-delà saigne en suspension). Particules issues du sol
+// qui s'élèvent lentement vers le ciel et fadent en haut.
+
+function poserParticulesAscendantes(scene, dims, rng) {
+    if (!scene.textures.exists('_particule')) return [];
+    const objets = [];
+
+    const em = scene.add.particles(0, 0, '_particule', {
+        x: { min: -50, max: GAME_WIDTH + 50 },
+        // Départ depuis le bas de l'écran (le sol "exhale" la corruption)
+        y: { min: GAME_HEIGHT - 80, max: GAME_HEIGHT + 20 },
+        lifespan: 14000,
+        // GRAVITÉ INVERSÉE : speedY négatif, particules qui montent
+        speedY: { min: -22, max: -10 },
+        speedX: { min: -6, max: 6 },
+        scale: { start: 0.5, end: 0.1 },
+        // Magenta-blanc dérivé des déchirures (cohérence chromatique)
+        tint: [0xf0a8e8, 0xff90c0, 0xffd0e0, 0xffffff],
+        alpha: { start: 0.55, end: 0 },
+        quantity: 1,
+        frequency: 600
+    });
+    em.setScrollFactor(0.25, 0);
+    em.setDepth(DEPTH.CIEL + 3);
+    objets.push(em);
+
+    return objets;
+}
+
+// ============================================================
+// COUCHE 6 — BRUME AUBERGINE BASSE (saturée, dense)
+// ============================================================
+//
+// Brume au sol qui clôt l'atmosphère. Aubergine saturée (vs bleu glacé
+// des Cristaux). 3 bandes alpha empilées qui pulsent légèrement en
+// alpha de façon désynchronisée — la brume respire.
+
+function poserBrumeVoileBasse(scene, dims, rng) {
+    const objets = [];
+    const bandes = [
+        { y: GAME_HEIGHT - 40,  h: 50, c: 0x582a70, a: 0.30 },
+        { y: GAME_HEIGHT - 65,  h: 45, c: 0x40205a, a: 0.22 },
+        { y: GAME_HEIGHT - 90,  h: 40, c: 0x281842, a: 0.14 }
+    ];
+    for (const b of bandes) {
+        const g = scene.add.graphics();
+        g.fillStyle(b.c, b.a);
+        g.fillRect(-100, b.y, GAME_WIDTH + 200, b.h);
+        g.setScrollFactor(0.30, 0);
+        g.setDepth(DEPTH.SILHOUETTES + 1);
+        objets.push(g);
+
+        // Pulse lent désynchronisé
+        scene.tweens.add({
+            targets: g,
+            alpha: { from: b.a * 0.7, to: b.a * 1.15 },
+            duration: 6000 + rng() * 3000,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1,
+            delay: rng() * 2000
+        });
+    }
+    return objets;
+}
+
+// ============================================================
 // COMPOSER PUBLIC
 // ============================================================
 
@@ -895,7 +966,12 @@ export function composerParallaxVoileInverse(scene, dims, monde, rng) {
     // Couche 4 — déchirures verticales du Voile (5 lacérations dynamiques)
     objets.push(...poserDechiruresVoile(scene, dims, rng));
 
-    // L'atmosphère inversée arrivera en 5'.23.
+    // Couche 5 — particules ascendantes (gravité inversée préfigure
+    // l'ennemi inverseur_gravite)
+    objets.push(...poserParticulesAscendantes(scene, dims, rng));
+
+    // Couche 6 — brume aubergine basse saturée (clôt l'atmosphère)
+    objets.push(...poserBrumeVoileBasse(scene, dims, rng));
 
     return objets;
 }
