@@ -45,6 +45,36 @@ function teinterPlusSombre(c, amount) {
     return (r << 16) | (g << 8) | b;
 }
 
+// Phase 5'.20.3 — Peint la base "arrachée" d'un fragment flottant : un liseré
+// magenta dentelé (polyline en dents irrégulières) + 3-4 débris magenta
+// qui chutent autour. Marqueur visuel fort pour signaler "ce bâtiment est
+// un morceau cassé" (vs "ce bâtiment flotte par erreur").
+// Le fragment doit être peint à (0,0), `demiLargeur` = demi-largeur en px.
+function peindreBaseArrachee(graphics, demiLargeur, rng) {
+    // Liseré dentelé : polyline en dents de scie sur ±2 px de hauteur
+    graphics.fillStyle(0xff5078, 0.85);
+    const nbDents = Math.max(6, Math.floor(demiLargeur * 0.4));
+    const pas = (demiLargeur * 2) / nbDents;
+    for (let d = 0; d < nbDents; d++) {
+        const xD = -demiLargeur + d * pas + (rng() - 0.5) * pas * 0.3;
+        const wD = pas * (0.5 + rng() * 0.5);
+        const hD = 1 + rng() * 3;          // 1-4 px de hauteur (irrégulier)
+        graphics.fillRect(xD, -hD * 0.4, wD, hD);
+    }
+    // Cœur blanc-rose central plus net (le "saignement" le plus vif)
+    graphics.fillStyle(0xffb0d8, 0.75);
+    graphics.fillRect(-demiLargeur * 0.5, -1, demiLargeur, 1.2);
+
+    // 4 débris magenta qui chutent autour de la base
+    graphics.fillStyle(0xff5078, 0.85);
+    for (let i = 0; i < 4; i++) {
+        const xD = -demiLargeur * 0.8 + rng() * demiLargeur * 1.6;
+        const yD = 4 + rng() * 14;         // entre 4 et 18 px sous la base
+        const tD = 1 + rng() * 1.5;        // taille
+        graphics.fillRect(xD, yD, tD, tD);
+    }
+}
+
 // ============================================================
 // COUCHE 1 — SKYLINE CORROMPUE (scrollFactor 0.04)
 // ============================================================
@@ -183,11 +213,12 @@ function poserSkylineCorrompue(scene, dims, rng, palette) {
     for (let f = 0; f < nbFragments; f++) {
         const src = positionsSilhouettes[Math.floor(rng() * positionsSilhouettes.length)];
         if (!src) break;
-        // Phase 5'.20.1 — hauteurs et inclinaisons plus marquées pour vraiment
-        // vendre les "angles impossibles" (et pas un flottement timide)
+        // Phase 5'.20.1/.3 — hauteurs et inclinaisons fortes pour vendre
+        // les "angles impossibles". Min ±18° pour qu'on lise franchement
+        // "morceau arraché" et pas "maison qui flotte un peu".
         const dyHaut = 70 + rng() * 130;                                    // 70-200 px
         const signe = rng() < 0.5 ? -1 : 1;
-        const inclinaison = signe * (0.18 + rng() * 0.28);                  // ±10° à ±26°
+        const inclinaison = signe * (0.32 + rng() * 0.24);                  // ±18° à ±32°
         const fragG = scene.add.graphics();
         fragG.fillStyle(couleur, 0.95);
 
@@ -221,9 +252,8 @@ function poserSkylineCorrompue(scene, dims, rng, palette) {
             fragG.fillPath();
         }
 
-        // Liseré magenta sous le fragment (le morceau "saigne" en s'arrachant)
-        fragG.fillStyle(0xff5078, 0.55);
-        fragG.fillRect(-src.w / 2 - 2, -1, src.w + 4, 2);
+        // Phase 5'.20.3 — Base arrachée (liseré dentelé + débris)
+        peindreBaseArrachee(fragG, src.w / 2 + 3, rng);
 
         fragG.setPosition(src.x, ySol - dyHaut);
         fragG.setRotation(inclinaison);
@@ -314,10 +344,10 @@ function poserCiteLointaineFragmentee(scene, dims, rng, palette) {
             cible = scene.add.graphics();
             cibleFen = scene.add.graphics();
             cibleFen.setBlendMode(Phaser.BlendModes.ADD);
-            // Phase 5'.20.1 — fragments plus marqués
+            // Phase 5'.20.1/.3 — fragments fortement détachés
             dyFragment = 100 + rng() * 130;                                 // 100-230 px
             const signeF = rng() < 0.5 ? -1 : 1;
-            inclinaisonFragment = signeF * (0.18 + rng() * 0.30);           // ±10° à ±27°
+            inclinaisonFragment = signeF * (0.32 + rng() * 0.26);           // ±18° à ±33°
             xLocal = 0;
         }
         // Phase 5'.20.1 — inclinaison ±10° pour les structures non-fragments
@@ -468,9 +498,11 @@ function poserCiteLointaineFragmentee(scene, dims, rng, palette) {
 
         if (estFragment) {
             dessiner(cible, cibleFen, 0, 0);
-            // Liseré magenta sous le fragment (la base saigne en s'arrachant)
-            cible.fillStyle(0xff5078, 0.55);
-            cible.fillRect(-30, -1, 60, 2);
+            // Phase 5'.20.3 — Base arrachée (dent + débris) à la place du
+            // liseré droit. La largeur est volontairement large (45) pour
+            // couvrir les types de structures les plus larges (temple/tour
+            // de cité) en dénominateur commun.
+            peindreBaseArrachee(cible, 45, rng);
             cible.setPosition(x, ySol - dyFragment);
             cible.setRotation(inclinaisonFragment);
             cibleFen.setPosition(x, ySol - dyFragment);
