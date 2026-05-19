@@ -91,7 +91,7 @@ npx live-server .
 - ✅ **Phase 6 → 6.2** — Crafting profond (instances forgées, score 0-100, 7 tiers couleur), Garde, sorts 1/2/3, Fondeur upgrade, fixes review
 - ✅ **Phase 7 (musique)** — Audio procédural Tone.js, 5 patches en crossfade adaptatif (menu/cité/présent/combat/boss), volume + mute persistés
 - ⬜ **5c.3** — Polish HUD cooldown Geste (overlay tournant + label)
-- ⬜ **5'** — Identité visuelle par paire d'étages (polish biome par biome)
+- 🔄 **5'** — Identité visuelle par paire d'étages : ✅ Ruines basses (5'.1-2), ✅ Halls Cendrés (5'.3-7), ✅ Cristaux Glacés (5'.8-18 ; sanctuaire boss étage 6 reste à faire), ⬜ Voile Inversé (7-8 = même cité corrompue), ⬜ Cœur Reflux (9-10 = chambre finale)
 - ⬜ **Phase 6.x** — Passes successives polish/équilibrage Phase 6 selon retours user
 - ⬜ **Échos** — Re-respawn salles nettoyées en Élite + drop bonus (quand équilibrage 6 stable)
 
@@ -134,9 +134,9 @@ npx live-server .
 ## État actuel
 *À mettre à jour à la fin de chaque session. Garder court — détails dans les commits.*
 
-- **Dernière étape franchie** : Phase 7 (musique) — moteur audio procédural Tone.js, 5 patches (menu/cité/présent/combat/boss) en crossfade 1.5 s, BPM par patch, volume + mute persistés localStorage, touche N pour couper. Aucun asset audio chargé.
-- **À tester en navigateur** : musique au Menu, transition Présent/Miroir en entrant en Cité, bascule combat quand un ennemi <320 px, bascule boss en salle BOSS, fade silence en FinScene, volume −/+ et N pour mute. Phase 6.1 + 6.2 toujours non validées bout-en-bout.
-- **Prochain chantier** : Phase 7.x — passes successives sur la sonorité des patches selon ressenti. Phase 6.x en attente. Échos en attente que l'équilibrage Phase 6 soit stable.
+- **Dernière étape franchie** : Phase 5'.8 → 5'.18 — DA Cristaux Glacés (étages 5-6) en cité minimaliste type Olympe glacée. Palette + plateformes mnésiques (bi-ton actif/fossilisé) + parallax 4 couches étagées (skyline lointaine + cité variée + tour cristalline focal + cité moyen plan) + fenêtres lumineuses ADD chaudes. Arbre cristallin tenté puis abandonné (perf). Détails dans `git log` 5'.8 à 5'.18.
+- **À tester en navigateur** : étages 5-6 en Présent (Sanctuaire → Pont Suspendu → boss), vérifier que la skyline est bien visible au-dessus du sol, fenêtres lumineuses qui pulsent doucement, tour cristalline centrale avec lueur violet ADD, perf fluide. Tester aussi salle boss étage 6 (ne possède pas encore son intérieur dédié — Phase 5'.x suivante).
+- **Prochain chantier** : finir polish Cristaux Glacés si retours négatifs, sinon attaquer biome 7-8 Voile Inversé (zone de Reflux dans la même cité, corrompue). Sanctuaire boss étage 6 (intérieur dédié comme HallsCendresInterieur.js) reste à faire si on veut pousser. Phase 6.x / 7.x en attente.
 
 ## Compromis MVP — dette technique / narrative documentée
 - **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce. La Cité = respawn point amélioré. Mécanique LORE complète (cf. [LORE.md §6](LORE.md)) reste vision long terme.
