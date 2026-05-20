@@ -54,8 +54,10 @@ const PROBA_DROP_SOL = 0.3;
 
 /**
  * Hash stable d'un id de salle (string) pour le mélanger dans un seed.
+ * Exporté pour qu'EtageGen puisse calculer un seed dérivé identique
+ * (utile pour pré-assembler une salle via RoomAssembler).
  */
-function hashStr(s) {
+export function hashStr(s) {
     let h = 2166136261;
     for (let i = 0; i < s.length; i++) {
         h ^= s.charCodeAt(i);
@@ -96,6 +98,10 @@ export function genererSalle({
     const obstacles = result.obstacles ?? [];
     const portes = result.portes ?? {};
     const spawnDefault = result.spawnDefault;
+    // Zones interactives spécifiques au biome (ancres construction Ruines,
+    // gouffres lethaux Cristaux, etc.). Issues uniquement des salles
+    // handcrafted XL pour l'instant (les topographies legacy n'en exposent pas).
+    const zones = result.zones ?? [];
 
     // 2. Vortex Miroir : sur une plateforme flottante différente du spawn et des
     //    portes, avec distance min. Fallback : centre.
@@ -176,9 +182,13 @@ export function genererSalle({
 
     // 5. Ennemis — densité dictée par le biome de l'étage.
     //    Pas d'ennemis dans la salle d'entrée ni de boss (boss instancié séparément).
+    //    Scale linéaire selon largeur réelle (réf 1600 px = densité de base).
+    //    Salles chunks 2400-5000 px → 1.5× à 3.1× ennemis pour densité perçue
+    //    constante. Plafonné à 3× pour éviter explosion sur très longues salles.
     const biome = biomePourEtage(etageNumero);
     const fourchette = biome?.densite ?? ENNEMIS_PAR_NIVEAU[niveau];
-    let nbEnnemis = entreEntier(rng, fourchette.min, fourchette.max);
+    const scaleLargeur = Math.min(3, Math.max(1, dims.largeur / 1600));
+    let nbEnnemis = Math.round(entreEntier(rng, fourchette.min, fourchette.max) * scaleLargeur);
     if (estEntree || estBoss) nbEnnemis = 0;
     // Pour éviter que les ennemis spawnent sur les plateformes d'échelle
     // one-way (rendant la montée pénible), on filtre : ennemi sur plateforme
@@ -217,6 +227,7 @@ export function genererSalle({
         plateformes,
         obstacles,
         portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur, interieur }
+        zones,                  // zones interactives biome (ancrage Ruines, gouffres Cristaux...)
         vortex,
         spawnDefault,
         coffre,

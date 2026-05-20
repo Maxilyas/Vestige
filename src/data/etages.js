@@ -28,16 +28,14 @@
 
 export const ETAGES = {
     // ─── 1. Ruines basses — initiation horizontale ───────────────────────
+    // Étape 4A : graphe spanning tree sur grille 5×5. L'algo place entrée
+    // et boss aux extrémités, génère un chemin critique + branches + boucles
+    // (~10-18 salles). Chaque cellule reçoit une salle handcrafted compatible
+    // avec ses portes (catalogue + fallback ruines_carrefour si pool vide).
     1: {
-        themeNarratif: 'Premiers pas. Tout est plat, doux. La verticalité existe (B-haut) mais reste optionnelle.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'hall',       topographie: 'arene_ouverte' },
-            'B-haut': { archetype: 'puits',      topographie: 'puits_descente' },
-            'C':      { archetype: 'hall',       topographie: 'salle_colonnes' },
-            'D':      { archetype: 'pont',       topographie: 'pont_brise' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_ruines_1' }
-        }
+        themeNarratif: 'Premiers pas. Initiation à l\'exploration et à l\'ancrage.',
+        spanningTree: true,
+        grille: { cols: 5, rows: 5 }
     },
 
     // ─── 2. Ruines basses — élargissement (gouffre + croix) ──────────────

@@ -37,6 +37,7 @@ import { Boss } from '../entities/Boss.js';
 import { Projectile } from '../entities/Projectile.js';
 import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
+import { AncrageSystem } from '../systems/AncrageSystem.js';
 import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { executerGeste } from '../systems/GesteSystem.js';
 import { lancerCinematiqueFin } from '../systems/CinematiqueFusion.js';
@@ -426,9 +427,28 @@ export class GameScene extends Phaser.Scene {
             return this.time.now >= this.dropThroughJusqu;
         });
 
+        // --- Système d'ancrage Ruines (touche A → pose plateforme) ---
+        // Initialisé après les groupes physics + economy. initSalle indexe les
+        // zones ancrables et dessine leurs silhouettes pulsantes.
+        this.ancrage = new AncrageSystem(this, this.resonance);
+        this.ancrage.initSalle(salle.zones ?? []);
+
         // --- Caméra : suit le joueur avec lerp doux + deadzone ---
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
         this.cameras.main.setDeadzone(200, 150);
+        // Zoom dynamique (touche TAB maintenue = vue d'ensemble fluide)
+        this.cameras.main.setZoom(1);
+        const cam = this.cameras.main;
+        this._zoomNormal = 1;
+        // Cible de zoom-out : on prend le MIN entre fit-width et fit-height,
+        // ce qui garantit qu'on VOIT la salle ENTIÈRE (quitte à exposer du
+        // vide hors-monde sur l'axe minoritaire). C'est le bon compromis pour
+        // les salles tall (puits) ET wide (chunks/handcrafted XL). Le vide
+        // visible est gérable visuellement (vignette fade + parallax discret).
+        const fitWidth  = cam.width  / salle.dims.largeur;
+        const fitHeight = cam.height / salle.dims.hauteur;
+        this._zoomOut = Math.min(Math.min(fitWidth, fitHeight), 1);
+        this._zoomCible = this._zoomNormal;
 
         // Direction de l'attaque
         this.lastDirection = 1;
@@ -465,28 +485,65 @@ export class GameScene extends Phaser.Scene {
             this.creerDropSol(salle.dropSol);
         }
 
-        // --- Obstacles (pieux, ressorts, plateformes mobiles) ---
-        // Skip en Miroir : la Cité est un atelier paisible, on ne veut pas
-        // que des pieux décoratifs blessent le joueur qui crafte tranquille.
+        // --- Obstacles (pieux, ressorts, plateformes mobiles, vague 1+2) ---
+        // Skip en Miroir : la Cité est un atelier paisible.
         this.obstacles = [];
+        // Group physics dédié pour les obstacles solides cassables (éboulis,
+        // mur_fissure). Permet une collision bloquante + on garde une réf pour
+        // les briser à l'attaque.
+        this.obstaclesSolides = this.physics.add.staticGroup();
         if (!enMiroir && salle.obstacles?.length) {
-            for (const obsData of salle.obstacles) {
+            for (let idx = 0; idx < salle.obstacles.length; idx++) {
+                const obsData = salle.obstacles[idx];
+                // Skip si éboulis/mur_fissure DÉJÀ brisé dans cette salle (persisté
+                // dans le registry pour survivre aux transit entre salles).
+                const cleBrise = `eboulis:${this.cleSalleEtage}:${idx}`;
+                if ((obsData.type === 'eboulis' || obsData.type === 'mur_fissure')
+                    && this.registry.get(cleBrise) === true) continue;
+
                 const obs = new Obstacle(this, obsData, salle.biomeId);
-                if (!obs.sprite) continue;
+                if (!obs.sprite && obs.data.type !== 'anti_ancrage') continue;
+                obs._cleBrise = cleBrise;
                 this.obstacles.push(obs);
-                if (obs.data.type === 'pieu') {
+
+                const t = obs.data.type;
+                if (t === 'pieu' || t === 'ressort') {
                     this.physics.add.overlap(this.player, obs.sprite, () =>
                         obs.onContactJoueur(this, this.player));
-                } else if (obs.data.type === 'ressort') {
-                    this.physics.add.overlap(this.player, obs.sprite, () =>
-                        obs.onContactJoueur(this, this.player));
-                } else if (obs.data.type === 'plateforme_mobile') {
-                    // Collider one-way virtuel : checkCollision.{down,left,right} = false
-                    // côté plateforme. Le joueur peut sauter à travers par le bas.
+                } else if (t === 'plateforme_mobile') {
                     this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'eboulis' || t === 'mur_fissure') {
+                    // Bloquant : collision dure. Géré par obstaclesSolides (déjà ajouté
+                    // par l'Obstacle dans _creerCassable via scene.obstaclesSolides).
+                    this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'sol_effrite') {
+                    // One-way + déclenchement effondrement au contact (atterrissage)
+                    this.physics.add.collider(this.player, obs.sprite, () => {
+                        // Seulement quand le joueur ATTERRIT dessus (vy ≥ 0 et touche down)
+                        if (this.player.body.velocity.y >= 0) obs.onContactJoueur(this, this.player);
+                    }, () => this.time.now >= this.dropThroughJusqu);
+                } else if (t === 'roc_tombe') {
+                    // Collider bloquant : le joueur ne passe pas au travers du roc.
+                    // La callback applique aussi les dégâts en phase 'chute'.
+                    this.physics.add.collider(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'plaque_pression') {
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'racines_reflux') {
+                    // Collider one-way en phase plateforme ; overlap dégât en phase pieu.
+                    this.physics.add.collider(this.player, obs.sprite, null,
+                        () => this.time.now >= this.dropThroughJusqu);
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
                 }
+                // anti_ancrage : pas de sprite physique, lecture par AncrageSystem
             }
         }
+        // Anti-ancrage : on injecte la liste dans le système
+        this.ancrage?.setObstaclesAntiAncrage?.(
+            this.obstacles.filter(o => o.data.type === 'anti_ancrage')
+        );
 
         // --- Ennemis (Présent uniquement, hors salle d'entrée) ---
         // La salle d'entrée est le point de respawn après mort / sortie Miroir :
@@ -574,7 +631,10 @@ export class GameScene extends Phaser.Scene {
         }
 
         // --- Vignette (overlay cinéma sombre aux bords, fixe à l'écran) ---
-        poserVignette(this, 1);
+        // Réf gardée pour pouvoir la fader quand la caméra zoom-out (sinon
+        // elle reste dimensionnée à 960×540 et apparaît comme un rectangle
+        // sombre au centre une fois la vue élargie).
+        this._vignette = poserVignette(this, 1);
 
         // --- Hooks selon le monde ---
         // Doctrine : Miroir = atelier paisible (pas de drain, pas de combat).
@@ -716,6 +776,30 @@ export class GameScene extends Phaser.Scene {
 
         this.inputSystem.update();
         const i = this.inputSystem.intentions;
+
+        // --- Ancrage Ruines : pose une plateforme sur la zone ancrable proche ---
+        if (i.ancrer && this.ancrage) {
+            this.ancrage.tenterAncrage(this.player);
+        }
+
+        // --- Caméra : zoom-out fluide tant que N est maintenue ---
+        if (this._zoomCible !== undefined) {
+            this._zoomCible = i.zoomOutTenu ? this._zoomOut : this._zoomNormal;
+            const cam = this.cameras.main;
+            const z = cam.zoom;
+            // Lerp ~200ms : facteur 0.12 par frame ≈ 0.5 atteint en ~14 frames @60fps
+            const dz = (this._zoomCible - z) * 0.12;
+            if (Math.abs(dz) > 0.0005) cam.setZoom(z + dz);
+            else cam.setZoom(this._zoomCible);
+
+            // Vignette : fade en fonction du zoom (à 1.0 = pleine, à zoomOut = 0).
+            // Évite qu'elle apparaisse comme un cadre sombre rétréci au centre
+            // quand on dézoome (elle est dimensionnée à la caméra d'origine).
+            if (this._vignette) {
+                const t = (cam.zoom - this._zoomOut) / Math.max(0.001, this._zoomNormal - this._zoomOut);
+                this._vignette.setAlpha(Math.max(0, Math.min(1, t)));
+            }
+        }
 
         // --- Mouvement ---
         const body = this.player.body;
@@ -987,6 +1071,24 @@ export class GameScene extends Phaser.Scene {
         }
         if (dernierToucheRef) this._dernierEnnemiTouche = dernierToucheRef;
         if (aTouche) this.revelation?.incrementer('hits');
+
+        // ─── Obstacles cassables (éboulis, mur fissuré) ────────────────
+        // Même zone d'attaque que pour les ennemis. Si touchés, on les
+        // amoche d'1 hp. Quand hp=0, briser() émet drop events + clean up.
+        if (this.obstacles) {
+            for (const o of this.obstacles) {
+                if (!o.sprite || !o.sprite.active) continue;
+                if (o.data.type !== 'eboulis' && o.data.type !== 'mur_fissure') continue;
+                const dx = Math.abs(o.sprite.x - hx);
+                const dy = Math.abs(o.sprite.y - hy);
+                const ow = o.sprite.width  ?? 60;
+                const oh = o.sprite.height ?? 60;
+                if (dx < portee / 2 + ow / 2 && dy < halfH + oh / 2) {
+                    o.subirDegats(1);
+                    aTouche = true;
+                }
+            }
+        }
 
         // === HIT FEEDBACK — c'est ici que ça devient jouissif ===
         if (aTouche) {
@@ -1455,6 +1557,12 @@ export class GameScene extends Phaser.Scene {
         ennemi.sprite.setDepth(DEPTH.ENTITES);
         if (defFinale.gravite) {
             this.physics.add.collider(ennemi.sprite, this.platforms);
+            // Les obstacles solides (éboulis, murs fissurés) doivent bloquer
+            // les ennemis aussi — sinon ils traversent et le puzzle "casser
+            // pour passer" n'a aucun sens.
+            if (this.obstaclesSolides) {
+                this.physics.add.collider(ennemi.sprite, this.obstaclesSolides);
+            }
         }
         this.physics.add.overlap(this.player, ennemi.sprite, () => this.contactEnnemi(ennemi));
         this.enemies.push(ennemi);
@@ -1526,10 +1634,13 @@ export class GameScene extends Phaser.Scene {
         const onPieuHit = (obs) => {
             const now = this.time.now;
             if (now < this.invincibleJusqu) return;
-            this.resonance.prendreDegats(obs.def.degats);
+            // Fallback : les types d'obstacles utilisent des champs différents
+            // pour leurs dégâts (degats / degatsImpact / degatsPieu). 3 par défaut.
+            const degats = obs.def.degats ?? obs.def.degatsImpact ?? obs.def.degatsPieu ?? 3;
+            this.resonance.prendreDegats(degats);
             this.invincibleJusqu = now + DUREE_INVINCIBILITE_MS;
             this.flashJoueur(0xff6060);
-            this.afficherMessageFlottant(`-${obs.def.degats}`, '#ff6060');
+            this.afficherMessageFlottant(`-${degats}`, '#ff6060');
         };
         this.events.on('obstacle:pieu:hit', onPieuHit);
 
@@ -1886,6 +1997,16 @@ export class GameScene extends Phaser.Scene {
         if (this.fondeurEntite && prochePNJ(this.fondeurEntite)) { this.ouvrirFondeur(); return; }
         if (this.identifieurEntite && prochePNJ(this.identifieurEntite)) { this.ouvrirIdentifieur(); return; }
         if (this.marchandEntite && prochePNJ(this.marchandEntite)) { this.ouvrirMarchand(); return; }
+        // Portes : si le joueur overlap une porte, on traverse. Priorité plus
+        // basse que les interactions explicites (coffre/PNJ) pour ne pas
+        // déclencher de transit accidentel si on est sur une porte ET un PNJ.
+        for (const dir of Object.keys(this.portes ?? {})) {
+            const p = this.portes[dir];
+            if (p?.rect && this.physics.overlap(this.player, p.rect)) {
+                this._traverserPorte(p.salle, p.direction);
+                return;
+            }
+        }
     }
 
     ouvrirFondeur() {
@@ -2014,10 +2135,12 @@ export class GameScene extends Phaser.Scene {
         const rect = this.add.rectangle(porte.x, porte.y, porte.largeur, porte.hauteur, 0xffffff, 0);
         rect.setAlpha(0);
         this.physics.add.existing(rect, true);
-        this.physics.add.overlap(this.player, rect, () => this._traverserPorte(salle, direction));
-        // Visuel : arche de pierre avec intérieur lumineux doré
+        // Pas d'overlap automatique : la traversée se fait UNIQUEMENT sur
+        // touche E (essayerInteragir). Le joueur peut donc longer/explorer
+        // près d'une porte sans la traverser involontairement — important
+        // pour les portes au milieu d'un sol (S/N).
         creerVisuelPorteSortie(this, porte.x, porte.y, porte.largeur, porte.hauteur, this.mondeCourant);
-        return rect;
+        return { rect, direction, salle };
     }
 
     /**
@@ -2061,6 +2184,7 @@ export class GameScene extends Phaser.Scene {
         this.registry.remove(CLE_ETAGE_DATA);     // force la régen
         this.registry.remove(CLE_SALLE_COURANTE); // entrée par défaut
         this.registry.remove(CLE_PORTE_ARRIVEE);
+        this._purgerEtatsObstacles();             // nouvel étage = obstacles neufs
         this.cameras.main.fadeOut(400, 30, 30, 60);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.afficherMessageFlottant?.(`Étage ${numero}`, '#ffd070');
@@ -2094,6 +2218,18 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
+    /**
+     * Purge tous les marqueurs 'eboulis:*' du registry. Appelé au retour de la
+     * Cité (reset étage) et au passage d'étage. Les obstacles cassables
+     * sont remis à neuf.
+     */
+    _purgerEtatsObstacles() {
+        const data = this.registry.values;
+        for (const cle of Object.keys(data)) {
+            if (cle.startsWith('eboulis:')) this.registry.remove(cle);
+        }
+    }
+
     retourAuNormal() {
         if (this.transitionEnCours) return;
         this.transitionEnCours = true;
@@ -2103,6 +2239,10 @@ export class GameScene extends Phaser.Scene {
         // (inventaire, équipement, Sel, Fragments, identifications, etc.).
         this.inventaire.resetEtage(this.etageNumero);
         this.enemySystem.resetEtage(this.etageNumero);
+        // Purge les marqueurs d'éboulis brisés (les obstacles cassables
+        // ressuscitent quand on retourne en Présent — cohérent avec le reset
+        // de l'étage).
+        this._purgerEtatsObstacles();
         // Phase 6 — Incrémente le compteur de visites Cité → la sous-seed loot
         // changera, donc les coffres droppent des objets différents à chaque
         // retour. Les ennemis restent stables (pool seedé indépendamment).

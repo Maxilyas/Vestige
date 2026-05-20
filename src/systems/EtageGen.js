@@ -22,12 +22,14 @@
 // remplacent le tirage aléatoire. La microgéométrie + pool ennemis + rareté
 // restent seedés (variance vivante au sein d'une structure stable).
 
-import { creerRng, genererSalle } from './WorldGen.js';
+import { creerRng, genererSalle, hashStr } from './WorldGen.js';
 import { ARCHETYPES, directionOpposee } from '../data/archetypes.js';
 import { TOPOGRAPHIES, topographiesPour, BOSS_ARENA_PAR_ETAGE } from '../data/topographies.js';
 import { biomePourEtage } from '../data/biomes.js';
 import { ETAGES, configSalle } from '../data/etages.js';
 import { sallesVisiteesPersistantes, marquerSalleVisiteePersistant } from './CarteMemoire.js';
+import { sallePar, tirerSalleCompatible, salleFallback } from '../data/salles/_index.js';
+import { genererGrapheSpanningTree } from './GrapheEtageGen.js';
 
 /**
  * Hash deux entiers en un seed reproductible.
@@ -86,77 +88,122 @@ export function genererEtage(numero, seedRun) {
     const seedEtage = combineSeed(seedRun, numero * 1009);
     const rng = creerRng(seedEtage);
     const biome = biomePourEtage(numero);
-
-    // ─── 1. Place les noeuds (col, row) avec leur rôle ───
-    const nodes = [
-        { id: 'A',    col: 0, row: 0,  role: 'entree' },
-        { id: 'B',    col: 1, row: 0,  role: 'main' },
-        { id: 'C',    col: 2, row: 0,  role: 'main' },
-        { id: 'D',    col: 3, row: 0,  role: 'main' },
-        { id: 'BOSS', col: 4, row: 0,  role: 'boss' },
-        // Dead-ends verticaux : connectés par N à un node main
-        { id: 'B-haut', col: 1, row: -1, role: 'deadend' },
-        { id: 'D-haut', col: 3, row: -1, role: 'deadend' }
-    ];
-    const byId = new Map(nodes.map(n => [n.id, n]));
-    for (const n of nodes) n.voisins = {};
-
-    // ─── 2. Connecte les noeuds (bidirectionnel) ───
-    const connecter = (idA, dirA, idB) => {
-        const dirB = directionOpposee(dirA);
-        byId.get(idA).voisins[dirA] = idB;
-        byId.get(idB).voisins[dirB] = idA;
-    };
-
-    // Chaîne principale (E/O)
-    connecter('A',    'E', 'B');
-    connecter('B',    'E', 'C');
-    connecter('C',    'E', 'D');
-    connecter('D',    'E', 'BOSS');
-
-    // Dead-ends verticaux : pinnés par data/etages.js si l'étage est éditorialisé,
-    // sinon fallback algorithmique (~70 % de chance chacun, seedé).
     const pinEtage = ETAGES[numero];
-    const branchesGardees = [];
-    const garderBrancheEditorialisee = (id) =>
-        pinEtage ? (pinEtage.salles?.[id] !== undefined) : (rng() < 0.7);
-    if (garderBrancheEditorialisee('B-haut')) {
-        connecter('B', 'N', 'B-haut');
-        branchesGardees.push('B-haut');
-    }
-    if (garderBrancheEditorialisee('D-haut')) {
-        connecter('D', 'N', 'D-haut');
-        branchesGardees.push('D-haut');
-    }
-    let nodesActifs = nodes.filter(n =>
-        n.role !== 'deadend' || branchesGardees.includes(n.id)
-    );
 
-    // ─── 2b. Garde-fou : déconnecter les branches deadend si aucune
-    // topographie ne supporte les portes demandées du node main.
-    // ─────────────────────────────────────────────────────────────
-    for (const n of nodesActifs) {
-        if (n.role !== 'main') continue;
-        const portesNec = Object.keys(n.voisins);
-        // On simule : y a-t-il un archétype du biome avec une topographie
-        // supportant ces portes ?
-        const candidats = biome.archetypesAutorises
-            .map(id => ARCHETYPES[id])
-            .filter(a => a && topographiesPour(a.id, portesNec).length > 0);
-        if (candidats.length > 0) continue;
+    // ─── 1. Construit le graphe ──────────────────────────────────────
+    // Trois modes :
+    //   (a) DATA-DRIVEN — pinEtage.noeuds explicite. Graphe arbitraire éditorial.
+    //   (b) SPANNING TREE — pinEtage.spanningTree=true (ou pin absent et pas
+    //       de pinEtage.salles). Algo génère un graphe sur grille NxN, tire
+    //       les salles dans le catalogue par tag de portes.
+    //   (c) LEGACY — pinEtage.salles défini (ancienne structure). Chaîne
+    //       fixe A→B→C→D→BOSS + deadends B-haut/D-haut. Conservé pour les
+    //       étages 3-10 pas encore migrés.
+    let nodes, nodesActifs, branchesGardees, byId;
+    let modeGraphe;
 
-        // Aucun candidat → on retire les voisins deadend (sacrifiables)
-        for (const dir of [...Object.keys(n.voisins)]) {
-            const voisinId = n.voisins[dir];
-            const voisin = byId.get(voisinId);
-            if (voisin?.role === 'deadend') {
-                delete n.voisins[dir];
-                const opp = directionOpposee(dir);
-                if (voisin.voisins[opp] === n.id) delete voisin.voisins[opp];
-                if (Object.keys(voisin.voisins).length === 0) {
-                    nodesActifs = nodesActifs.filter(x => x.id !== voisin.id);
-                    const idx = branchesGardees.indexOf(voisin.id);
-                    if (idx !== -1) branchesGardees.splice(idx, 1);
+    if (pinEtage?.noeuds) {
+        modeGraphe = 'data-driven';
+        // ─── Mode data-driven ───
+        nodes = Object.entries(pinEtage.noeuds).map(([id, def]) => ({
+            id,
+            col: def.col ?? 0,
+            row: def.row ?? 0,
+            role: def.role ?? 'main',
+            voisins: { ...(def.voisins ?? {}) }
+        }));
+        byId = new Map(nodes.map(n => [n.id, n]));
+        nodesActifs = nodes;
+        branchesGardees = nodes.filter(n => n.role === 'deadend').map(n => n.id);
+
+        // Sanity check : voisinages réciproques
+        for (const n of nodes) {
+            for (const [dir, voisinId] of Object.entries(n.voisins)) {
+                const v = byId.get(voisinId);
+                const dirOpp = directionOpposee(dir);
+                if (!v) {
+                    console.warn(`[EtageGen] Voisin manquant: ${n.id}.${dir} → '${voisinId}' (étage ${numero})`);
+                } else if (v.voisins[dirOpp] !== n.id) {
+                    console.warn(`[EtageGen] Voisinage non réciproque: ${n.id}.${dir}=${voisinId} mais ${voisinId}.${dirOpp}=${v.voisins[dirOpp]} (étage ${numero})`);
+                }
+            }
+        }
+    } else if (pinEtage?.spanningTree === true || !pinEtage?.salles) {
+        // ─── Mode SPANNING TREE (nouveau défaut pour étages migrés) ───
+        modeGraphe = 'spanning-tree';
+        const dimsGrille = pinEtage?.grille ?? { cols: 5, rows: 5 };
+        const rngGraphe = creerRng((seedEtage ^ 0x6E0DE5A1) >>> 0);
+        nodes = genererGrapheSpanningTree(rngGraphe, { dims: dimsGrille });
+        byId = new Map(nodes.map(n => [n.id, n]));
+        nodesActifs = nodes;
+        branchesGardees = nodes.filter(n => n.role === 'deadend').map(n => n.id);
+    } else {
+        // ─── Mode LEGACY (étages 3-10 non migrés) ───
+        modeGraphe = 'legacy';
+        nodes = [
+            { id: 'A',    col: 0, row: 0,  role: 'entree' },
+            { id: 'B',    col: 1, row: 0,  role: 'main' },
+            { id: 'C',    col: 2, row: 0,  role: 'main' },
+            { id: 'D',    col: 3, row: 0,  role: 'main' },
+            { id: 'BOSS', col: 4, row: 0,  role: 'boss' },
+            { id: 'B-haut', col: 1, row: -1, role: 'deadend' },
+            { id: 'D-haut', col: 3, row: -1, role: 'deadend' }
+        ];
+        byId = new Map(nodes.map(n => [n.id, n]));
+        for (const n of nodes) n.voisins = {};
+
+        const connecter = (idA, dirA, idB) => {
+            const dirB = directionOpposee(dirA);
+            byId.get(idA).voisins[dirA] = idB;
+            byId.get(idB).voisins[dirB] = idA;
+        };
+        connecter('A',    'E', 'B');
+        connecter('B',    'E', 'C');
+        connecter('C',    'E', 'D');
+        connecter('D',    'E', 'BOSS');
+
+        branchesGardees = [];
+        const garderBrancheEditorialisee = (id) =>
+            pinEtage ? (pinEtage.salles?.[id] !== undefined) : (rng() < 0.7);
+        if (garderBrancheEditorialisee('B-haut')) {
+            connecter('B', 'N', 'B-haut');
+            branchesGardees.push('B-haut');
+        }
+        if (garderBrancheEditorialisee('D-haut')) {
+            connecter('D', 'N', 'D-haut');
+            branchesGardees.push('D-haut');
+        }
+        nodesActifs = nodes.filter(n =>
+            n.role !== 'deadend' || branchesGardees.includes(n.id)
+        );
+    }
+
+    // ─── 2b. Garde-fou (LEGACY uniquement) ──────────────────────────
+    // Déconnecte les branches deadend si aucune topographie ne supporte
+    // les portes demandées du node main. En modes data-driven et spanning-
+    // tree, on tire dans le catalogue de salles handcrafted (avec fallback)
+    // donc cette vérification n'est pas pertinente.
+    if (modeGraphe === 'legacy') {
+        for (const n of nodesActifs) {
+            if (n.role !== 'main') continue;
+            const portesNec = Object.keys(n.voisins);
+            const candidats = biome.archetypesAutorises
+                .map(id => ARCHETYPES[id])
+                .filter(a => a && topographiesPour(a.id, portesNec).length > 0);
+            if (candidats.length > 0) continue;
+
+            for (const dir of [...Object.keys(n.voisins)]) {
+                const voisinId = n.voisins[dir];
+                const voisin = byId.get(voisinId);
+                if (voisin?.role === 'deadend') {
+                    delete n.voisins[dir];
+                    const opp = directionOpposee(dir);
+                    if (voisin.voisins[opp] === n.id) delete voisin.voisins[opp];
+                    if (Object.keys(voisin.voisins).length === 0) {
+                        nodesActifs = nodesActifs.filter(x => x.id !== voisin.id);
+                        const idx = branchesGardees.indexOf(voisin.id);
+                        if (idx !== -1) branchesGardees.splice(idx, 1);
+                    }
                 }
             }
         }
@@ -164,6 +211,9 @@ export function genererEtage(numero, seedRun) {
 
     // ─── 3. Pour chaque noeud, choisit (archétype, topographie) et génère ───
     const salles = new Map();
+    // Track des salles uniques (signature) déjà tirées dans cet étage.
+    // Empêche d'avoir 3 Grimpeur de suite.
+    const sallesUniquesDejaUtilisees = new Set();
     for (const n of nodesActifs) {
         const portesNec = [...Object.keys(n.voisins)];
         // La salle BOSS reçoit une porte E "transition d'étage" (sans voisin
@@ -177,12 +227,31 @@ export function genererEtage(numero, seedRun) {
         // Pin éditorialisé (Phase 4) — priorité absolue sauf pour la salle
         // d'entrée qui DOIT rester sanctuaire/arene_ouverte (la Cité Miroir
         // s'y déploie : 3 PNJ posés au sol, doit être plat et large).
-        const pin = configSalle(numero, n.id);
+        // En mode data-driven, le pin EST le noeud (contient archetype/
+        // useSalle/topographie directement). Sinon on lit depuis pinEtage.salles.
+        const pin = pinEtage?.noeuds?.[n.id] ?? configSalle(numero, n.id);
 
         if (n.role === 'entree') {
             // Entrée = Cité Marchande en Miroir. Forçage non négociable.
             archetype = ARCHETYPES.sanctuaire;
             topographie = TOPOGRAPHIES.arene_ouverte;
+        } else if (pin?.useSalle && sallePar(pin.useSalle)) {
+            // ─── Salle handcrafted pinnée explicitement ──────────────
+            const salleDef = sallePar(pin.useSalle);
+            archetype = ARCHETYPES[pin.archetype] ?? ARCHETYPES.hall;
+            topographie = salleDef;
+        } else if (modeGraphe === 'spanning-tree' && n.role !== 'boss') {
+            // ─── Spanning tree : tire dans le catalogue par tag de portes ─
+            // portesNec = directions des voisins du nœud. Le rôle filtre les
+            // salles signature hors des deadends. dejaUtilisees exclut les
+            // salles `unique: true` déjà placées (Grimpeur, Arche brisée).
+            const rngSalle = creerRng((seedEtage ^ 0xCA7A1067 ^ hashStr(n.id)) >>> 0);
+            const salleDef = tirerSalleCompatible(biome.id, portesNec, rngSalle, n.role, sallesUniquesDejaUtilisees)
+                          ?? salleFallback(biome.id);
+            // Track les salles uniques placées
+            if (salleDef.unique) sallesUniquesDejaUtilisees.add(salleDef.id);
+            archetype = ARCHETYPES[salleDef.archetypesCompatibles?.[0]] ?? ARCHETYPES.hall;
+            topographie = salleDef;
         } else if (pin && ARCHETYPES[pin.archetype] && TOPOGRAPHIES[pin.topographie]) {
             archetype = ARCHETYPES[pin.archetype];
             topographie = TOPOGRAPHIES[pin.topographie];
@@ -246,12 +315,18 @@ export function genererEtage(numero, seedRun) {
         }
     }
 
-    // Mémoire de carte persistante (Phase 4) : on hydrate sallesVisitees avec
-    // toutes les salles que le joueur a déjà foulées à des runs précédents,
-    // filtrées pour ne garder que celles qui existent encore dans le graphe.
+    // Mémoire de carte persistante.
+    //   - Mode legacy : ids stables (A, B, C, D, BOSS, B-haut, D-haut), donc
+    //     on hydrate les visitées d'un run précédent.
+    //   - Mode spanning tree : ids générés à chaque run (R00, R01...), donc
+    //     toute persistance entre runs serait incohérente. On démarre vierge
+    //     à chaque génération. Le système de sauvegarde "vraie" (à venir)
+    //     persistera l'étage entier en l'état, pas juste les visites.
     const visiteesInitiales = new Set(['A']);
-    for (const id of sallesVisiteesPersistantes(numero)) {
-        if (salles.has(id)) visiteesInitiales.add(id);
+    if (modeGraphe === 'legacy' || modeGraphe === 'data-driven') {
+        for (const id of sallesVisiteesPersistantes(numero)) {
+            if (salles.has(id)) visiteesInitiales.add(id);
+        }
     }
 
     return {

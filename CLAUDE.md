@@ -94,6 +94,7 @@ npx live-server .
 - ✅ **5'** — Identité visuelle par paire d'étages : ✅ Ruines basses (5'.1-2), ✅ Halls Cendrés (5'.3-7), ✅ Cristaux Glacés (5'.8-18 ; sanctuaire boss étage 6 reste à faire), ✅ Voile Inversé (5'.19-23 ; même cité corrompue), ✅ Cœur Reflux (5'.24 — chambre intérieure mur ancré + arêtes Reflux désync). Sanctuaires boss 6/7/8/10 restent à faire
 - ⬜ **Phase 6.x** — Passes successives polish/équilibrage Phase 6 selon retours user
 - ⬜ **Échos** — Re-respawn salles nettoyées en Élite + drop bonus (quand équilibrage 6 stable)
+- ✅ **Phase 8 — Refonte génération étages (Ruines)** — Salles handcrafted XL (19 dans pool Ruines), spanning tree 5×5 algorithmique, mécanique d'ancrage joueur (touche A, 5 Résonance/ancre, FIFO 3), 7 nouveaux types d'obstacles (sol_effrite, eboulis cassable, mur_fissure, roc_tombe, plaque_pression, racines_reflux mécaniques, anti_ancrage), portes activées par E. Phase 8 ne couvre que Ruines basses (étage 1). Étages 3-10 restent sur l'ancien système topographies jusqu'à migration.
 
 ## Systèmes implémentés (récap pour reprise)
 
@@ -134,9 +135,18 @@ npx live-server .
 ## État actuel
 *À mettre à jour à la fin de chaque session. Garder court — détails dans les commits.*
 
-- **Dernière étape franchie** : Phase 5'.24 → 5'.24.5 — DA Cœur du Reflux (étages 9-10). Direction radicalement différente des biomes précédents : INTÉRIEUR clos (pas de ciel, pas de skyline). Doctrine itérative validée : palette pierre ardoise glaciale froide (gris-violet désaturé, le rouge/Reflux reste sur les éléments physiques pour contraste froid/chaud), mur maçonné dense ANCRÉ à la salle (scrollFactor 1, dims exactes — pas parallax), quinconce vrai ~70×35 px (~200-400 blocs/salle selon largeur), ratio 50/50 clair/sombre. Signature dynamique : ~18% des arêtes de briques infiltrées par le Reflux en 4 groupes ADD désynchronisés (cramoisi+magenta 55/45, durées 1300-1750 ms + delays différents → vagues de luminosité non-métronomiques). Composer dans `src/render/biomes/CoeurReflux.js`. `BIOMES_INTERIEUR` skip aussi les types façade (batiment/tour/dome/atelier) dans DecorRegistry. Tentatives intermédiaires retirées : cadre vignette (voûte+pilastres+plinthe), cœur central pulsant.
-- **À tester en navigateur** : étages 9-10 en Présent. Salles boss 6/7/8/10 n'ont pas encore d'intérieur dédié (boss 10 → cinématique fin déjà gérée).
-- **Prochain chantier** : sanctuaires boss étages 6/7/8/10 (intérieurs dédiés). Sinon Phase 6.x polish/équilibrage selon retours user. Tous les biomes 5' sont posés.
+- **Dernière étape franchie** : Phase 8 — Refonte génération étages (Ruines seul). Nouveau pipeline : `src/data/salles/_format.js` (helpers sol/plafond/tunnel/plateforme/ancre/eboulis/murFissure/solEffrite/rocQuiTombe/plaque/racinesReflux/antiAncrage), `src/data/salles/_index.js` (catalogue 19 salles handcrafted XL + carrefour fallback), `src/systems/GrapheEtageGen.js` (spanning tree 5×5 + branches + boucles 10% + antichambre boss garantie côté O), `src/systems/AncrageSystem.js` (touche A → 5 Résonance, FIFO 3, range 140 px, refusé en zone anti_ancrage), `src/entities/Obstacle.js` étendu (7 nouveaux types). Étape 4D : 8 salles "verticales" (Cathédrale 3 étages, Tour Sentinelles 4 étages, Atelier tunnel forcé, 3 plaques activation, Crypte profonde paliers, Pont Soupirs cascade, Tour Brouillage anti-ancrage central, Caveau scellé mur+rocs) + 3 enrichies (couloir_traversant, t_NEO, t_SEO). Persistence éboulis cassés via registry (purgé au retour Cité + passage étage). Portes activent sur **E** uniquement (plus de transit auto). Validateur `scripts/valider_salles.mjs` (BFS) → 91 → 1 plateformes inaccessibles (le palier d'arrivée Grimpeur, attendu = puzzle ancrage).
+- **À tester en navigateur** : étage 1 entier (run complet A→BOSS via plusieurs seeds différents pour voir variété). Étages 2-10 toujours sur ANCIEN système topographies (pas migrés).
+- **Prochain chantier** : (a) migrer étages 2 vers spanning tree + créer 12-20 salles Halls Cendrés (mécanique destruction) ; (b) sanctuaires boss étages 6/7/8/10 ; (c) Phase 6.x polish équilibrage.
+
+### Notes Phase 8 — conventions à respecter
+- Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. ÉCART_VERT_SAFE = 70 (préféré). Mes "premiers paliers" depuis sol doivent être à ≤ 96 du sol, idéalement 70.
+- Éboulis hauteur min **110 px** (sinon le joueur saute par-dessus). Pour bloquer vraiment, placer SOUS un plafond (tunnel) — sinon contournable.
+- Salles SIGNATURE (puzzles forts) → marquer `unique: true` (max 1 par étage) + `rolesAutorises: ['main','alt','entree']` (exclues des deadends).
+- Carrefour NSEO (`ruines_carrefour`) est dans `salleFallback`, PAS dans `TOUTES_SALLES` → ne sort que si pool vide.
+- Le validateur `scripts/valider_salles.mjs` est l'outil canonique pour détecter les bugs de saut. À lancer après toute modif de salle.
+- Touche **A** = ancrer (geste Ruines). Touche **TAB** = zoom-out caméra (continu tant que maintenu). Touche **N** = mute audio (legacy, NE PAS réutiliser).
+- Coût ancrage = 5 Résonance (pas Fragment). Refusé si Résonance ≤ 5 OU si dans zone anti_ancrage.
 
 ## Compromis MVP — dette technique / narrative documentée
 - **Miroir simplifié** : pas de drain, pas d'Absorption, pas de fenêtre de grâce. La Cité = respawn point amélioré. Mécanique LORE complète (cf. [LORE.md §6](LORE.md)) reste vision long terme.
