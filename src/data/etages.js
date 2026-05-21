@@ -28,53 +28,41 @@
 
 export const ETAGES = {
     // ─── 1. Ruines basses — initiation horizontale ───────────────────────
-    // Étape 4A : graphe spanning tree sur grille 5×5. L'algo place entrée
-    // et boss aux extrémités, génère un chemin critique + branches + boucles
-    // (~10-18 salles). Chaque cellule reçoit une salle handcrafted compatible
-    // avec ses portes (catalogue + fallback ruines_carrefour si pool vide).
+    // Phase 9 : grille 6×5 + cible 12-18 salles (mini-Metroidvania).
+    // L'algo spanning tree place entrée et boss aux extrémités, génère un
+    // chemin critique + branches + boucles, puis remplit jusqu'au minimum
+    // si la densité naturelle est trop faible.
     1: {
         themeNarratif: 'Premiers pas. Initiation à l\'exploration et à l\'ancrage.',
         spanningTree: true,
-        grille: { cols: 5, rows: 5 }
+        grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 2. Ruines basses — élargissement (gouffre + croix) ──────────────
+    // ─── 2. Ruines basses — élargissement (Phase 9 mini-Metroidvania) ────
+    // Pool Ruines existant (19 salles handcrafted), grille 6×5 et remplissage
+    // densifiant. Le joueur découvre des configurations différentes à chaque run.
     2: {
-        themeNarratif: 'Premier vrai gouffre, première croix centrale. Le deadend bascule à D-haut.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'hall',       topographie: 'croix_centrale' },
-            'C':      { archetype: 'pont',       topographie: 'gouffre_lateral' },
-            'D':      { archetype: 'crypte',     topographie: 'crypte_dalles' },
-            'D-haut': { archetype: 'puits',      topographie: 'puits_descente' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_ruines_2' }
-        }
+        themeNarratif: 'Élargissement du réseau. Pool Ruines complet, plus de salles signature.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 3. Halls Cendrés — multi-étages installés ───────────────────────
+    // ─── 3. Halls Cendrés — installation biome (Phase 9 mini-Metroidvania) ─
+    // Pool Halls (25 salles handcrafted), mécanique signature = destruction
+    // (murs fissurés, murs explosifs, sous-salles cachées, brasiers cycliques).
     3: {
-        themeNarratif: 'On monte. Double étage, colonnade haute, passerelles parallèles.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'hall',       topographie: 'double_etage' },
-            'B-haut': { archetype: 'puits',      topographie: 'puits_descente' },
-            'C':      { archetype: 'hall',       topographie: 'colonnade_haute' },
-            'D':      { archetype: 'pont',       topographie: 'passerelles_paralleles' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_halls_3' }
-        }
+        themeNarratif: 'Les feux brûlent encore. Mécanique destruction : casse murs et révèle sous-salles.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 4. Halls Cendrés — densification (couloirs, donjon) ────────────
+    // ─── 4. Halls Cendrés — densification (Phase 9 mini-Metroidvania) ────
+    // Même pool que l'étage 3, graphe encore plus dense + ennemis tier
+    // supérieur. La variété vient de la combinatoire spanning tree.
     4: {
-        themeNarratif: 'La chaleur enferme. Couloir étroit, cellules de donjon, spirale ascendante.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'hall',       topographie: 'couloir_etroit' },
-            'C':      { archetype: 'crypte',     topographie: 'donjon_cellules' },
-            'D':      { archetype: 'hall',       topographie: 'tour_marches' },
-            'D-haut': { archetype: 'puits',      topographie: 'puits_spirale' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_halls_4' }
-        }
+        themeNarratif: 'La chaleur enferme. Réseau dense, brasiers en cascade, explosions plus fréquentes.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
     // ─── 5. Cristaux Glacés — bascule arènes ouvertes + verticalité ─────

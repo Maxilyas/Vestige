@@ -26,10 +26,17 @@ const DELTAS = {
 };
 const DIRS = ['N', 'S', 'E', 'O'];
 
-const DIMS_DEFAUT = { cols: 5, rows: 5 };
-const PROBA_BOUCLE      = 0.10;   // chance qu'une paire voisine non connectée se relie
-const PROBA_BRANCHE     = 0.55;   // chance qu'un nœud du chemin engendre une branche
-const PROBA_BRANCHE_EXT = 0.55;   // chance qu'une branche s'étende d'1 case de plus
+const DIMS_DEFAUT = { cols: 6, rows: 5 };
+const PROBA_BOUCLE      = 0.18;   // chance qu'une paire voisine non connectée se relie
+const PROBA_BRANCHE     = 0.85;   // chance qu'un nœud du chemin engendre une branche
+const PROBA_BRANCHE_EXT = 0.65;   // chance qu'une branche s'étende d'1 case de plus
+
+// Phase 9 — cible "mini-Metroidvania" : 12-18 salles par étage.
+// Si après la phase 3 (branches naturelles) on est sous ce seuil, une passe
+// de remplissage force des branches additionnelles depuis n'importe quel nœud
+// du graphe vers les cases libres adjacentes, jusqu'à atteindre TARGET_MIN.
+const TARGET_MIN_SALLES = 12;
+const TARGET_MAX_SALLES = 18;
 
 function k(col, row) { return col + ',' + row; }
 
@@ -154,7 +161,49 @@ export function genererGrapheSpanningTree(rng, options = {}) {
         }
     }
 
-    // ─── 4. Boucles : 10% chance de relier 2 voisines non connectées ──
+    // ─── 3b. Phase 9 — Remplissage cible mini-Metroidvania ─────────────
+    // Si le graphe est en-dessous de la cible minimum, on force des branches
+    // supplémentaires depuis n'importe quel nœud existant (hors entrée/boss
+    // qui restent à 1-2 connexions) vers les cases libres adjacentes. Stop
+    // dès qu'on atteint la cible OU qu'il n'y a plus de case libre.
+    let nbActuel = Object.keys(grid).length;
+    if (nbActuel < TARGET_MIN_SALLES) {
+        const candidats = Object.values(grid).filter(n =>
+            n.role !== 'entree' && n.role !== 'boss'
+        );
+        // Mélange seedé pour répartir les nouvelles branches
+        for (let i = candidats.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [candidats[i], candidats[j]] = [candidats[j], candidats[i]];
+        }
+        let safetyRemplissage = 40;
+        while (nbActuel < TARGET_MAX_SALLES && safetyRemplissage-- > 0) {
+            let aProgresse = false;
+            for (const nodeBase of candidats) {
+                if (nbActuel >= TARGET_MAX_SALLES) break;
+                // Direction libre adjacente avec case vide
+                const dirsLibres = [];
+                for (const d of DIRS) {
+                    if (nodeBase.voisins[d]) continue;
+                    const { dc, dr } = DELTAS[d];
+                    const nc = nodeBase.col + dc, nr = nodeBase.row + dr;
+                    if (!dansGrille(nc, nr, dims) || grid[k(nc, nr)]) continue;
+                    dirsLibres.push(d);
+                }
+                if (dirsLibres.length === 0) continue;
+                const d = dirsLibres[Math.floor(rng() * dirsLibres.length)];
+                etendreBranche(nodeBase, d, grid, dims, rng, newId);
+                aProgresse = true;
+                nbActuel = Object.keys(grid).length;
+                // Une fois min atteint, on arrête (sauf si on est dans la
+                // marge basse < 14 où on continue pour densifier)
+                if (nbActuel >= TARGET_MIN_SALLES && rng() < 0.4) break;
+            }
+            if (!aProgresse) break;
+        }
+    }
+
+    // ─── 4. Boucles : 18% chance de relier 2 voisines non connectées ──
     // Le boss est EXCLU des boucles (il doit n'avoir que l'unique porte O
     // depuis l'antichambre, sinon la mise en scène horizontale de l'arène
     // boss est cassée).
