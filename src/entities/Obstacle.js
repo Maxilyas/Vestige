@@ -15,11 +15,16 @@
 // Vague 2 :
 //   - racines_reflux    : zone cyclique pieu↔plateforme
 //   - anti_ancrage      : zone non-physique (lecture par AncrageSystem)
+//
+// Vague 3 (Halls Cendrés) :
+//   - brasier_mobile    : zone de feu cyclique (ON dégâts ↔ OFF inerte)
+//   - mur_explosif      : mur fissuré qui éclate en projectiles à la rupture
 
 import { TYPES_OBSTACLES } from '../data/obstacles.js';
 import { creerVisuelPieux } from '../render/entities/Pieux.js';
 import { creerVisuelRessort, jouerDeclenchementRessort } from '../render/entities/Ressort.js';
 import { creerVisuelPlateformeMobile } from '../render/entities/PlateformeMobile.js';
+import { peindreOrnementPlateforme } from '../render/PlateformeStyle.js';
 
 // Palette Ruines basses (utilisée pour les visuels inline ci-dessous)
 const COULEUR_PIERRE       = 0x5a6850;
@@ -29,6 +34,13 @@ const COULEUR_RACINE       = 0x6a2070;
 const COULEUR_RACINE_VIVE  = 0xa030c0;
 const COULEUR_FISSURE      = 0x1a1a1a;
 const COULEUR_PLAQUE       = 0x88643a;     // or terni (cf. paletteBiome.accent)
+
+// Palette Halls Cendrés (pour brasier_mobile + mur_explosif)
+const COULEUR_BRAISE       = 0xff7028;
+const COULEUR_BRAISE_VIVE  = 0xffaa50;
+const COULEUR_BRAISE_FONCE = 0xa83820;
+const COULEUR_SUIE         = 0x18120e;
+const COULEUR_CUIVRE_TERNI = 0xa86838;
 
 export class Obstacle {
     /**
@@ -61,6 +73,9 @@ export class Obstacle {
         else if (data.type === 'plaque_pression')   this._creerPlaque();
         else if (data.type === 'racines_reflux')    this._creerRacinesReflux();
         else if (data.type === 'anti_ancrage')      this._creerAntiAncrage();
+        else if (data.type === 'brasier_mobile')    this._creerBrasierMobile();
+        else if (data.type === 'mur_explosif')      this._creerCassable('mur_explosif');
+        else if (data.type === 'mur_secret')        this._creerMurSecret();
     }
 
     _creerPieu() {
@@ -192,6 +207,18 @@ export class Obstacle {
             // Anime les spores qui flottent dans la zone (pas de sprite physique)
             if (this.visual?.active) this._dessinerAntiAncrage();
         }
+        else if (this.data.type === 'brasier_mobile') {
+            if (!this.sprite || !this.sprite.active) return;
+            this._updateBrasier(this.scene.time.now);
+        }
+        else if (this.data.type === 'mur_explosif') {
+            // Pulse animé du cœur incandescent (lecture danger croissant)
+            if (this.visual?.active) {
+                this._dessinerCassable('mur_explosif',
+                    this.data.largeur ?? this.def.largeurDefault,
+                    this.data.hauteur ?? this.def.hauteurDefault);
+            }
+        }
     }
 
     /**
@@ -230,12 +257,19 @@ export class Obstacle {
             if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
             this.dernierHit = now;
             scene.events.emit('obstacle:pieu:hit', this);
+        } else if (this.data.type === 'brasier_mobile') {
+            // Dégâts uniquement en phase 'feu'
+            if (this.brasierPhase !== 'feu') return;
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            scene.events.emit('obstacle:pieu:hit', this);
         }
     }
 
     detruire() {
         this.sprite?.destroy();
         this.visual?.destroy();
+        this.ornement?.destroy();
         if (this._timers) for (const t of this._timers) t?.remove?.();
     }
 
@@ -307,6 +341,41 @@ export class Obstacle {
             g.lineTo(cx + w * 0.1, cy + h * 0.1);
             g.lineTo(cx, cy + h * 0.4);
             g.strokePath();
+        } else if (typeVisuel === 'mur_explosif') {
+            // Mur Halls : pierre carbonisée + runes braises rouges (avertissement)
+            // Pulse de chaleur intérieure visible (lecture "ça va exploser").
+            const totalHp = this.data.hp ?? this.def.hpDefault;
+            const charge = 1 - (this.hp / totalHp);  // 0 → neuf, 1 → presque cassé
+            // Corps : pierre carbonisée gris-anthracite (palette Halls)
+            g.fillStyle(COULEUR_SUIE, 1);
+            g.fillRect(cx - w / 2, cy - h / 2, w, h);
+            g.fillStyle(0x3e3128, 1);  // pierre Halls
+            g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, w - 4, h - 4);
+            // Lueur intérieure braise qui s'intensifie avec les hits
+            const pulseT = (this.scene.time.now / 400) % 1;
+            const pulse = 0.4 + 0.4 * Math.sin(pulseT * Math.PI * 2);
+            g.fillStyle(COULEUR_BRAISE_FONCE, 0.3 + charge * 0.5);
+            g.fillRect(cx - w / 2 + 4, cy - h / 2 + 4, w - 8, h - 8);
+            // Runes rouges verticales (signature avertissement)
+            g.lineStyle(2, COULEUR_BRAISE, 0.7 + charge * 0.3);
+            const nbRunes = 3;
+            for (let i = 0; i < nbRunes; i++) {
+                const ry = cy - h * 0.35 + i * (h * 0.35);
+                g.beginPath();
+                g.moveTo(cx - w * 0.25, ry);
+                g.lineTo(cx + w * 0.25, ry);
+                g.strokePath();
+                g.beginPath();
+                g.moveTo(cx, ry - 6);
+                g.lineTo(cx, ry + 6);
+                g.strokePath();
+            }
+            // Cœur incandescent qui s'élargit au fur et à mesure
+            const coeurR = 4 + charge * 8;
+            g.fillStyle(COULEUR_BRAISE_VIVE, pulse * (0.5 + charge * 0.5));
+            g.fillCircle(cx, cy, coeurR);
+            g.fillStyle(0xffffff, pulse * charge * 0.6);
+            g.fillCircle(cx, cy, coeurR * 0.4);
         }
 
         // Indicateur de HP : on assombrit selon les hits reçus
@@ -326,7 +395,17 @@ export class Obstacle {
             this._briser();
             return true;
         }
-        // Visuel : flash + redessine (pour montrer la dégradation)
+
+        // Mur SECRET : pas de flash + le dessin progressif gère la révélation
+        // (poussière au 1er hit, fissures fines après 2 hits, marquées vers 3+).
+        if (this.data.type === 'mur_secret') {
+            this._sursauterMurSecret();
+            this._dessinerMurSecret();
+            return false;
+        }
+
+        // Visuel cassable normal (éboulis/mur_fissure/mur_explosif) :
+        // flash + redessine pour montrer la dégradation
         this.scene.tweens.add({
             targets: this.visual,
             alpha: { from: 0.3, to: 1 },
@@ -341,14 +420,23 @@ export class Obstacle {
         // au prochain load (transit entre salles). Mort = restart étage =
         // reset (cf. retourAuNormal qui purge le registry).
         if (this._cleBrise) this.scene.registry.set(this._cleBrise, true);
+
+        // Mur explosif : déclenche l'explosion radiale AVANT particules génériques
+        if (this.data.type === 'mur_explosif') {
+            this._exploserMur();
+        }
+
         // Burst de particules à la destruction
         if (this.scene.textures.exists('_particule')) {
+            const tintParticules = this.data.type === 'mur_explosif'
+                ? [COULEUR_BRAISE, COULEUR_BRAISE_VIVE, COULEUR_BRAISE_FONCE]
+                : [COULEUR_PIERRE, COULEUR_PIERRE_CLAIR, 0x88643a];
             const burst = this.scene.add.particles(this.data.x, this.data.y, '_particule', {
                 lifespan: 500,
                 speed: { min: 80, max: 200 },
                 angle: { min: 0, max: 360 },
                 scale: { start: 0.7, end: 0 },
-                tint: [COULEUR_PIERRE, COULEUR_PIERRE_CLAIR, 0x88643a],
+                tint: tintParticules,
                 quantity: 18,
                 alpha: { start: 1, end: 0 }
             });
@@ -363,12 +451,14 @@ export class Obstacle {
         if (this.data.dropFragmentFamille) {
             this.scene.events.emit('obstacle:drop:fragment', { x: this.data.x, y: this.data.y, famille: this.data.dropFragmentFamille });
         }
-        // Détruit la collision + le visuel
+        // Détruit la collision + le visuel + ornement éventuel (mur_secret)
         this.sprite?.body?.destroy();
         this.sprite?.destroy();
         this.visual?.destroy();
+        this.ornement?.destroy();
         this.sprite = null;
         this.visual = null;
+        this.ornement = null;
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -832,5 +922,334 @@ export class Obstacle {
     contient(px, py) {
         if (this.data.type !== 'anti_ancrage' || !this.zoneRect) return false;
         return this.zoneRect.contains(px, py);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 3 — Halls Cendrés : Brasier mobile
+    // ════════════════════════════════════════════════════════════════
+
+    _creerBrasierMobile() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+
+        // Sprite : zone d'overlap (pas de collision physique, le joueur PASSE
+        // au travers — c'est juste une zone de dégâts cyclique).
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+        // PAS d'ajout aux platforms/obstaclesSolides : zone d'overlap pure.
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this.brasierPhase = 'feu';
+        this._t0 = this.scene.time.now + (this.data.offsetMs ?? 0);
+    }
+
+    _updateBrasier(now) {
+        const cycle = this.data.cycleMs ?? this.def.cycleMs;
+        const t = ((now - this._t0) % cycle) / cycle;
+        // 55% du cycle = feu actif (dégâts), 45% = inerte (passage)
+        const enFeu = t < this.def.feuRatio;
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        const cx = this.data.x, cy = this.data.y;
+
+        const g = this.visual;
+        g.clear();
+
+        // Socle commun : grille de cuivre encastrée (signature Halls)
+        const socleH = Math.min(h * 0.5, 18);
+        const socleTop = cy + h / 2 - socleH;
+        g.fillStyle(COULEUR_SUIE, 1);
+        g.fillRect(cx - w / 2, socleTop, w, socleH);
+        g.fillStyle(COULEUR_CUIVRE_TERNI, 1);
+        g.fillRect(cx - w / 2 + 3, socleTop + 3, w - 6, socleH - 6);
+        // Barreaux de la grille
+        g.lineStyle(2, COULEUR_SUIE, 0.9);
+        const nbBarreaux = Math.floor(w / 16);
+        for (let i = 1; i < nbBarreaux; i++) {
+            const bx = cx - w / 2 + i * (w / nbBarreaux);
+            g.beginPath();
+            g.moveTo(bx, socleTop + 2);
+            g.lineTo(bx, socleTop + socleH - 2);
+            g.strokePath();
+        }
+
+        if (enFeu) {
+            // PHASE FEU : flammes orange vif qui dansent au-dessus de la grille
+            const phaseProgress = t / this.def.feuRatio;
+            // Easing : montée rapide (0→0.15), plein feu (0.15→0.85), retombée (0.85→1)
+            let intensite;
+            if (phaseProgress < 0.15) intensite = phaseProgress / 0.15;
+            else if (phaseProgress > 0.85) intensite = (1 - phaseProgress) / 0.15;
+            else intensite = 1;
+
+            const hauteurFlamme = h * 0.7 * intensite;
+            const flammeTopY = socleTop - hauteurFlamme;
+
+            // Lueur diffuse (halo orangé sous-jacent)
+            g.fillStyle(COULEUR_BRAISE, 0.18 * intensite);
+            g.fillRect(cx - w / 2 - 8, flammeTopY - 6, w + 16, hauteurFlamme + 14);
+
+            // Flammes : triangles irréguliers qui dansent (3-5 selon largeur)
+            const nbFlammes = Math.max(3, Math.floor(w / 28));
+            const dance = Math.sin(now / 80) * 4;
+            for (let i = 0; i < nbFlammes; i++) {
+                const fx = cx - w / 2 + (i + 0.5) * (w / nbFlammes);
+                const haut = hauteurFlamme * (0.7 + 0.3 * Math.sin(now / 90 + i * 1.3));
+                const decal = Math.sin(now / 70 + i * 2) * 3;
+                // Base large braise foncée
+                g.fillStyle(COULEUR_BRAISE_FONCE, 0.9);
+                g.fillTriangle(
+                    fx - 10, socleTop,
+                    fx + 10, socleTop,
+                    fx + decal, socleTop - haut
+                );
+                // Cœur orange
+                g.fillStyle(COULEUR_BRAISE, 0.95);
+                g.fillTriangle(
+                    fx - 6, socleTop - 2,
+                    fx + 6, socleTop - 2,
+                    fx + decal * 0.7, socleTop - haut * 0.85
+                );
+                // Pointe jaune-blanc vif
+                g.fillStyle(COULEUR_BRAISE_VIVE, intensite);
+                g.fillTriangle(
+                    fx - 3, socleTop - haut * 0.3,
+                    fx + 3, socleTop - haut * 0.3,
+                    fx + decal * 0.5, socleTop - haut * 0.95
+                );
+                // Escarbille (petit point qui s'envole)
+                if (i % 2 === 0) {
+                    const ex = fx + dance + decal;
+                    const ey = flammeTopY - 4 - Math.abs(Math.sin(now / 110 + i)) * 12;
+                    g.fillStyle(COULEUR_BRAISE_VIVE, 0.8 * intensite);
+                    g.fillCircle(ex, ey, 1.5);
+                }
+            }
+            this.brasierPhase = 'feu';
+        } else {
+            // PHASE INERTE : braises résiduelles rougeoyantes dans la grille
+            const phaseProgress = (t - this.def.feuRatio) / (1 - this.def.feuRatio);
+            const lueur = 0.3 + 0.2 * Math.sin(now / 250);
+            // Quelques braises encore actives au fond de la grille
+            const nbBraises = Math.floor(w / 24);
+            for (let i = 0; i < nbBraises; i++) {
+                const bx = cx - w / 2 + (i + 0.5) * (w / nbBraises);
+                const by = socleTop + socleH * 0.5;
+                g.fillStyle(COULEUR_BRAISE_FONCE, lueur * (1 - phaseProgress * 0.6));
+                g.fillCircle(bx, by, 3);
+                g.fillStyle(COULEUR_BRAISE, lueur * 0.5);
+                g.fillCircle(bx, by, 1.5);
+            }
+            this.brasierPhase = 'inerte';
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 3 — Halls Cendrés : Mur secret (cassable invisible)
+    // ════════════════════════════════════════════════════════════════
+
+    _creerMurSecret() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        this.hp = this.data.hp ?? this.def.hpDefault;
+
+        // Récupère la palette biome courante (couleur plateforme du biome).
+        // Le mur doit ressembler à un morceau de mur/sol normal.
+        const paletteScene = this.scene.palette || {};
+        const couleurBase = paletteScene.plateforme ?? 0x3e3128;
+
+        // Sprite physique solide (bloque le joueur — collision ajoutée par GameScene)
+        // On crée DIRECTEMENT le rectangle visible avec la couleur biome.
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, couleurBase);
+        this.sprite.setDepth(8);  // = DEPTH.PLATEFORMES, identique aux plateformes
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+        if (this.scene.obstaclesSolides) this.scene.obstaclesSolides.add(this.sprite);
+
+        // Ornement identique aux plateformes du biome (peint par-dessus).
+        // Aucun indice que c'est cassable — c'est volontaire.
+        try {
+            this.ornement = peindreOrnementPlateforme(
+                this.scene, this.data.x, this.data.y, w, h,
+                this.scene.mondeCourant, paletteScene,
+                /* oneWay */ false,
+                /* estSol */ this.data.orientation === 'sol'
+            );
+        } catch (e) {
+            // Si l'ornement échoue (palette manquante), pas de crash : le mur
+            // garde juste son visuel rectangulaire de base — encore moins
+            // distinctif d'une plateforme.
+        }
+
+        // Couche de fissures (vide au départ — apparaîtra au fil des hits)
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(9);
+    }
+
+    /**
+     * Petit shake + nuage de poussière à l'impact — signal "ça sonne creux".
+     * Le joueur perçoit qu'il a touché quelque chose de SPÉCIAL sans voir de
+     * marque visible avant le 2ᵉ hit.
+     */
+    _sursauterMurSecret() {
+        // Shake court
+        const orig = { x: this.sprite.x, y: this.sprite.y };
+        this.scene.tweens.add({
+            targets: [this.sprite, this.ornement].filter(Boolean),
+            x: orig.x + 2,
+            duration: 40,
+            yoyo: true,
+            repeat: 2,
+            onComplete: () => {
+                if (this.sprite) this.sprite.x = orig.x;
+                if (this.ornement) this.ornement.x = 0;  // ornement use absolute coords
+            }
+        });
+        // Burst de poussière (couleur pierre claire biome) au point d'impact
+        if (this.scene.textures.exists('_particule')) {
+            const w = this.data.largeur ?? this.def.largeurDefault;
+            const h = this.data.hauteur ?? this.def.hauteurDefault;
+            const tintPalette = this.scene.palette?.pierreClaire ?? 0x6e5440;
+            const burst = this.scene.add.particles(this.data.x, this.data.y, '_particule', {
+                lifespan: 380,
+                speed: { min: 40, max: 100 },
+                angle: { min: 180, max: 360 },  // vers le haut (poussière qui s'élève)
+                scale: { start: 0.4, end: 0 },
+                tint: [tintPalette, 0xcccccc],
+                quantity: 8,
+                alpha: { start: 0.7, end: 0 }
+            });
+            burst.setDepth(15);
+            burst.explode(8);
+            this.scene.time.delayedCall(400, () => burst.destroy());
+        }
+    }
+
+    _dessinerMurSecret() {
+        const g = this.visual;
+        if (!g) return;
+        g.clear();
+        const totalHp = this.data.hp ?? this.def.hpDefault;
+        const dommage = (totalHp - this.hp) / totalHp;   // 0..1
+        // Pas de fissure visible tant que dommage < 0.4 (1er hit sur HP=4 → 0.25, rien)
+        // Première micro-fissure à dommage ≥ 0.4 (2ᵉ hit = 0.5)
+        // Fissures bien marquées à dommage ≥ 0.6 (3ᵉ hit = 0.75)
+        if (dommage < 0.4) return;
+
+        const cx = this.data.x, cy = this.data.y;
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        const epaisseur = dommage >= 0.6 ? 2 : 1;
+        const alpha = 0.3 + dommage * 0.5;
+
+        g.lineStyle(epaisseur, 0x1a1208, alpha);
+        // Fissures en étoile depuis le centre (style impact)
+        const seed = (cx * 13 + cy * 7) | 0;
+        const rand = (i) => {
+            const x = Math.sin(seed + i * 91.6) * 10000;
+            return x - Math.floor(x);
+        };
+        const nbFissures = Math.floor(2 + dommage * 4);
+        for (let i = 0; i < nbFissures; i++) {
+            const angle = (i / nbFissures) * Math.PI * 2 + rand(i) * 0.5;
+            const lon = Math.min(w, h) * 0.3 * (0.5 + rand(i + 7) * 0.5);
+            const x2 = cx + Math.cos(angle) * lon;
+            const y2 = cy + Math.sin(angle) * lon;
+            g.beginPath();
+            g.moveTo(cx, cy);
+            g.lineTo(x2, y2);
+            g.strokePath();
+            // Petite ramification
+            if (dommage >= 0.6) {
+                const ramAngle = angle + (rand(i + 13) - 0.5) * 0.8;
+                const ramLon = lon * 0.4;
+                g.beginPath();
+                g.moveTo(x2, y2);
+                g.lineTo(x2 + Math.cos(ramAngle) * ramLon, y2 + Math.sin(ramAngle) * ramLon);
+                g.strokePath();
+            }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 3 — Halls Cendrés : Mur explosif (explosion radiale)
+    // ════════════════════════════════════════════════════════════════
+
+    _exploserMur() {
+        const cx = this.data.x, cy = this.data.y;
+        const def = this.def;
+        const nbProj = def.nbProjectiles ?? 6;
+        const vitesse = def.vitesseProjectile ?? 320;
+        const degats = def.degatsProjectile ?? 4;
+
+        // Shake plus violent que la cassure simple
+        this.scene.cameras.main.shake(160, 0.008);
+
+        // Flash blanc rapide centré
+        const flash = this.scene.add.circle(cx, cy, def.rayonExplosion ?? 220, 0xffffff, 0.65);
+        flash.setDepth(20);
+        this.scene.tweens.add({
+            targets: flash,
+            alpha: 0,
+            scale: { from: 0.3, to: 1.2 },
+            duration: 280,
+            ease: 'Cubic.easeOut',
+            onComplete: () => flash.destroy()
+        });
+
+        // Projectiles braises radiaux
+        const fauxDef = { degats, invincibiliteApresHit: 500 };
+        const fauxObs = { def: fauxDef };
+        for (let i = 0; i < nbProj; i++) {
+            const angle = (i / nbProj) * Math.PI * 2;
+            const dx = Math.cos(angle), dy = Math.sin(angle);
+            const proj = this.scene.add.rectangle(cx, cy, 14, 14, 0xffffff, 0);
+            proj.setAlpha(0);
+            this.scene.physics.add.existing(proj);
+            proj.body.allowGravity = false;
+            proj.body.setVelocity(dx * vitesse, dy * vitesse);
+            proj._dernierHit = 0;
+
+            // Visuel : braise pulsante orange-jaune
+            const visuel = this.scene.add.graphics();
+            visuel.setDepth(14);
+
+            // Overlap joueur : dégâts via pipeline pieu
+            const overlap = this.scene.physics.add.overlap(this.scene.player, proj, () => {
+                const t = this.scene.time.now;
+                if (t - proj._dernierHit < 500) return;
+                proj._dernierHit = t;
+                this.scene.events.emit('obstacle:pieu:hit', fauxObs);
+            });
+
+            // Boucle update visuel + auto-destruction
+            const tween = this.scene.tweens.addCounter({
+                from: 0, to: 1,
+                duration: 1100,
+                onUpdate: (tw) => {
+                    if (!proj.active) return;
+                    visuel.clear();
+                    const fade = 1 - tw.getValue();
+                    // Traînée
+                    visuel.fillStyle(COULEUR_BRAISE_FONCE, 0.4 * fade);
+                    visuel.fillCircle(proj.x - dx * 12, proj.y - dy * 12, 8);
+                    visuel.fillStyle(COULEUR_BRAISE, 0.6 * fade);
+                    visuel.fillCircle(proj.x - dx * 6, proj.y - dy * 6, 6);
+                    // Cœur
+                    visuel.fillStyle(COULEUR_BRAISE_VIVE, fade);
+                    visuel.fillCircle(proj.x, proj.y, 5);
+                    visuel.fillStyle(0xffffff, fade * 0.7);
+                    visuel.fillCircle(proj.x, proj.y, 2);
+                },
+                onComplete: () => {
+                    overlap?.destroy();
+                    proj?.destroy();
+                    visuel?.destroy();
+                }
+            });
+        }
     }
 }

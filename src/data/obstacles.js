@@ -20,6 +20,17 @@
 //   - anti_ancrage     : zone qui désactive le geste d'ancrage dans son rayon
 //                        (gérée par AncrageSystem, présente comme zone non-physique)
 //
+//   ─── Vague 3 Halls Cendrés ──────────────────────────────────────
+//   - brasier_mobile   : zone de feu au sol pulsant on/off (cycle 2.5s),
+//                        dégâts seulement en phase ON. Lecture cendres actives.
+//   - mur_explosif     : mur fissuré qui ÉCLATE en projectiles braises à la
+//                        cassure. Détruire = dangereux mais souvent récompensé
+//                        (sous-salle cachée).
+//   - mur_secret       : mur VISUELLEMENT IDENTIQUE à une plateforme/sol normale
+//                        du biome (aucun indice). Cassable en 4 hits. Première
+//                        fissure révélée après ~2 hits. Pure découverte
+//                        Metroidvania — récompense l'exploration aveugle.
+//
 // La data ici décrit les paramètres et le balance ; les visuels sont dans
 // `render/entities/*`. L'instanciation physique est dans `entities/Obstacle.js`.
 
@@ -108,5 +119,47 @@ export const TYPES_OBSTACLES = {
         // une ancre si player est dans la zone.
         // data : { x, y (centre), largeur, hauteur }
         largeurDefault: 200, hauteurDefault: 200
+    },
+
+    // ─── Vague 3 — Halls Cendrés ───────────────────────────────────
+    brasier_mobile: {
+        id: 'brasier_mobile',
+        // Zone de feu au sol qui pulse on/off cycliquement.
+        // Phase ON = dégâts au contact, phase OFF = socle terni inerte.
+        // Lecture biome Halls (cendres actives, feux résiduels).
+        // data : { x, y (centre), largeur, hauteur, cycleMs?, offsetMs? }
+        largeurDefault: 90, hauteurDefault: 36,
+        cycleMs: 2500,
+        feuRatio: 0.55,                // 55% du cycle = ON (fenêtre passage 45%)
+        degatsFeu: 3,
+        invincibiliteApresHit: 500
+    },
+    mur_explosif: {
+        id: 'mur_explosif',
+        // Mur fissuré chargé de braises. À la rupture, éclate en 6 projectiles
+        // radiaux qui font des dégâts. Sa destruction est dangereuse — récompense
+        // accrue (sous-salle, raccourci). Visuel pré-rupture = runes rouges.
+        // data : { x, y (centre), largeur, hauteur, hp? }
+        largeurDefault: 32, hauteurDefault: 140,
+        hpDefault: 4,
+        invincibiliteApresHit: 250,
+        // Explosion à la rupture
+        nbProjectiles: 6,
+        vitesseProjectile: 320,
+        degatsProjectile: 4,
+        rayonExplosion: 220
+    },
+
+    mur_secret: {
+        id: 'mur_secret',
+        // Mur cassable VISUELLEMENT IDENTIQUE à une plateforme/sol normale du
+        // biome (même couleur, même ornement painterly). Aucune fissure visible.
+        // Seul indice = particules de poussière à l'impact (signal sonore-visuel
+        // équivalent : "ça sonne creux"). Premier hit révèle une micro-fissure
+        // qui s'élargit avec les coups suivants. Métroidvania classique.
+        // data : { x, y (centre), largeur, hauteur, hp? }
+        largeurDefault: 60, hauteurDefault: 40,
+        hpDefault: 4,
+        invincibiliteApresHit: 200
     }
 };

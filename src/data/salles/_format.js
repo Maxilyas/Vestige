@@ -95,14 +95,20 @@ export function sol(xDeb, xFin, yTop, opts = {}) {
 }
 
 /**
- * Plafond bloquant — sépare deux étages d'une même salle. Identique à un
- * sol mais sa fonction sémantique est différente : il EMPÊCHE le joueur de
- * monter à l'étage du dessus, sauf via les ouvertures que tu laisses (gaps
- * dans le plafond, trappes one-way…).
+ * Plafond bloquant — sépare deux étages d'une même salle. Sa fonction
+ * peut être :
+ *   • DUAL : sert AUSSI de plateforme walkable pour l'étage du dessus
+ *     (cas Ruines cathédrale, atelier — joueur marche sur le plafond).
+ *   • CATHÉDRALE : ferme la voûte sans être walkable (cas Halls — plafond
+ *     organique en haut de salle). Pour ce cas, utiliser `plafondCathedrale`.
+ *
+ * Par défaut walkable (compat Ruines). Pour rendre non-walkable (validateur
+ * BFS), utiliser `plafondCathedrale` ou ajouter manuellement tag 'structurel'.
+ *
  * @param {number} xDeb  - x gauche
  * @param {number} xFin  - x droit
  * @param {number} yTop  - top du plafond
- * @param {object} [opts] - { h? = 14 }
+ * @param {object} [opts] - { h? = 14, tags? }
  */
 export function plafond(xDeb, xFin, yTop, opts = {}) {
     const h = opts.h ?? 14;
@@ -114,6 +120,72 @@ export function plafond(xDeb, xFin, yTop, opts = {}) {
         oneWay: false,
         tags: opts.tags ?? []
     };
+}
+
+/**
+ * Plafond CATHÉDRALE / VOÛTE : équivalent à `plafond` mais auto-tagué
+ * 'structurel'. Signale que le joueur n'est pas censé marcher sur le top
+ * (plafond ornemental qui ferme la salle, pas un palier). Le validateur
+ * BFS ignore ces éléments.
+ *
+ * Use cases : voûtes Halls, plafonds organiques avec stalactites, fermetures
+ * supérieures des cavernes.
+ */
+export function plafondCathedrale(xDeb, xFin, yTop, opts = {}) {
+    const h = opts.h ?? 14;
+    const tagsBase = opts.tags ?? [];
+    return {
+        x: (xDeb + xFin) / 2,
+        y: yTop + h / 2,
+        largeur: xFin - xDeb,
+        hauteur: h,
+        oneWay: false,
+        tags: tagsBase.includes('structurel') ? tagsBase : [...tagsBase, 'structurel']
+    };
+}
+
+/**
+ * Mur VERTICAL plein. Pour fermer les bords d'une salle, créer des piliers,
+ * cloisons internes, etc. Bloque tous les axes (pas oneWay).
+ *
+ * Tagué 'structurel' automatiquement : le validateur ne s'attend pas à ce
+ * que le joueur marche sur le top fin d'un mur (épaisseur 30).
+ *
+ * @param {number} x        - centre x
+ * @param {number} yHaut    - top du mur
+ * @param {number} yBas     - bottom du mur
+ * @param {object} [opts]   - { epaisseur? = 30, tags? }
+ */
+export function mur(x, yHaut, yBas, opts = {}) {
+    const epaisseur = opts.epaisseur ?? 30;
+    const tagsBase = opts.tags ?? [];
+    return {
+        x,
+        y: (yHaut + yBas) / 2,
+        largeur: epaisseur,
+        hauteur: yBas - yHaut,
+        oneWay: false,
+        tags: tagsBase.includes('structurel') ? tagsBase : [...tagsBase, 'structurel']
+    };
+}
+
+/**
+ * Mur lateral GAUCHE : ferme le bord ouest d'une salle du plafond au sol.
+ * À utiliser quand la porte O n'est pas active (donc bord plein).
+ * Inclut un peu de décor : pas plat 100%, légère varation x pour donner
+ * une lecture "paroi rocheuse" plutôt qu'écran lisse.
+ */
+export function murLateralGauche(yHaut, yBas, opts = {}) {
+    const x = opts.x ?? 15;
+    return mur(x, yHaut, yBas, { epaisseur: 30, ...opts });
+}
+
+/**
+ * Mur lateral DROIT : ferme le bord est. Symétrique de murLateralGauche.
+ */
+export function murLateralDroit(largeurSalle, yHaut, yBas, opts = {}) {
+    const x = opts.x ?? largeurSalle - 15;
+    return mur(x, yHaut, yBas, { epaisseur: 30, ...opts });
 }
 
 /**
@@ -329,6 +401,85 @@ export function ancre(x, yTop, w = 80, h = 30, opts = {}) {
             plateformeW: opts.plateformeW ?? 90,
             plateformeH: opts.plateformeH ?? 14
         }
+    };
+}
+
+// ─── Helpers obstacles Vague 3 (Halls Cendrés) ───
+
+/**
+ * Brasier mobile : zone de feu au sol qui pulse on/off cycliquement.
+ * Phase ON (55% du cycle) = dégâts. Phase OFF (45%) = passage sûr.
+ * Le joueur ne marche PAS dessus — c'est une zone de dégâts traversable
+ * (pas de plateforme). Pour bloquer un passage, le placer DANS le couloir.
+ * Pour synchroniser/désynchroniser plusieurs brasiers : varier offsetMs.
+ * @param {number} x         centre x
+ * @param {number} yTopSol   top du sol sur lequel le brasier est posé
+ * @param {object} [opts]    { largeur, hauteur, cycleMs, offsetMs }
+ */
+export function brasier(x, yTopSol, opts = {}) {
+    const largeur = opts.largeur ?? 90;
+    const hauteur = opts.hauteur ?? 36;
+    return {
+        type: 'brasier_mobile',
+        x,
+        y: yTopSol - hauteur / 2,  // ancré au sol (top du brasier au-dessus du sol)
+        largeur, hauteur,
+        cycleMs: opts.cycleMs ?? 2500,
+        offsetMs: opts.offsetMs ?? 0
+    };
+}
+
+/**
+ * Mur SECRET : visuellement IDENTIQUE à une plateforme/sol normale du biome
+ * (même palette, même ornement painterly). Aucune fissure visible. Le joueur
+ * découvre qu'il est cassable EN L'ATTAQUANT — dust particles + sound creux
+ * au premier hit, fissure visible après quelques coups.
+ *
+ * Utilisations type Metroidvania :
+ *   • Pan de mur lateral cachant une niche/coffre
+ *   • Sol qui mène à une cave secrète (attaquer le sol)
+ *   • Plafond cassable révélant une cheminée verticale
+ *
+ * HP par défaut 4. Pour bloquer vraiment un passage horizontal, prévoir
+ * largeur ≥ 60. Pour une dalle de sol, prévoir largeur 80-200.
+ * @param {number} x      - centre x
+ * @param {number} yTop   - top du mur
+ * @param {number} w      - largeur
+ * @param {number} h      - hauteur (40-200 selon usage)
+ * @param {object} [opts] - { hp?, dropSel?, dropFragmentFamille?, orientation? }
+ *                          orientation : 'mur' (vertical) | 'sol' (horizontal,
+ *                          dessiné comme un sol). Influence le visuel.
+ */
+export function murSecret(x, yTop, w, h, opts = {}) {
+    return {
+        type: 'mur_secret',
+        x,
+        y: yTop + h / 2,
+        largeur: w, hauteur: h,
+        hp: opts.hp ?? 4,
+        orientation: opts.orientation ?? 'mur',
+        dropSel: opts.dropSel ?? false,
+        dropFragmentFamille: opts.dropFragmentFamille ?? null
+    };
+}
+
+/**
+ * Mur explosif : mur fissuré chargé de braises. À la rupture, ÉCLATE en
+ * projectiles braises radiaux (6 par défaut). Détruire = dangereux, mais
+ * cache souvent une sous-salle/raccourci. HP par défaut 4.
+ * Pré-rupture : runes rouges visibles + cœur incandescent qui s'élargit.
+ */
+export function murExplosif(x, yTop, opts = {}) {
+    const largeur = opts.largeur ?? 32;
+    const hauteur = opts.hauteur ?? 140;
+    return {
+        type: 'mur_explosif',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur,
+        hp: opts.hp ?? 4,
+        dropSel: opts.dropSel ?? false,
+        dropFragmentFamille: opts.dropFragmentFamille ?? null
     };
 }
 

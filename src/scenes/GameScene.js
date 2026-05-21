@@ -318,6 +318,13 @@ export class GameScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
         this.cameras.main.setBounds(0, 0, salle.dims.largeur, salle.dims.hauteur);
 
+        // --- Gouffre mortel : si la salle déclare gouffreMort, le joueur peut
+        // tomber sous le sol (gouffres ouverts dans la géométrie) → mort instantanée.
+        // Réservé Présent : en Miroir, jamais de chute mortelle (hub paisible).
+        this._dimsSalle = salle.dims;
+        this._gouffreMort = !enMiroir && salle.gouffreMort === true;
+        this._mortGouffreEnCours = false;
+
         // --- COUCHES PARALLAX (du plus loin au plus proche) ---
         // Couche 1 (x0)    : ciel/abîme avec dégradé vertical, fixe à l'écran
         poserCiel(this, mondeCourant);
@@ -408,6 +415,16 @@ export class GameScene extends Phaser.Scene {
         this._posEntreeSalle = { x: spawn.x, y: spawn.y };
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
+        // Gouffre mortel : on désactive la collision bottom-bound pour laisser
+        // le joueur tomber dans le vide. _declencherMortGouffre s'active dans
+        // update() quand player.y dépasse le bottom de la salle.
+        if (this._gouffreMort) {
+            this.player.body.checkCollision.down = true;  // garde collision plateformes
+            this.player.body.onWorldBounds = false;
+            // Le bottom du world bounds reste actif mais on tue le joueur AVANT
+            // qu'il l'atteigne (cf. _declencherMortGouffre). On laisse 30 px de
+            // marge de chute pour le feedback visuel "il tombe vraiment".
+        }
         this.physics.add.collider(this.player, this.platforms);
 
         // Visuel séparé : silhouette + cœur lumineux (suit la position du Rectangle)
@@ -498,7 +515,8 @@ export class GameScene extends Phaser.Scene {
                 // Skip si éboulis/mur_fissure DÉJÀ brisé dans cette salle (persisté
                 // dans le registry pour survivre aux transit entre salles).
                 const cleBrise = `eboulis:${this.cleSalleEtage}:${idx}`;
-                if ((obsData.type === 'eboulis' || obsData.type === 'mur_fissure')
+                if ((obsData.type === 'eboulis' || obsData.type === 'mur_fissure'
+                     || obsData.type === 'mur_explosif' || obsData.type === 'mur_secret')
                     && this.registry.get(cleBrise) === true) continue;
 
                 const obs = new Obstacle(this, obsData, salle.biomeId);
@@ -512,7 +530,7 @@ export class GameScene extends Phaser.Scene {
                         obs.onContactJoueur(this, this.player));
                 } else if (t === 'plateforme_mobile') {
                     this.physics.add.collider(this.player, obs.sprite);
-                } else if (t === 'eboulis' || t === 'mur_fissure') {
+                } else if (t === 'eboulis' || t === 'mur_fissure' || t === 'mur_explosif' || t === 'mur_secret') {
                     // Bloquant : collision dure. Géré par obstaclesSolides (déjà ajouté
                     // par l'Obstacle dans _creerCassable via scene.obstaclesSolides).
                     this.physics.add.collider(this.player, obs.sprite);
@@ -534,6 +552,11 @@ export class GameScene extends Phaser.Scene {
                     // Collider one-way en phase plateforme ; overlap dégât en phase pieu.
                     this.physics.add.collider(this.player, obs.sprite, null,
                         () => this.time.now >= this.dropThroughJusqu);
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'brasier_mobile') {
+                    // Zone d'overlap pure : dégâts seulement en phase 'feu'
+                    // (gérée par onContactJoueur qui check this.brasierPhase).
                     this.physics.add.overlap(this.player, obs.sprite, () =>
                         obs.onContactJoueur(this, this.player));
                 }
@@ -937,6 +960,14 @@ export class GameScene extends Phaser.Scene {
         // --- Update des obstacles (plateformes mobiles oscillent) ---
         for (const o of this.obstacles) o.update();
 
+        // --- Gouffres mortels (salle.gouffreMort = true) ---
+        // Si le joueur est tombé sous le bottom de la salle (gouffre du sol non
+        // continu), on inflige mort = retour Cité Miroir. Le joueur a chuté dans
+        // l'abîme : tu refais ton run depuis la Cité.
+        if (this._gouffreMort && this.player.y > this._dimsSalle.hauteur + 30) {
+            this._declencherMortGouffre();
+        }
+
         // --- Update du visuel joueur ---
         if (this.playerVisual) {
             this.playerVisual.setPosition(this.player.x, this.player.y);
@@ -1078,7 +1109,8 @@ export class GameScene extends Phaser.Scene {
         if (this.obstacles) {
             for (const o of this.obstacles) {
                 if (!o.sprite || !o.sprite.active) continue;
-                if (o.data.type !== 'eboulis' && o.data.type !== 'mur_fissure') continue;
+                if (o.data.type !== 'eboulis' && o.data.type !== 'mur_fissure'
+                    && o.data.type !== 'mur_explosif' && o.data.type !== 'mur_secret') continue;
                 const dx = Math.abs(o.sprite.x - hx);
                 const dy = Math.abs(o.sprite.y - hy);
                 const ow = o.sprite.width  ?? 60;
@@ -2269,6 +2301,21 @@ export class GameScene extends Phaser.Scene {
         this.events.once('shutdown', () => {
             this.registry.events.off('resonance:vide', this.handlerVide);
         });
+    }
+
+    /**
+     * Chute mortelle dans un gouffre : trigger une fois quand le joueur passe
+     * sous le sol d'une salle avec `gouffreMort:true`. Inflige assez de
+     * Résonance pour basculer en Miroir (Cité). Le flag empêche les multi-déclenchements.
+     */
+    _declencherMortGouffre() {
+        if (this._mortGouffreEnCours) return;
+        this._mortGouffreEnCours = true;
+        // Petit shake + fondu rapide pour vendre la chute
+        this.cameras.main.shake(180, 0.012);
+        this.cameras.main.fade(220, 0, 0, 0);
+        // Tue le joueur via la pipeline normale (massive damage → resonance:vide → Cité)
+        this.resonance.prendreDegats(999);
     }
 
     activerBaissePassive(_enMiroir) {

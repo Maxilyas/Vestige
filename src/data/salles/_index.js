@@ -36,6 +36,34 @@ import { ruines_pont_soupirs }        from './ruines/ruines_pont_soupirs.js';
 import { ruines_tour_brouillage }     from './ruines/ruines_tour_brouillage.js';
 import { ruines_caveau_scelle }       from './ruines/ruines_caveau_scelle.js';
 
+// ─── Halls Cendrés (Phase 8 — 25 salles + 1 fallback) ────────────
+import { halls_couloir_brasiers }     from './halls/halls_couloir_brasiers.js';
+import { halls_grand_mur }            from './halls/halls_grand_mur.js';
+import { halls_cascade_pierres }      from './halls/halls_cascade_pierres.js';
+import { halls_brasserie }            from './halls/halls_brasserie.js';
+import { halls_voute_basse }          from './halls/halls_voute_basse.js';
+import { halls_pont_braise }          from './halls/halls_pont_braise.js';
+import { halls_atelier_marteau }      from './halls/halls_atelier_marteau.js';
+import { halls_couloir_explosif }     from './halls/halls_couloir_explosif.js';
+import { halls_crypte_effondree }     from './halls/halls_crypte_effondree.js';
+import { halls_cheminee_braise }      from './halls/halls_cheminee_braise.js';
+import { halls_puits_cendres }        from './halls/halls_puits_cendres.js';
+import { halls_coin_NE }              from './halls/halls_coin_NE.js';
+import { halls_coin_SO }              from './halls/halls_coin_SO.js';
+import { halls_coin_NO }              from './halls/halls_coin_NO.js';
+import { halls_coin_SE }              from './halls/halls_coin_SE.js';
+import { halls_t_NEO }                from './halls/halls_t_NEO.js';
+import { halls_t_SEO }                from './halls/halls_t_SEO.js';
+import { halls_t_NSO }                from './halls/halls_t_NSO.js';
+import { halls_t_NSE }                from './halls/halls_t_NSE.js';
+import { halls_impasse_O }            from './halls/halls_impasse_O.js';
+import { halls_impasse_E }            from './halls/halls_impasse_E.js';
+import { halls_impasse_N }            from './halls/halls_impasse_N.js';
+import { halls_impasse_S }            from './halls/halls_impasse_S.js';
+import { halls_foyer_eteint }         from './halls/halls_foyer_eteint.js';
+import { halls_reseau_plaques }       from './halls/halls_reseau_plaques.js';
+import { halls_carrefour_brasier }    from './halls/halls_carrefour_brasier.js';
+
 // 19 salles handcrafted Ruines basses dans le pool de tirage normal.
 // Le carrefour NSEO est EXCLU du tirage : il ne sort que via salleFallback()
 // quand aucune autre salle ne match (configs NSE, NSO, NSEO rares). Sinon
@@ -61,20 +89,55 @@ const TOUTES_SALLES = [
     ruines_crypte_profonde,    // NS   — descente paliers + pieux méca
     ruines_pont_soupirs,       // OE   — pont effrites en cascade (unique)
     ruines_tour_brouillage,    // OES  — anti-ancrage central (unique)
-    ruines_caveau_scelle       // OE   — mur fissuré central + roc (unique)
+    ruines_caveau_scelle,      // OE   — mur fissuré central + roc (unique)
+
+    // ─── Halls Cendrés (25 salles ; mécanique = destruction) ──────
+    // OE bus principal (8)
+    halls_couloir_brasiers,    // OE   — 3 brasiers cycliques décalés
+    halls_grand_mur,           // OE   — mur géant HP=8 central (unique)
+    halls_cascade_pierres,     // OE   — réaction en chaîne murs + rocs (unique)
+    halls_brasserie,           // OE   — combat vertical pieux + ressorts (unique)
+    halls_voute_basse,         // OE   — couloir bas + sols effrites
+    halls_pont_braise,         // OE   — pont au-dessus fosse de brasiers
+    halls_atelier_marteau,     // OE   — sous-salle coffre via mur fissuré
+    halls_couloir_explosif,    // OE   — 2 murs explosifs au sol
+    // NS verticaux (3)
+    halls_crypte_effondree,    // NS   — zigzag + niches latérales (unique)
+    halls_cheminee_braise,     // NS   — brasiers étagés en quinconce
+    halls_puits_cendres,       // NS   — sols effrites + mur barre en haut
+    // Coins (4)
+    halls_coin_NE,             // NE   — atelier vertical + niche mur fissuré
+    halls_coin_SO,             // SO   — foyer éteint + éboulis
+    halls_coin_NO,             // NO   — cendrier suspendu + mur explosif
+    halls_coin_SE,             // SE   — descente forge + plaque pression
+    // T (4)
+    halls_t_NEO,               // NEO  — voûte fendue 3 étages (unique)
+    halls_t_SEO,               // SEO  — carrefour dépôts + éboulis
+    halls_t_NSO,               // NSO  — passage triple ouest
+    halls_t_NSE,               // NSE  — passage triple est
+    // Deadends (4)
+    halls_impasse_O,           // O    — sanctuaire éteint deadend
+    halls_impasse_E,           // E    — chambre brasier permanent
+    halls_impasse_N,           // N    — corniche oubliée vertical haut
+    halls_impasse_S,           // S    — fosse brasiers vertical bas
+    // Signature OES/NEO (2)
+    halls_foyer_eteint,        // OES  — 3 niveaux + sous-salle mur explosif (unique)
+    halls_reseau_plaques       // NEO  — 3 plaques pression puzzle (unique)
 ];
 
 // Salles de secours par biome (jamais dans le pool de tirage normal —
 // matchent toutes les configs et écraseraient la variété).
 const PAR_ID_FALLBACK = {
-    [ruines_carrefour.id]: ruines_carrefour
+    [ruines_carrefour.id]: ruines_carrefour,
+    [halls_carrefour_brasier.id]: halls_carrefour_brasier
 };
 
 // Salle "fallback" universelle par biome. Utilisée quand le pool est trop
 // pauvre pour matcher la combinaison de portes demandée. Doit supporter
 // les 4 portes NSEO.
 const FALLBACK_PAR_BIOME = {
-    'ruines_basses': ruines_carrefour
+    'ruines_basses': ruines_carrefour,
+    'halls_cendres': halls_carrefour_brasier
 };
 
 export function salleFallback(biomeId) {

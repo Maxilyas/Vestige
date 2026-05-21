@@ -41,7 +41,11 @@ function peutAtteindre(P, Q) {
 }
 
 function valider(salle) {
-    const plateformes = salle.plateformes.filter(p => !p.tags?.includes('decoratif'));
+    // Ignore les plateformes 'decoratif' (purement visuelles) ET 'structurel'
+    // (murs latéraux, plafonds, cloisons — non walkable par design).
+    const plateformes = salle.plateformes.filter(p =>
+        !p.tags?.includes('decoratif') && !p.tags?.includes('structurel')
+    );
     if (plateformes.length === 0) return [];
 
     // Sol = la plus large plateforme (souvent yTop le plus bas aussi)
@@ -76,7 +80,16 @@ const ids = ['ruines_grimpeur','ruines_passage_humble','ruines_carrefour',
              'ruines_impasse_O','ruines_impasse_E','ruines_arche_brisee',
              'ruines_cathedrale','ruines_tour_sentinelles','ruines_atelier',
              'ruines_3plaques','ruines_crypte_profonde','ruines_pont_soupirs',
-             'ruines_tour_brouillage','ruines_caveau_scelle'];
+             'ruines_tour_brouillage','ruines_caveau_scelle',
+             // ─── Halls Cendrés (Phase 8, vague 5) ───
+             'halls_couloir_brasiers','halls_grand_mur','halls_cascade_pierres',
+             'halls_brasserie','halls_voute_basse','halls_pont_braise',
+             'halls_atelier_marteau','halls_couloir_explosif',
+             'halls_crypte_effondree','halls_cheminee_braise','halls_puits_cendres',
+             'halls_coin_NE','halls_coin_SO','halls_coin_NO','halls_coin_SE',
+             'halls_t_NEO','halls_t_SEO','halls_t_NSO','halls_t_NSE',
+             'halls_impasse_O','halls_impasse_E','halls_impasse_N','halls_impasse_S',
+             'halls_foyer_eteint','halls_reseau_plaques','halls_carrefour_brasier'];
 
 let totalBugs = 0;
 for (const id of ids) {
