@@ -11,6 +11,7 @@
 import { VORTEX_DIMS, HAUTEUR_SOL_EXPORT as HAUTEUR_SOL } from '../data/archetypes.js';
 import { biomePourEtage } from '../data/biomes.js';
 import { tirerRarete, probasPourEtage } from './RaritySystem.js';
+import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 
 // --- PRNG déterministe (Mulberry32) ---
 export function creerRng(seed) {
@@ -92,7 +93,15 @@ export function genererSalle({
 
     // 1. Structure physique : la topographie owns dims + plateformes + obstacles
     //    + portes positions + spawnDefault.
-    const dims = topographie.dims;
+    //
+    // Phase 9 — Salles compactes : si la topographie déclare `dimsCanvas: true`,
+    // on force les dims à la taille du canvas (960×540) et la caméra sera figée
+    // sur la salle (cf. GameScene). Permet une transition progressive : ancien
+    // pipeline scrollé pour les salles legacy, nouveau pipeline fixe pour les
+    // salles compactes refondues à partir de Phase 9.
+    const dims = topographie.dimsCanvas
+        ? { largeur: GAME_WIDTH, hauteur: GAME_HEIGHT }
+        : topographie.dims;
     const result = topographie.generer({ rng, portesActives, dims });
     const plateformes = result.plateformes;
     const obstacles = result.obstacles ?? [];
@@ -224,6 +233,10 @@ export function genererSalle({
         topographie: topographie.id,
         etageNumero,
         dims,
+        // Phase 9 — propagé à GameScene pour décider de figer la caméra ou non.
+        // Les salles legacy (XL, dims variables) gardent le scroll caméra ;
+        // les salles compactes (960×540) ont caméra figée sur 0,0.
+        dimsCanvas: !!topographie.dimsCanvas,
         plateformes,
         obstacles,
         portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur, interieur }

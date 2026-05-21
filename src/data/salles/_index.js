@@ -35,6 +35,8 @@ import { ruines_crypte_profonde }     from './ruines/ruines_crypte_profonde.js';
 import { ruines_pont_soupirs }        from './ruines/ruines_pont_soupirs.js';
 import { ruines_tour_brouillage }     from './ruines/ruines_tour_brouillage.js';
 import { ruines_caveau_scelle }       from './ruines/ruines_caveau_scelle.js';
+// ─── Phase 9.2 : salle test compacte 960×540 (canvas fixe, caméra figée) ───
+import { ruines_atrium_effondre }     from './ruines/ruines_atrium_effondre.js';
 
 // ─── Halls Cendrés (Phase 8 — 25 salles + 1 fallback) ────────────
 import { halls_couloir_brasiers }     from './halls/halls_couloir_brasiers.js';
@@ -90,6 +92,8 @@ const TOUTES_SALLES = [
     ruines_pont_soupirs,       // OE   — pont effrites en cascade (unique)
     ruines_tour_brouillage,    // OES  — anti-ancrage central (unique)
     ruines_caveau_scelle,      // OE   — mur fissuré central + roc (unique)
+    // ─── Phase 9.2 : salle test compacte (canvas 960×540, caméra figée) ───
+    ruines_atrium_effondre,    // OE   — 5 niveaux verticaux dans 540 px (unique)
 
     // ─── Halls Cendrés (25 salles ; mécanique = destruction) ──────
     // OE bus principal (8)

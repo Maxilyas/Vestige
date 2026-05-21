@@ -450,22 +450,35 @@ export class GameScene extends Phaser.Scene {
         this.ancrage = new AncrageSystem(this, this.resonance);
         this.ancrage.initSalle(salle.zones ?? []);
 
-        // --- Caméra : suit le joueur avec lerp doux + deadzone ---
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-        this.cameras.main.setDeadzone(200, 150);
-        // Zoom dynamique (touche TAB maintenue = vue d'ensemble fluide)
-        this.cameras.main.setZoom(1);
+        // --- Caméra : 2 modes selon Phase 9 ─
+        //   • Salle compacte (dimsCanvas) : caméra FIGÉE sur 0,0 → 960×540.
+        //     La salle = l'écran. Pas de scroll, pas de follow, pas de zoom-out
+        //     (rien à voir hors champ). Mode mini-Metroidvania Phase 9+.
+        //   • Salle legacy (dims XL) : follow joueur + zoom-out TAB pour
+        //     vue d'ensemble. Comportement historique Phase 8 et avant.
         const cam = this.cameras.main;
-        this._zoomNormal = 1;
-        // Cible de zoom-out : on prend le MIN entre fit-width et fit-height,
-        // ce qui garantit qu'on VOIT la salle ENTIÈRE (quitte à exposer du
-        // vide hors-monde sur l'axe minoritaire). C'est le bon compromis pour
-        // les salles tall (puits) ET wide (chunks/handcrafted XL). Le vide
-        // visible est gérable visuellement (vignette fade + parallax discret).
-        const fitWidth  = cam.width  / salle.dims.largeur;
-        const fitHeight = cam.height / salle.dims.hauteur;
-        this._zoomOut = Math.min(Math.min(fitWidth, fitHeight), 1);
-        this._zoomCible = this._zoomNormal;
+        if (salle.dimsCanvas) {
+            cam.stopFollow();
+            cam.setScroll(0, 0);
+            cam.setZoom(1);
+            this._zoomNormal = 1;
+            this._zoomOut = 1;          // dézoom = pas d'effet (salle = écran)
+            this._zoomCible = 1;
+        } else {
+            cam.startFollow(this.player, true, 0.1, 0.1);
+            cam.setDeadzone(200, 150);
+            cam.setZoom(1);
+            this._zoomNormal = 1;
+            // Cible de zoom-out : on prend le MIN entre fit-width et fit-height,
+            // ce qui garantit qu'on VOIT la salle ENTIÈRE (quitte à exposer du
+            // vide hors-monde sur l'axe minoritaire). C'est le bon compromis pour
+            // les salles tall (puits) ET wide (chunks/handcrafted XL). Le vide
+            // visible est gérable visuellement (vignette fade + parallax discret).
+            const fitWidth  = cam.width  / salle.dims.largeur;
+            const fitHeight = cam.height / salle.dims.hauteur;
+            this._zoomOut = Math.min(Math.min(fitWidth, fitHeight), 1);
+            this._zoomCible = this._zoomNormal;
+        }
 
         // Direction de l'attaque
         this.lastDirection = 1;
