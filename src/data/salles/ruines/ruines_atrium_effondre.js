@@ -68,9 +68,10 @@ export const ruines_atrium_effondre = {
         // Niveau 4 — palier sommet sous la voûte (passerelle + 70)
         plateformes.push(plateforme(480, 220, 110, { oneWay: true }));
 
-        // Niveau 5 — corniche tout en haut (palier sommet + 70)
-        plateformes.push(plateforme(220, 150, 100, { oneWay: true }));
-        plateformes.push(plateforme(740, 150, 100, { oneWay: true }));
+        // Niveau 5 — corniches sommet (palier sommet + 70, edge-to-edge < 130)
+        // Rapprochées du centre pour rester atteignables depuis palier 480/220.
+        plateformes.push(plateforme(330, 150, 110, { oneWay: true }));
+        plateformes.push(plateforme(630, 150, 110, { oneWay: true }));
 
         // ─── Pas d'obstacles pour le test (lecture max) ──────────────
         const obstacles = [];

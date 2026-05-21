@@ -37,6 +37,11 @@ import { ruines_tour_brouillage }     from './ruines/ruines_tour_brouillage.js';
 import { ruines_caveau_scelle }       from './ruines/ruines_caveau_scelle.js';
 // ─── Phase 9.2 : salle test compacte 960×540 (canvas fixe, caméra figée) ───
 import { ruines_atrium_effondre }     from './ruines/ruines_atrium_effondre.js';
+// ─── Phase 9.3b : Pool OE compact Ruines (4 salles) ───────────────────
+import { ruines_couloir_brise }       from './ruines/ruines_couloir_brise.js';
+import { ruines_escaliers_effrites }  from './ruines/ruines_escaliers_effrites.js';
+import { ruines_arene_pieux }         from './ruines/ruines_arene_pieux.js';
+import { ruines_arene_ressorts }      from './ruines/ruines_arene_ressorts.js';
 
 // ─── Halls Cendrés (Phase 8 — 25 salles + 1 fallback) ────────────
 import { halls_couloir_brasiers }     from './halls/halls_couloir_brasiers.js';
@@ -94,6 +99,11 @@ const TOUTES_SALLES = [
     ruines_caveau_scelle,      // OE   — mur fissuré central + roc (unique)
     // ─── Phase 9.2 : salle test compacte (canvas 960×540, caméra figée) ───
     ruines_atrium_effondre,    // OE   — 5 niveaux verticaux dans 540 px (unique)
+    // ─── Phase 9.3b : Pool OE compact Ruines (4 salles) ───────────────
+    ruines_couloir_brise,      // OE   — combat propre style Hollow Knight
+    ruines_escaliers_effrites, // OE   — timing sols effrités style Celeste
+    ruines_arene_pieux,        // OE   — combat sur sol piégé style Castlevania
+    ruines_arene_ressorts,     // OE   — mobilité aérienne dynamique
 
     // ─── Halls Cendrés (25 salles ; mécanique = destruction) ──────
     // OE bus principal (8)

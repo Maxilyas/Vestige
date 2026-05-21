@@ -81,6 +81,10 @@ const ids = ['ruines_grimpeur','ruines_passage_humble','ruines_carrefour',
              'ruines_cathedrale','ruines_tour_sentinelles','ruines_atelier',
              'ruines_3plaques','ruines_crypte_profonde','ruines_pont_soupirs',
              'ruines_tour_brouillage','ruines_caveau_scelle',
+             // ─── Phase 9.2/9.3 — Salles compactes 960×540 ───
+             'ruines_atrium_effondre',
+             'ruines_couloir_brise','ruines_escaliers_effrites',
+             'ruines_arene_pieux','ruines_arene_ressorts',
              // ─── Halls Cendrés (Phase 8, vague 5) ───
              'halls_couloir_brasiers','halls_grand_mur','halls_cascade_pierres',
              'halls_brasserie','halls_voute_basse','halls_pont_braise',
