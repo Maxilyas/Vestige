@@ -13,6 +13,19 @@
 //     de portes (ex. {O,E,N}). Catalogue retourne le pool de salles dont
 //     portesPossibles ⊇ portes demandées (un superset est OK : la salle
 //     ne dessine que les portes activeés à la génération).
+//
+// ═════════════════════════════════════════════════════════════════════
+// PHASE 9 — MODE TEST COMPACT ONLY (TEMPORAIRE)
+// ═════════════════════════════════════════════════════════════════════
+// Quand `true`, `sallesCompatibles` filtre le pool de tirage spanning
+// tree pour ne garder QUE les salles `dimsCanvas: true` (Phase 9.3+).
+// Pour les configs de portes non couvertes par les salles compactes,
+// le système se rabat sur le fallback (carrefour XL legacy).
+// → À désactiver une fois Phase 9.3 complète (NS + coins + T + impasses
+//   compacts créés). Les pins éditoriaux via sallePar() ne sont PAS
+//   affectés par ce flag (ils retrouvent toujours leur salle).
+// ═════════════════════════════════════════════════════════════════════
+const MODE_COMPACT_ONLY = true;
 
 import { ruines_grimpeur }            from './ruines/ruines_grimpeur.js';
 import { ruines_passage_humble }      from './ruines/ruines_passage_humble.js';
@@ -182,10 +195,16 @@ export function sallesCompatibles(biomeId, portesReq, role, dejaUtilisees) {
     return TOUTES_SALLES.filter(s => {
         if (s.biome !== biomeId) return false;
         if (!portesReq.every(d => s.portesPossibles.includes(d))) return false;
-        if (role && s.rolesAutorises && !s.rolesAutorises.includes(role)) return false;
+        // Phase 9 mode test : on ignore le filtre rolesAutorises pour
+        // maximiser la présence des 5 salles compactes (sinon les deadends
+        // tirent sur le fallback XL). Hors mode test, filtre normal.
+        if (role && s.rolesAutorises && !s.rolesAutorises.includes(role) && !MODE_COMPACT_ONLY) return false;
         // Salles "unique" : max 1 par étage (Grimpeur, Arche brisée, futures
         // salles signature). Si déjà tirée → exclue du pool.
         if (s.unique && dejaUtilisees?.has(s.id)) return false;
+        // Phase 9 — mode test : filtre pour ne garder que les salles
+        // compactes 960×540. Configs non couvertes → fallback (carrefour XL).
+        if (MODE_COMPACT_ONLY && !s.dimsCanvas) return false;
         return true;
     });
 }
