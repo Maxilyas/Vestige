@@ -15,15 +15,21 @@
 //     ne dessine que les portes activeés à la génération).
 //
 // ═════════════════════════════════════════════════════════════════════
-// PHASE 9 — MODE TEST COMPACT ONLY (TEMPORAIRE)
+// PHASE 9 — MODE COMPACT ONLY (Ruines)
 // ═════════════════════════════════════════════════════════════════════
 // Quand `true`, `sallesCompatibles` filtre le pool de tirage spanning
-// tree pour ne garder QUE les salles `dimsCanvas: true` (Phase 9.3+).
-// Pour les configs de portes non couvertes par les salles compactes,
-// le système se rabat sur le fallback (carrefour XL legacy).
-// → À désactiver une fois Phase 9.3 complète (NS + coins + T + impasses
-//   compacts créés). Les pins éditoriaux via sallePar() ne sont PAS
-//   affectés par ce flag (ils retrouvent toujours leur salle).
+// tree pour ne garder QUE les salles `dimsCanvas: true` (Ruines 9.3+).
+// Le fallback Ruines pointe désormais sur `ruines_carrefour_compact`
+// (cf. FALLBACK_PAR_BIOME), donc même les configs non couvertes par
+// le pool compact retombent sur du compact.
+//
+// Reste activé tant que les biomes 2-5 (Halls, Cristaux, Voile, Cœur)
+// n'ont pas leurs propres salles compactes. Quand on migrera ces biomes,
+// on retirera ce flag — les salles XL legacy seront alors complètement
+// retirées du pool.
+//
+// Les pins éditoriaux via sallePar() ne sont PAS affectés par ce flag
+// (ils retrouvent toujours leur salle, même XL).
 // ═════════════════════════════════════════════════════════════════════
 const MODE_COMPACT_ONLY = true;
 
@@ -55,6 +61,22 @@ import { ruines_couloir_brise }       from './ruines/ruines_couloir_brise.js';
 import { ruines_escaliers_effrites }  from './ruines/ruines_escaliers_effrites.js';
 import { ruines_arene_pieux }         from './ruines/ruines_arene_pieux.js';
 import { ruines_arene_ressorts }      from './ruines/ruines_arene_ressorts.js';
+// ─── Phase 9.3c : Pool compact Ruines complet (15 salles) ─────────────
+import { ruines_carrefour_compact }   from './ruines/ruines_carrefour_compact.js';
+import { ruines_puits_compact }       from './ruines/ruines_puits_compact.js';
+import { ruines_cheminee_compact }    from './ruines/ruines_cheminee_compact.js';
+import { ruines_coin_NE_compact }     from './ruines/ruines_coin_NE_compact.js';
+import { ruines_coin_NO_compact }     from './ruines/ruines_coin_NO_compact.js';
+import { ruines_coin_SE_compact }     from './ruines/ruines_coin_SE_compact.js';
+import { ruines_coin_SO_compact }     from './ruines/ruines_coin_SO_compact.js';
+import { ruines_t_NEO_compact }       from './ruines/ruines_t_NEO_compact.js';
+import { ruines_t_SEO_compact }       from './ruines/ruines_t_SEO_compact.js';
+import { ruines_t_NSO_compact }       from './ruines/ruines_t_NSO_compact.js';
+import { ruines_t_NSE_compact }       from './ruines/ruines_t_NSE_compact.js';
+import { ruines_impasse_O_compact }   from './ruines/ruines_impasse_O_compact.js';
+import { ruines_impasse_E_compact }   from './ruines/ruines_impasse_E_compact.js';
+import { ruines_impasse_N_compact }   from './ruines/ruines_impasse_N_compact.js';
+import { ruines_impasse_S_compact }   from './ruines/ruines_impasse_S_compact.js';
 
 // ─── Halls Cendrés (Phase 8 — 25 salles + 1 fallback) ────────────
 import { halls_couloir_brasiers }     from './halls/halls_couloir_brasiers.js';
@@ -117,6 +139,21 @@ const TOUTES_SALLES = [
     ruines_escaliers_effrites, // OE   — timing sols effrités style Celeste
     ruines_arene_pieux,        // OE   — combat sur sol piégé style Castlevania
     ruines_arene_ressorts,     // OE   — mobilité aérienne dynamique
+    // ─── Phase 9.3c : Pool compact Ruines complet (15 salles) ─────────
+    ruines_puits_compact,      // NS   — puits zigzag vertical
+    ruines_cheminee_compact,   // NS   — cheminée étroite + sols effrités centre
+    ruines_coin_NE_compact,    // NE   — tour de garde ascension droite
+    ruines_coin_NO_compact,    // NO   — belvédère ascension gauche
+    ruines_coin_SE_compact,    // SE   — descente oubliée vers le bas-droite
+    ruines_coin_SO_compact,    // SO   — caveau affaissé vers le bas-gauche
+    ruines_t_NEO_compact,      // NEO  — forum 3 voies ascension centrale
+    ruines_t_SEO_compact,      // SEO  — embranchement des dépôts
+    ruines_t_NSO_compact,      // NSO  — passage triple ouest
+    ruines_t_NSE_compact,      // NSE  — passage triple est
+    ruines_impasse_O_compact,  // O    — sanctuaire scellé deadend
+    ruines_impasse_E_compact,  // E    — atelier scellé deadend
+    ruines_impasse_N_compact,  // N    — corniche oubliée (haut → bas)
+    ruines_impasse_S_compact,  // S    — caveau profond (descente coffre)
 
     // ─── Halls Cendrés (25 salles ; mécanique = destruction) ──────
     // OE bus principal (8)
@@ -156,14 +193,18 @@ const TOUTES_SALLES = [
 // matchent toutes les configs et écraseraient la variété).
 const PAR_ID_FALLBACK = {
     [ruines_carrefour.id]: ruines_carrefour,
+    [ruines_carrefour_compact.id]: ruines_carrefour_compact,
     [halls_carrefour_brasier.id]: halls_carrefour_brasier
 };
 
 // Salle "fallback" universelle par biome. Utilisée quand le pool est trop
 // pauvre pour matcher la combinaison de portes demandée. Doit supporter
 // les 4 portes NSEO.
+//
+// Phase 9.3c : fallback Ruines passé à `ruines_carrefour_compact` (960×540)
+// pour garantir que toutes les configs spanning tree sortent en mode compact.
 const FALLBACK_PAR_BIOME = {
-    'ruines_basses': ruines_carrefour,
+    'ruines_basses': ruines_carrefour_compact,
     'halls_cendres': halls_carrefour_brasier
 };
 
@@ -202,9 +243,11 @@ export function sallesCompatibles(biomeId, portesReq, role, dejaUtilisees) {
         // Salles "unique" : max 1 par étage (Grimpeur, Arche brisée, futures
         // salles signature). Si déjà tirée → exclue du pool.
         if (s.unique && dejaUtilisees?.has(s.id)) return false;
-        // Phase 9 — mode test : filtre pour ne garder que les salles
-        // compactes 960×540. Configs non couvertes → fallback (carrefour XL).
-        if (MODE_COMPACT_ONLY && !s.dimsCanvas) return false;
+        // Phase 9 — mode compact-only : ne tire que les salles 960×540
+        // pour les biomes ayant un pool compact complet. Limité à 'ruines_basses'
+        // pour l'instant (Halls/Cristaux/Voile/Cœur restent en XL legacy
+        // jusqu'à leur migration en 9.4+).
+        if (MODE_COMPACT_ONLY && biomeId === 'ruines_basses' && !s.dimsCanvas) return false;
         return true;
     });
 }
