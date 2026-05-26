@@ -117,9 +117,13 @@ export function genererSalle({
     //    (En Présent, ce vortex n'est plus utilisé depuis Phase 1 — il vit pour
     //    la Cité Marchande en Miroir.)
     const platfMaxLargeur = plateformes.reduce((m, p) => Math.max(m, p.largeur), 0);
+    // Exclut les éléments `structurel` (plafondCathedrale, murs ornementaux) :
+    // visuellement des décors fermant la salle, pas des paliers walkable. Sinon
+    // ennemis/coffre/vortex pouvaient y être placés et tomber depuis le top.
     const plateformesFlottantes = plateformes.filter(p =>
         p.largeur < platfMaxLargeur * 0.95 &&
-        p.largeur > p.hauteur
+        p.largeur > p.hauteur &&
+        !(p.tags?.includes('structurel'))
     );
     const candidatsVortex = plateformesFlottantes.map(p => ({
         x: p.x,
@@ -179,9 +183,18 @@ export function genererSalle({
         }
     }
 
-    // 4. Drop orphelin (30 % si pas de coffre, et pas dans boss/entrée)
+    // 4. Drop orphelin.
+    //    - Si la salle handcrafted déclare `dropSolForce: {x, y}`, on l'utilise
+    //      (récompense intermédiaire de design : palier refuge d'une salle puzzle).
+    //    - Sinon, 30 % aléatoire si pas de coffre et pas dans boss/entrée.
     let dropSol = null;
-    if (!coffre && !estBoss && !estEntree && rng() < PROBA_DROP_SOL) {
+    if (!estBoss && !estEntree && result.dropSolForce) {
+        dropSol = {
+            x: result.dropSolForce.x,
+            y: result.dropSolForce.y,
+            largeur: 18, hauteur: 18
+        };
+    } else if (!coffre && !estBoss && !estEntree && rng() < PROBA_DROP_SOL) {
         dropSol = {
             x: entre(rng, 200, dims.largeur - 200),
             y: dims.hauteur - HAUTEUR_SOL - 10,
@@ -194,38 +207,61 @@ export function genererSalle({
     //    Scale linéaire selon largeur réelle (réf 1600 px = densité de base).
     //    Salles chunks 2400-5000 px → 1.5× à 3.1× ennemis pour densité perçue
     //    constante. Plafonné à 3× pour éviter explosion sur très longues salles.
+    //
+    //    Si la salle handcrafted déclare `ennemisForce: [{x, y, enemyId, tier?}, ...]`,
+    //    on utilise UNIQUEMENT ces ennemis (la salle contrôle son combat — utile
+    //    pour les salles signature avec rôles gardien/patrouille précis).
     const biome = biomePourEtage(etageNumero);
-    const fourchette = biome?.densite ?? ENNEMIS_PAR_NIVEAU[niveau];
-    const scaleLargeur = Math.min(3, Math.max(1, dims.largeur / 1600));
-    let nbEnnemis = Math.round(entreEntier(rng, fourchette.min, fourchette.max) * scaleLargeur);
-    if (estEntree || estBoss) nbEnnemis = 0;
-    // Pour éviter que les ennemis spawnent sur les plateformes d'échelle
-    // one-way (rendant la montée pénible), on filtre : ennemi sur plateforme
-    // flottante NORMALE uniquement, fallback sol si aucune normale dispo.
-    const plateformesEnnemiSpawn = plateformesFlottantes.filter(p => !p.oneWay);
-    const ennemis = [];
-    const pool = biome?.ennemisPool ?? [];
-    // RNG dédié à la rareté — découplé du tirage géométrie/ennemi pour rester
-    // stable même si la liste d'ennemis ou les plateformes évoluent.
     const rngRarete = creerRng((seedEtage ^ 0x5A17B0B0 ^ hashStr(salleId)) >>> 0);
     const probasRarete = probasPourEtage(etageNumero);
-    for (let i = 0; i < nbEnnemis; i++) {
-        const enemyId = pool.length > 0
-            ? pool[Math.floor(rng() * pool.length)]
-            : null;
-        const surSol = plateformesEnnemiSpawn.length === 0 || rng() < 0.5;
-        let x, y;
-        if (surSol) {
-            x = entre(rng, 150, dims.largeur - 150);
-            y = dims.hauteur - HAUTEUR_SOL - 20;
-        } else {
-            const p = plateformesEnnemiSpawn[entreEntier(rng, 0, plateformesEnnemiSpawn.length - 1)];
-            x = p.x;
-            y = p.y - p.hauteur / 2 - 20;
+    const ennemis = [];
+
+    if (!estEntree && !estBoss && Array.isArray(result.ennemisForce)) {
+        // Mode handcrafted : la salle dicte ses ennemis (positions + types).
+        // Le tier est forcé si déclaré, sinon tiré comme d'habitude.
+        result.ennemisForce.forEach((e, i) => {
+            ennemis.push({
+                x: e.x, y: e.y, idx: i,
+                enemyId: e.enemyId ?? null,
+                tier: e.tier ?? tirerRarete(rngRarete, probasRarete)
+            });
+        });
+    } else {
+        const fourchette = biome?.densite ?? ENNEMIS_PAR_NIVEAU[niveau];
+        const scaleLargeur = Math.min(3, Math.max(1, dims.largeur / 1600));
+        let nbEnnemis = Math.round(entreEntier(rng, fourchette.min, fourchette.max) * scaleLargeur);
+        if (estEntree || estBoss) nbEnnemis = 0;
+        // Pour éviter que les ennemis spawnent sur les plateformes d'échelle
+        // one-way (rendant la montée pénible), on filtre : ennemi sur plateforme
+        // flottante NORMALE uniquement, fallback sol si aucune normale dispo.
+        const plateformesEnnemiSpawn = plateformesFlottantes.filter(p => !p.oneWay);
+        const pool = biome?.ennemisPool ?? [];
+        for (let i = 0; i < nbEnnemis; i++) {
+            const enemyId = pool.length > 0
+                ? pool[Math.floor(rng() * pool.length)]
+                : null;
+            const surSol = plateformesEnnemiSpawn.length === 0 || rng() < 0.5;
+            let x, y;
+            if (surSol) {
+                x = entre(rng, 150, dims.largeur - 150);
+                y = dims.hauteur - HAUTEUR_SOL - 20;
+            } else {
+                const p = plateformesEnnemiSpawn[entreEntier(rng, 0, plateformesEnnemiSpawn.length - 1)];
+                x = p.x;
+                y = p.y - p.hauteur / 2 - 20;
+            }
+            const tier = tirerRarete(rngRarete, probasRarete);
+            ennemis.push({ x, y, idx: i, enemyId, tier });
         }
-        const tier = tirerRarete(rngRarete, probasRarete);
-        ennemis.push({ x, y, idx: i, enemyId, tier });
     }
+
+    // Convention globale : toute salle compacte (dimsCanvas) active `gouffreMort`
+    // par défaut. Tomber sous le canvas = mort + retour Cité Miroir. Permet aux
+    // designs d'avoir des fosses dangereuses sans coincer le joueur. La salle
+    // peut explicitement opt-out via `topographie.gouffreMort = false`.
+    const gouffreMort = topographie.gouffreMort
+        ?? result.gouffreMort
+        ?? !!topographie.dimsCanvas;
 
     return {
         id: salleId,
@@ -237,6 +273,7 @@ export function genererSalle({
         // Les salles legacy (XL, dims variables) gardent le scroll caméra ;
         // les salles compactes (960×540) ont caméra figée sur 0,0.
         dimsCanvas: !!topographie.dimsCanvas,
+        gouffreMort,            // tomber sous canvas = mort + retour Cité
         plateformes,
         obstacles,
         portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur, interieur }

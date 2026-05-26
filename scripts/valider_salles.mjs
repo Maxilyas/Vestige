@@ -41,11 +41,49 @@ function peutAtteindre(P, Q) {
 }
 
 function valider(salle) {
-    // Ignore les plateformes 'decoratif' (purement visuelles) ET 'structurel'
-    // (murs latéraux, plafonds, cloisons — non walkable par design).
+    // Ignore les plateformes 'decoratif' (purement visuelles), 'structurel'
+    // (murs latéraux, plafonds, cloisons — non walkable par design), 'secret'
+    // (niches cachées accessibles seulement après mur_secret cassé), et
+    // 'metroidvania' (plateformes accessibles seulement avec upgrade futur :
+    // ancrage, wall-jump, double-saut, etc. — gating de progression).
     const plateformes = salle.plateformes.filter(p =>
-        !p.tags?.includes('decoratif') && !p.tags?.includes('structurel')
+        !p.tags?.includes('decoratif') &&
+        !p.tags?.includes('structurel') &&
+        !p.tags?.includes('secret') &&
+        !p.tags?.includes('metroidvania')
     );
+
+    // Plateformes MOBILES (oscillation cyclique) : on génère 3 pseudo-plateformes
+    // pour chaque mobile (centre + 2 extrémités). Le BFS les voit comme des
+    // tremplins virtuels. Toutes les pseudo-plateformes d'un même mobile sont
+    // marquées avec un `_mobileGroup` partagé : si le BFS en visite une, les
+    // 2 autres sont automatiquement visitées (la plateforme PORTE le joueur
+    // entre ses positions, indépendamment du saut max). Marqueur _virtuel
+    // pour ne pas les compter dans le rapport KO.
+    const mobiles = (salle.obstacles ?? []).filter(o => o.type === 'plateforme_mobile');
+    const mobileGroups = new Map();  // groupId → [pseudo1, pseudo2, pseudo3]
+    mobiles.forEach((m, idx) => {
+        const axe = m.axe ?? 'horizontale';
+        const amp = m.amplitude ?? 140;
+        const groupId = `mobile_${idx}`;
+        const base = {
+            largeur: m.largeur, hauteur: m.hauteur,
+            oneWay: true, _virtuel: true, _mobileGroup: groupId
+        };
+        const positions = [];
+        if (axe === 'horizontale') {
+            positions.push({ ...base, x: m.x - amp, y: m.y });
+            positions.push({ ...base, x: m.x,       y: m.y });
+            positions.push({ ...base, x: m.x + amp, y: m.y });
+        } else {
+            positions.push({ ...base, x: m.x, y: m.y - amp });
+            positions.push({ ...base, x: m.x, y: m.y });
+            positions.push({ ...base, x: m.x, y: m.y + amp });
+        }
+        plateformes.push(...positions);
+        mobileGroups.set(groupId, positions);
+    });
+
     if (plateformes.length === 0) return [];
 
     // Sol = la plus large plateforme (souvent yTop le plus bas aussi)
@@ -60,11 +98,23 @@ function valider(salle) {
             if (peutAtteindre(P, Q)) {
                 visited.add(Q);
                 queue.push(Q);
+                // Si Q appartient à un groupe mobile, ses jumelles sont
+                // automatiquement accessibles (la plateforme transporte le joueur).
+                if (Q._mobileGroup) {
+                    for (const jumelle of mobileGroups.get(Q._mobileGroup)) {
+                        if (!visited.has(jumelle)) {
+                            visited.add(jumelle);
+                            queue.push(jumelle);
+                        }
+                    }
+                }
             }
         }
     }
 
-    return plateformes.filter(p => !visited.has(p));
+    // Exclut les pseudo-plateformes mobiles du rapport (ce sont des tremplins
+    // virtuels, pas des plateformes "réelles" à valider).
+    return plateformes.filter(p => !visited.has(p) && !p._virtuel);
 }
 
 // Importe le catalogue et valide chaque salle
@@ -74,18 +124,10 @@ const { sallesCompatibles } = mod;
 // Récupère TOUTES les salles Ruines (compatibles avec n'importe quelle porte)
 // → on génère chaque salle avec ses portesPossibles complètes
 const directions = ['N','S','E','O'];
-const ids = ['ruines_grimpeur','ruines_passage_humble','ruines_carrefour',
-             'ruines_couloir_traversant','ruines_puits_vertical',
-             'ruines_coin_NE','ruines_coin_SO','ruines_t_NEO','ruines_t_SEO',
-             'ruines_impasse_O','ruines_impasse_E','ruines_arche_brisee',
-             'ruines_cathedrale','ruines_tour_sentinelles','ruines_atelier',
-             'ruines_3plaques','ruines_crypte_profonde','ruines_pont_soupirs',
-             'ruines_tour_brouillage','ruines_caveau_scelle',
-             // ─── Phase 9.2/9.3 — Salles compactes 960×540 ───
+const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'ruines_atrium_effondre',
              'ruines_couloir_brise','ruines_escaliers_effrites',
              'ruines_arene_pieux','ruines_arene_ressorts',
-             // Phase 9.3c — Pool compact complet
              'ruines_carrefour_compact',
              'ruines_puits_compact','ruines_cheminee_compact',
              'ruines_coin_NE_compact','ruines_coin_NO_compact',
@@ -94,6 +136,8 @@ const ids = ['ruines_grimpeur','ruines_passage_humble','ruines_carrefour',
              'ruines_t_NSO_compact','ruines_t_NSE_compact',
              'ruines_impasse_O_compact','ruines_impasse_E_compact',
              'ruines_impasse_N_compact','ruines_impasse_S_compact',
+             // ─── Phase 9.4 Vague 1 ───
+             'ruines_sanctuaire_suspendu',
              // ─── Halls Cendrés (Phase 8, vague 5) ───
              'halls_couloir_brasiers','halls_grand_mur','halls_cascade_pierres',
              'halls_brasserie','halls_voute_basse','halls_pont_braise',

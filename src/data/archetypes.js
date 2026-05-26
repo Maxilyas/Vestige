@@ -53,18 +53,22 @@ export const ARCHETYPES = {
 
 /**
  * Position de spawn du joueur depuis une porte donnée. Lit `porte.interieur`
- * pour décider de quel côté placer le joueur.
+ * pour décider de quel côté placer le joueur — et toujours POSÉ sur le
+ * palier qui supporte la porte (le bas du joueur s'aligne avec le bas
+ * de la porte = top du palier support).
+ *
+ * Pourquoi posé : si on spawne le joueur "centré sur la porte" ou "au-dessus
+ * en l'air", son corps (60 px) chevauche les plateformes adjacentes et la
+ * physique le pose dessus à la première frame (bug "spawn sur plateforme
+ * au-dessus de la porte d'arrivée" observé sur les salles compactes Ruines).
  *
  *   - 'gauche'  : à gauche de la porte (porte E)
  *   - 'droite'  : à droite de la porte (porte O)
- *   - 'bas'     : posé SUR la plateforme support juste sous la porte. Le bas
- *                 du joueur s'aligne avec le bas de la porte (= top de la
- *                 plateforme support).
- *   - 'haut'    : au-dessus de la porte (porte au sol)
+ *   - 'bas'     : à droite de la porte (porte N — joueur arrive du nord)
+ *   - 'haut'    : à droite de la porte (porte S — joueur arrive du sud)
  *
- * Pour les portes verticales, on ajoute un décalage horizontal pour sortir le
- * joueur de la zone X de la porte — il peut alors se déplacer librement sans
- * re-trigger la porte.
+ * Pour les portes verticales, le décalage horizontal sort le joueur de la
+ * zone X de la porte — il peut se déplacer librement sans re-trigger.
  */
 export function spawnDepuisPorte(porte) {
     if (!porte) return null;
@@ -72,13 +76,15 @@ export function spawnDepuisPorte(porte) {
     const halfW = porte.largeur / 2;
     const halfPlayerH = PLAYER.HEIGHT / 2;
     const bufferLat = 24;
-    const bufferVert = 24;
     const decalageX = halfW + 24;
 
-    if (porte.interieur === 'gauche') return { x: porte.x - halfW - bufferLat, y: porte.y };
-    if (porte.interieur === 'droite') return { x: porte.x + halfW + bufferLat, y: porte.y };
-    if (porte.interieur === 'bas')    return { x: porte.x + decalageX, y: porte.y + halfH - halfPlayerH };
-    if (porte.interieur === 'haut')   return { x: porte.x + decalageX, y: porte.y - halfH - bufferVert };
+    // Bas du joueur posé sur le top du palier support de la porte.
+    const yPose = porte.y + halfH - halfPlayerH;
+
+    if (porte.interieur === 'gauche') return { x: porte.x - halfW - bufferLat, y: yPose };
+    if (porte.interieur === 'droite') return { x: porte.x + halfW + bufferLat, y: yPose };
+    if (porte.interieur === 'bas')    return { x: porte.x + decalageX,         y: yPose };
+    if (porte.interieur === 'haut')   return { x: porte.x + decalageX,         y: yPose };
     return { x: porte.x, y: porte.y };
 }
 

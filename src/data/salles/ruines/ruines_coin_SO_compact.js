@@ -25,12 +25,16 @@ export const ruines_coin_SO_compact = {
         const plateformes = [];
         plateformes.push(sol(0, W, Y_SOL));
 
+        // Palier S surélevé bas (porte S dessus, position visuelle = direction sud)
+        plateformes.push(plateforme(480, 440, 140, { oneWay: true }));
+
+        // Paliers latéraux combat aérien
         plateformes.push(plateforme(810, 430, 130, { oneWay: true }));
         plateformes.push(plateforme(630, 360, 110, { oneWay: true }));
         plateformes.push(plateforme(140, 380, 110, { oneWay: true }));
         plateformes.push(plateforme(280, 320, 110, { oneWay: true }));
 
-        // Palier S central
+        // Passerelle centrale (combat aérien)
         plateformes.push(plateforme(480, 290, 180, { oneWay: true }));
 
         // Palier haut + coffre
@@ -42,7 +46,7 @@ export const ruines_coin_SO_compact = {
         ];
 
         const portes = {};
-        if (portesActives.includes('S')) portes.S = porteS(480, 290);
+        if (portesActives.includes('S')) portes.S = porteS(480, 440);
         if (portesActives.includes('O')) portes.O = porteO(Y_SOL);
 
         const coffreForce = { x: 740, y: 200 - 12 };

@@ -34,10 +34,10 @@ export const ruines_cheminee_compact = {
 
         // ─── Voie centrale rapide (sols effrités + ressort) ──────────
         // Le joueur monte directement via ressort, mais doit timer les
-        // sols effrités qui s'effondrent.
+        // sols effrités qui s'effondrent. La dernière marche centrale
+        // (palier solide 220 plus bas) sert de respiration avant le sommet.
         plateformes.push(solEffrite(480, 410, 120));
         plateformes.push(solEffrite(480, 320, 120));
-        plateformes.push(solEffrite(480, 230, 120));
 
         // ─── Voie latérale safe (zigzag normal) ──────────────────────
         plateformes.push(plateforme(150, 430, 110, { oneWay: true }));

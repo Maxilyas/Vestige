@@ -1,6 +1,8 @@
 // Salle : Ruines basses — Caveau Profond (impasse S compact)
 // (Phase 9.3c)
-// INTENTION : "deadend vers le bas" — entrée S sur palier surélevé, coffre en bas.
+// INTENTION : "deadend, monter pour le coffre" — entrée S sur palier bas
+// (cohérent avec la convention porte S = bas visuel = direction sud),
+// coffre au sommet (récompense l'ascension).
 
 import {
     HAUTEUR_SOL, sol, plateforme,
@@ -25,23 +27,25 @@ export const ruines_impasse_S_compact = {
         const plateformes = [];
         plateformes.push(sol(0, W, Y_SOL));
 
-        // Paliers en cascade : tous atteignables depuis le sol par sauts
-        // normaux (sol → 430 → 360 → 290 → 220 → 130).
-        plateformes.push(plateforme(150, 430, 110, { oneWay: true }));  // sol+70
-        plateformes.push(plateforme(810, 430, 110, { oneWay: true }));
-        plateformes.push(plateforme(320, 360, 130, { oneWay: true }));  // 70v, overlap
-        plateformes.push(plateforme(640, 360, 130, { oneWay: true }));
-        plateformes.push(plateforme(220, 290, 130, { oneWay: true }));  // 70v, 70h
-        plateformes.push(plateforme(740, 290, 130, { oneWay: true }));
-        plateformes.push(plateforme(480, 220, 200, { oneWay: true }));  // 70v, 95h
-        plateformes.push(plateforme(480, 130, 160, { oneWay: true }));  // palier S 90v
+        // Palier S surélevé bas (porte S dessus, spawn ici)
+        plateformes.push(plateforme(480, 440, 140, { oneWay: true }));
 
-        const portes = { S: porteS(480, 130) };
-        const coffreForce = { x: 480, y: Y_SOL - 12 };
+        // Cascade ascendante vers le coffre au sommet
+        plateformes.push(plateforme(180, 430, 130, { oneWay: true }));   // sol+70
+        plateformes.push(plateforme(780, 430, 130, { oneWay: true }));
+        plateformes.push(plateforme(320, 360, 130, { oneWay: true }));   // 70v
+        plateformes.push(plateforme(640, 360, 130, { oneWay: true }));
+        plateformes.push(plateforme(220, 290, 130, { oneWay: true }));
+        plateformes.push(plateforme(740, 290, 130, { oneWay: true }));
+        plateformes.push(plateforme(480, 220, 200, { oneWay: true }));   // passerelle
+        plateformes.push(plateforme(480, 130, 160, { oneWay: true }));   // sommet (coffre)
+
+        const portes = { S: porteS(480, 440) };
+        const coffreForce = { x: 480, y: 130 - 12 };
 
         return {
             plateformes, obstacles: [], zones: [], portes,
-            spawnDefault: { x: 480, y: 130 - 20 },
+            spawnDefault: { x: 480, y: 440 - 20 },
             coffreForce
         };
     }

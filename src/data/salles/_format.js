@@ -58,8 +58,8 @@
 
 // ─── Constantes physiques partagées ───
 export const HAUTEUR_SOL = 40;
-export const ECART_VERT_SAFE = 70;   // saut vertical sûr
-export const ECART_HORIZ_SAFE = 130; // saut horizontal sûr edge-to-edge
+export const ECART_VERT_SAFE = 70;   // saut vertical sûr (jump max ≈ 96)
+// Réf saut horizontal sûr edge-to-edge : 130 px.
 
 // Dimensions porte (mêmes valeurs que topographies.js)
 export const LARGEUR_PORTE = 60;
@@ -188,22 +188,6 @@ export function murLateralDroit(largeurSalle, yHaut, yBas, opts = {}) {
     return mur(x, yHaut, yBas, { epaisseur: 30, ...opts });
 }
 
-/**
- * Tunnel : un couloir étroit avec sol ET plafond serrés. Le joueur (60 px
- * de haut) y rentre debout si `hauteurInterieure ≥ 60`. Pour ÉBOULIS dans
- * un tunnel : choisis `hauteurInterieure ≤ 110` pour que l'éboulis (110+
- * de haut) bloque vraiment le passage (impossible de sauter par-dessus
- * vu le plafond).
- * @returns {Array} 2 plateformes (sol + plafond) à push dans la liste
- */
-export function tunnel(xDeb, xFin, yTopSol, hauteurInterieure = 80) {
-    const yTopPlafond = yTopSol - hauteurInterieure - 14;
-    return [
-        sol(xDeb, xFin, yTopSol),
-        plafond(xDeb, xFin, yTopPlafond)
-    ];
-}
-
 // ─── Helpers de portes ───
 // Convention : la porte "repose" sur le palier d'arrivée. yTopPalier =
 // altitude du sol/palier où l'on arrive par cette porte.
@@ -261,6 +245,57 @@ export function pieuPlafond(x, yBottomPlafond) {
 
 export function ressort(x, yTopSol) {
     return { type: 'ressort', x, y: yTopSol - 7 };
+}
+
+/**
+ * Zone d'ANTI-ANCRAGE — désactive le geste d'ancrage du joueur dans le rectangle.
+ * Zone non-physique, lue par AncrageSystem qui refuse de poser une ancre si le
+ * joueur (ou la position cible) est dedans. Utile pour empêcher de tricher sur
+ * un puzzle de timing : si tu mets une zone au-dessus d'une fosse de pieux,
+ * impossible de skip via une ancre — il faut utiliser les mobiles/timing.
+ *
+ * @param {number} x         centre x de la zone
+ * @param {number} yTop      top y de la zone
+ * @param {number} largeur
+ * @param {number} hauteur
+ */
+export function antiAncrage(x, yTop, largeur, hauteur) {
+    return {
+        type: 'anti_ancrage',
+        x,
+        y: yTop + hauteur / 2,
+        largeur,
+        hauteur
+    };
+}
+
+/**
+ * Plateforme MOBILE oscillante (one-way virtuelle : le joueur la traverse
+ * par le dessous/côtés, n'atterrit que par le dessus). Le mouvement est
+ * sinusoïdal autour du centre (x, y), amplitude = portée max d'un côté.
+ * Le joueur posé dessus est transporté par la collision physique.
+ *
+ * @param {number} x          centre x (= position de repos)
+ * @param {number} yTop       top de la plateforme à sa position centrale
+ * @param {number} w          largeur visuelle
+ * @param {object} [opts]     { axe, amplitude, periode, hauteur }
+ *                            axe : 'horizontale' (défaut) | 'verticale'
+ *                            amplitude : portée max d'un côté (défaut 140 px)
+ *                            periode : durée d'un cycle complet en ms (défaut 2400)
+ *                            hauteur : épaisseur visuelle (défaut 14)
+ */
+export function plateformeMobile(x, yTop, w, opts = {}) {
+    const hauteur = opts.hauteur ?? 14;
+    return {
+        type: 'plateforme_mobile',
+        x,
+        y: yTop + hauteur / 2,
+        largeur: w,
+        hauteur,
+        axe: opts.axe ?? 'horizontale',
+        amplitude: opts.amplitude ?? 140,
+        periode: opts.periode ?? 2400
+    };
 }
 
 // ─── Helpers obstacles Vague 1 (étape 4C) ───
@@ -350,60 +385,6 @@ export function plaque(x, yTopSol, effet, params = {}) {
     };
 }
 
-// ─── Helpers obstacles Vague 2 ───
-
-/**
- * Racines tentaculaires du Reflux : zone cyclique pieu↔plateforme.
- * Cycle de 3s : ~1s comme plateforme one-way, ~2s comme pieu dégâts.
- */
-export function racinesReflux(x, yTopSol, opts = {}) {
-    const largeur = opts.largeur ?? 60;
-    const hauteur = opts.hauteur ?? 40;
-    return {
-        type: 'racines_reflux',
-        x,
-        y: yTopSol - hauteur / 2,    // ancrées au sol, montent vers le haut
-        largeur, hauteur,
-        cycleMs: opts.cycleMs ?? 3000,
-        offsetMs: opts.offsetMs ?? 0  // décalage du cycle (sync ou désync entre instances)
-    };
-}
-
-/**
- * Zone d'anti-ancrage du Reflux. Le geste d'ancrage est désactivé dans
- * cette zone. Visuel : veines pourpres au sol et dans l'air.
- */
-export function antiAncrage(x, yTop, largeur, hauteur) {
-    return {
-        type: 'anti_ancrage',
-        x,
-        y: yTop + hauteur / 2,
-        largeur, hauteur
-    };
-}
-
-// ─── Helper zones (ancrage Ruines) ───
-
-/**
- * Zone ancrable Ruines : le joueur peut y poser une plateforme via touche A.
- * @param {number} x      - centre x de la zone (rect détection)
- * @param {number} yTop   - top de la zone
- * @param {number} w      - largeur zone détection (≈ largeur plateforme)
- * @param {number} h      - hauteur zone détection
- * @param {object} [opts] - { plateformeW, plateformeH } dims de la plateforme
- *                          matérialisée (défaut 90×14)
- */
-export function ancre(x, yTop, w = 80, h = 30, opts = {}) {
-    return {
-        type: 'ancre_construction',
-        x, yTop, w, h,
-        params: {
-            plateformeW: opts.plateformeW ?? 90,
-            plateformeH: opts.plateformeH ?? 14
-        }
-    };
-}
-
 // ─── Helpers obstacles Vague 3 (Halls Cendrés) ───
 
 /**
@@ -483,18 +464,3 @@ export function murExplosif(x, yTop, opts = {}) {
     };
 }
 
-// ─── Signature de portes (pour indexation dans le catalogue) ───
-// Tri canonique : N, S, E, O (boussole). Une salle avec portes O+E a tag
-// 'EO'. T-shape porte N+E+O = 'NEO'. Croix = 'NSEO'.
-// Utilisé par EtageGen pour piocher une salle compatible avec les voisins
-// que le graphe a alloué à une cellule.
-const ORDRE_PORTES = ['N', 'S', 'E', 'O'];
-
-/**
- * Calcule la signature à partir d'une liste de directions.
- * @param {string[]} portes - p.ex. ['O', 'E']
- * @returns {string} signature canonique, p.ex. 'EO'
- */
-export function signaturePortes(portes) {
-    return ORDRE_PORTES.filter(d => portes.includes(d)).join('');
-}

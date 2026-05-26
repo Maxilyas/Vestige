@@ -1,4 +1,4 @@
-// Index des salles handcrafted XL par biome.
+// Index des salles handcrafted par biome.
 //
 // Une salle = un fichier JS qui exporte une "topographie virtuelle" :
 // même API que data/topographies.js mais avec une géométrie pixel-précise
@@ -6,55 +6,22 @@
 //
 // Deux modes d'utilisation :
 //
-//  1. PIN ÉDITORIAL — etages.js noeuds {useSalle:'ruines_grimpeur'}
+//  1. PIN ÉDITORIAL — etages.js noeuds {useSalle:'xxx'}
 //     → résolution directe via sallePar(id)
 //
 //  2. SPANNING TREE — EtageGen demande une salle compatible avec un set
 //     de portes (ex. {O,E,N}). Catalogue retourne le pool de salles dont
 //     portesPossibles ⊇ portes demandées (un superset est OK : la salle
-//     ne dessine que les portes activeés à la génération).
+//     ne dessine que les portes activées à la génération).
 //
 // ═════════════════════════════════════════════════════════════════════
-// PHASE 9 — MODE COMPACT ONLY (Ruines)
+// PHASE 9 — Toutes les salles Ruines sont compactes (960×540, caméra figée).
+// Les anciennes salles XL ont été supprimées en Phase 9.3d (cleanup post-refonte).
+// Les biomes 2-5 (Halls, Cristaux, Voile, Cœur) restent en XL legacy
+// jusqu'à leur propre migration compact (9.4+).
 // ═════════════════════════════════════════════════════════════════════
-// Quand `true`, `sallesCompatibles` filtre le pool de tirage spanning
-// tree pour ne garder QUE les salles `dimsCanvas: true` (Ruines 9.3+).
-// Le fallback Ruines pointe désormais sur `ruines_carrefour_compact`
-// (cf. FALLBACK_PAR_BIOME), donc même les configs non couvertes par
-// le pool compact retombent sur du compact.
-//
-// Reste activé tant que les biomes 2-5 (Halls, Cristaux, Voile, Cœur)
-// n'ont pas leurs propres salles compactes. Quand on migrera ces biomes,
-// on retirera ce flag — les salles XL legacy seront alors complètement
-// retirées du pool.
-//
-// Les pins éditoriaux via sallePar() ne sont PAS affectés par ce flag
-// (ils retrouvent toujours leur salle, même XL).
-// ═════════════════════════════════════════════════════════════════════
-const MODE_COMPACT_ONLY = true;
 
-import { ruines_grimpeur }            from './ruines/ruines_grimpeur.js';
-import { ruines_passage_humble }      from './ruines/ruines_passage_humble.js';
-import { ruines_carrefour }           from './ruines/ruines_carrefour.js';
-import { ruines_couloir_traversant }  from './ruines/ruines_couloir_traversant.js';
-import { ruines_puits_vertical }      from './ruines/ruines_puits_vertical.js';
-import { ruines_coin_NE }             from './ruines/ruines_coin_NE.js';
-import { ruines_coin_SO }             from './ruines/ruines_coin_SO.js';
-import { ruines_t_NEO }               from './ruines/ruines_t_NEO.js';
-import { ruines_t_SEO }               from './ruines/ruines_t_SEO.js';
-import { ruines_impasse_O }           from './ruines/ruines_impasse_O.js';
-import { ruines_impasse_E }           from './ruines/ruines_impasse_E.js';
-import { ruines_arche_brisee }        from './ruines/ruines_arche_brisee.js';
-// ─── Vague 4D : 8 nouvelles salles à architecture verticale + plafonds ───
-import { ruines_cathedrale }          from './ruines/ruines_cathedrale.js';
-import { ruines_tour_sentinelles }    from './ruines/ruines_tour_sentinelles.js';
-import { ruines_atelier }             from './ruines/ruines_atelier.js';
-import { ruines_3plaques }            from './ruines/ruines_3plaques.js';
-import { ruines_crypte_profonde }     from './ruines/ruines_crypte_profonde.js';
-import { ruines_pont_soupirs }        from './ruines/ruines_pont_soupirs.js';
-import { ruines_tour_brouillage }     from './ruines/ruines_tour_brouillage.js';
-import { ruines_caveau_scelle }       from './ruines/ruines_caveau_scelle.js';
-// ─── Phase 9.2 : salle test compacte 960×540 (canvas fixe, caméra figée) ───
+// ─── Phase 9.2 : 1ère salle test compacte 960×540 ─────────────────────
 import { ruines_atrium_effondre }     from './ruines/ruines_atrium_effondre.js';
 // ─── Phase 9.3b : Pool OE compact Ruines (4 salles) ───────────────────
 import { ruines_couloir_brise }       from './ruines/ruines_couloir_brise.js';
@@ -77,6 +44,8 @@ import { ruines_impasse_O_compact }   from './ruines/ruines_impasse_O_compact.js
 import { ruines_impasse_E_compact }   from './ruines/ruines_impasse_E_compact.js';
 import { ruines_impasse_N_compact }   from './ruines/ruines_impasse_N_compact.js';
 import { ruines_impasse_S_compact }   from './ruines/ruines_impasse_S_compact.js';
+// ─── Phase 9.4 Vague 1 : salle signature mécanique mobile ─────────────
+import { ruines_sanctuaire_suspendu } from './ruines/ruines_sanctuaire_suspendu.js';
 
 // ─── Halls Cendrés (Phase 8 — 25 salles + 1 fallback) ────────────
 import { halls_couloir_brasiers }     from './halls/halls_couloir_brasiers.js';
@@ -106,40 +75,18 @@ import { halls_foyer_eteint }         from './halls/halls_foyer_eteint.js';
 import { halls_reseau_plaques }       from './halls/halls_reseau_plaques.js';
 import { halls_carrefour_brasier }    from './halls/halls_carrefour_brasier.js';
 
-// 19 salles handcrafted Ruines basses dans le pool de tirage normal.
-// Le carrefour NSEO est EXCLU du tirage : il ne sort que via salleFallback()
-// quand aucune autre salle ne match (configs NSE, NSO, NSEO rares). Sinon
-// les graphes seraient dominés par le carrefour (il match toutes les configs).
+// Pool de tirage normal. Les salles fallback (carrefour universel par biome)
+// sont EXCLUES : elles ne sortent que via salleFallback() quand le pool
+// est trop pauvre pour matcher la combinaison de portes demandée. Sans
+// cette exclusion, le carrefour matcherait toutes les configs et
+// dominerait le pool — sape la variété.
 const TOUTES_SALLES = [
-    // Vague 1-3 (existantes)
-    ruines_grimpeur,           // OES — signature verticalité + ancrage (unique)
-    ruines_passage_humble,     // EN  — narratif crypte
-    ruines_couloir_traversant, // OE  — couloir 2 étages + tunnel + plaque
-    ruines_puits_vertical,     // NS  — transition verticale
-    ruines_coin_NE,            // EN  — virage tour de garde
-    ruines_coin_SO,            // OS  — virage cave d'effondrement + éboulis
-    ruines_t_NEO,              // NEO — forum 2 étages + plafond troué
-    ruines_t_SEO,              // SEO — carrefour des dépôts + roc + éboulis S
-    ruines_impasse_O,          // O   — sanctuaire abandonné (deadend coffre)
-    ruines_impasse_E,          // E   — atelier scellé (deadend coffre)
-    ruines_arche_brisee,       // OE  — signature ancrage horizontal (unique)
-    // Vague 4D (8 nouvelles)
-    ruines_cathedrale,         // NSEO — 3 étages + plaque + coffre (unique)
-    ruines_tour_sentinelles,   // NS   — 4 étages verticaux combat
-    ruines_atelier,            // OE   — tunnel forcé + coffre étage 2
-    ruines_3plaques,           // OE   — puzzle activation 3 plaques
-    ruines_crypte_profonde,    // NS   — descente paliers + pieux méca
-    ruines_pont_soupirs,       // OE   — pont effrites en cascade (unique)
-    ruines_tour_brouillage,    // OES  — anti-ancrage central (unique)
-    ruines_caveau_scelle,      // OE   — mur fissuré central + roc (unique)
-    // ─── Phase 9.2 : salle test compacte (canvas 960×540, caméra figée) ───
+    // ─── Ruines basses (Phase 9 compact) ──────────────────────────────
     ruines_atrium_effondre,    // OE   — 5 niveaux verticaux dans 540 px (unique)
-    // ─── Phase 9.3b : Pool OE compact Ruines (4 salles) ───────────────
     ruines_couloir_brise,      // OE   — combat propre style Hollow Knight
     ruines_escaliers_effrites, // OE   — timing sols effrités style Celeste
     ruines_arene_pieux,        // OE   — combat sur sol piégé style Castlevania
     ruines_arene_ressorts,     // OE   — mobilité aérienne dynamique
-    // ─── Phase 9.3c : Pool compact Ruines complet (15 salles) ─────────
     ruines_puits_compact,      // NS   — puits zigzag vertical
     ruines_cheminee_compact,   // NS   — cheminée étroite + sols effrités centre
     ruines_coin_NE_compact,    // NE   — tour de garde ascension droite
@@ -154,6 +101,8 @@ const TOUTES_SALLES = [
     ruines_impasse_E_compact,  // E    — atelier scellé deadend
     ruines_impasse_N_compact,  // N    — corniche oubliée (haut → bas)
     ruines_impasse_S_compact,  // S    — caveau profond (descente coffre)
+    // ─── Phase 9.4 Vague 1 : signature mobile ─────────────────────
+    ruines_sanctuaire_suspendu, // OE   — timing plateformes mobiles, coffre haut (unique)
 
     // ─── Halls Cendrés (25 salles ; mécanique = destruction) ──────
     // OE bus principal (8)
@@ -189,27 +138,22 @@ const TOUTES_SALLES = [
     halls_reseau_plaques       // NEO  — 3 plaques pression puzzle (unique)
 ];
 
-// Salles de secours par biome (jamais dans le pool de tirage normal —
-// matchent toutes les configs et écraseraient la variété).
+// Salles "fallback universel" par biome — supportent NSEO et matchent toutes
+// les configs. Tenues hors du pool normal pour préserver la variété, mais
+// résolvables via sallePar() (si jamais référencées par useSalle) et via
+// salleFallback() (quand le pool ne match aucune config demandée).
 const PAR_ID_FALLBACK = {
-    [ruines_carrefour.id]: ruines_carrefour,
     [ruines_carrefour_compact.id]: ruines_carrefour_compact,
     [halls_carrefour_brasier.id]: halls_carrefour_brasier
 };
 
-// Salle "fallback" universelle par biome. Utilisée quand le pool est trop
-// pauvre pour matcher la combinaison de portes demandée. Doit supporter
-// les 4 portes NSEO.
-//
-// Phase 9.3c : fallback Ruines passé à `ruines_carrefour_compact` (960×540)
-// pour garantir que toutes les configs spanning tree sortent en mode compact.
 const FALLBACK_PAR_BIOME = {
     'ruines_basses': ruines_carrefour_compact,
     'halls_cendres': halls_carrefour_brasier
 };
 
 export function salleFallback(biomeId) {
-    return FALLBACK_PAR_BIOME[biomeId] ?? ruines_carrefour;
+    return FALLBACK_PAR_BIOME[biomeId] ?? ruines_carrefour_compact;
 }
 
 const PAR_ID = Object.fromEntries(TOUTES_SALLES.map(s => [s.id, s]));
@@ -236,28 +180,35 @@ export function sallesCompatibles(biomeId, portesReq, role, dejaUtilisees) {
     return TOUTES_SALLES.filter(s => {
         if (s.biome !== biomeId) return false;
         if (!portesReq.every(d => s.portesPossibles.includes(d))) return false;
-        // Phase 9 mode test : on ignore le filtre rolesAutorises pour
-        // maximiser la présence des 5 salles compactes (sinon les deadends
-        // tirent sur le fallback XL). Hors mode test, filtre normal.
-        if (role && s.rolesAutorises && !s.rolesAutorises.includes(role) && !MODE_COMPACT_ONLY) return false;
-        // Salles "unique" : max 1 par étage (Grimpeur, Arche brisée, futures
-        // salles signature). Si déjà tirée → exclue du pool.
+        // Pour Ruines (tout compact, pool dense), on ignore le filtre
+        // rolesAutorises pour maximiser la variété même sur deadends.
+        // Pour Halls (toujours XL), filtre normal pour préserver les
+        // salles signature des rôles main uniquement.
+        const ignoreRole = biomeId === 'ruines_basses';
+        if (role && s.rolesAutorises && !s.rolesAutorises.includes(role) && !ignoreRole) return false;
+        // Salles "unique" : max 1 par étage (signature). Si déjà tirée → exclue.
         if (s.unique && dejaUtilisees?.has(s.id)) return false;
-        // Phase 9 — mode compact-only : ne tire que les salles 960×540
-        // pour les biomes ayant un pool compact complet. Limité à 'ruines_basses'
-        // pour l'instant (Halls/Cristaux/Voile/Cœur restent en XL legacy
-        // jusqu'à leur migration en 9.4+).
-        if (MODE_COMPACT_ONLY && biomeId === 'ruines_basses' && !s.dimsCanvas) return false;
         return true;
     });
 }
 
 /**
- * Pioche une salle compatible aléatoirement (RNG fourni).
+ * Pioche une salle compatible aléatoirement (RNG fourni), avec tirage PONDÉRÉ.
+ * Chaque salle peut déclarer `tirageWeight` (défaut 1). Les salles signature
+ * (`unique: true` + `tirageWeight: 3` typique) sont plus probables — sinon
+ * elles sont noyées dans le pool et l'identité du biome se dilue.
+ *
  * Retourne null si aucune salle ne match — l'appelant doit avoir un fallback.
  */
 export function tirerSalleCompatible(biomeId, portesReq, rng, role, dejaUtilisees) {
     const pool = sallesCompatibles(biomeId, portesReq, role, dejaUtilisees);
     if (pool.length === 0) return null;
-    return pool[Math.floor(rng() * pool.length)];
+    const poids = pool.map(s => s.tirageWeight ?? 1);
+    const total = poids.reduce((a, b) => a + b, 0);
+    let r = rng() * total;
+    for (let i = 0; i < pool.length; i++) {
+        r -= poids[i];
+        if (r <= 0) return pool[i];
+    }
+    return pool[pool.length - 1];
 }

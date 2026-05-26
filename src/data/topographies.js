@@ -155,130 +155,7 @@ const arene_ouverte = {
     }
 };
 
-// ============================================================
-// 🏯 TOUR_VERTICALE — Tour centrale one-way, sommet bonus
-// ============================================================
-// Compatible : sanctuaire, hall, puits, crypte
-// Feel : voie main path PLATE au sol (E/O au sol). Verticalité OPTIONNELLE :
-// monter au sommet du donjon central pour porte N + coffre.
-// Reachability : tower en plateformes ONE-WAY empilées au même x (cx). Player
-// monte en jumpant à travers chaque plate, redescend en drop-through.
-const tour_verticale = {
-    id: 'tour_verticale',
-    nom: 'Tour Verticale',
-    dims: { largeur: 1280, hauteur: 1080 },
-    archetypesCompatibles: ['sanctuaire', 'hall', 'puits', 'crypte'],
-    portesPossibles: ['E', 'O', 'N', 'S'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 1040
-        const cx = dims.largeur / 2;                       // 640
-        const plateformes = [];
 
-        // Sol entier (voie main path plate)
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // Tower : plateformes ONE-WAY empilées à cx. 70 px de séparation
-        // verticale. Player jump-through montant, lands on top en redescendant
-        // de chaque saut. Drop-through descendant (touche S/↓).
-        let yTop = yTopSol - ECART_VERT_SAFE;              // 970
-        const xTour = cx;
-        while (yTop > 130) {
-            plateformes.push(plateforme(xTour, yTop, 220, 14, true));
-            yTop -= ECART_VERT_SAFE;
-        }
-
-        // Sommet : plateforme finale (one-way aussi, pour cohérence — pas de
-        // head-bonk en cas de saut au sommet). Supporte porte N si demandée.
-        const yTopSommet = yTop;                           // ~130
-        plateformes.push(plateforme(cx, yTopSommet, 320, 16, true));
-
-        const portes = {};
-        for (const dir of portesActives) {
-            let opts = {};
-            if (dir === 'N') {
-                opts = { yTopN: yTopSommet - HAUTEUR_PORTE };
-            }
-            portes[dir] = portePos(dir, dims, opts);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
-
-// ============================================================
-// ✦ CROIX_CENTRALE — Sol + corniches mid (E/O à mi-hauteur) + sommet (porte N)
-// ============================================================
-// Compatible : sanctuaire, hall, crypte
-// Feel : portes E/O à MI-HAUTEUR (force la montée pour traverser), portes
-// N/S en haut/bas. Échelle one-way au centre pour monter du sol au mid.
-// Reachability : sol → 5 paliers one-way → hub mid → corniches latérales
-// mid → top palier (porte N).
-const croix_centrale = {
-    id: 'croix_centrale',
-    nom: 'Croix Centrale',
-    dims: { largeur: 1400, hauteur: 900 },
-    archetypesCompatibles: ['sanctuaire', 'hall', 'crypte'],
-    portesPossibles: ['E', 'O', 'N', 'S'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 860
-        const yTopMid = 440;                               // bras horizontaux + hub
-        const yTopHaut = yTopMid - ECART_VERT_SAFE;        // 370, palier supérieur
-        const cx = dims.largeur / 2;                       // 700
-        const plateformes = [];
-
-        // Sol entier (bras vertical bas)
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // Échelle de plateformes one-way au centre : sol → mid (6 paliers,
-        // 70 px chaque). Player saute up à travers, drop-through pour redescendre.
-        // yTops : 790, 720, 650, 580, 510
-        for (let i = 1; i <= 5; i++) {
-            const yt = yTopSol - i * ECART_VERT_SAFE;
-            plateformes.push(plateforme(cx, yt, 180, 14, true));
-        }
-        // Le dernier palier (yt=510) est à 70 px du hub mid (440) → saut OK.
-
-        // Corniches latérales étendues à yTopMid (forment les bras horizontaux
-        // de la croix). Couvrent la majorité du mid-floor pour supporter les
-        // portes E/O et le déplacement entre portes.
-        const xMargeEdge = 0;
-        const halfWidth = 600;
-        plateformes.push(plateforme(halfWidth / 2 + xMargeEdge, yTopMid, halfWidth, 16, false));
-        plateformes.push(plateforme(dims.largeur - halfWidth / 2 - xMargeEdge, yTopMid, halfWidth, 16, false));
-
-        // Hub central : ONE-WAY pour éviter le head-bonk avec la dernière
-        // plateforme de l'échelle juste en dessous (overlap 8 px sinon).
-        // Le joueur saute through-and-land normalement.
-        plateformes.push(plateforme(cx, yTopMid, 220, 16, true));
-
-        // Top palier : ONE-WAY aussi (head-bonk avec le hub qui est juste en
-        // dessous à 70 px). Supporte porte N + coffre rare.
-        plateformes.push(plateforme(cx, yTopHaut, 220, 16, true));
-
-        const portes = {};
-        for (const dir of portesActives) {
-            let opts = {};
-            if (dir === 'E') opts = { yTopE: yTopMid - HAUTEUR_PORTE };
-            else if (dir === 'O') opts = { yTopO: yTopMid - HAUTEUR_PORTE };
-            else if (dir === 'N') opts = { yTopN: yTopHaut - HAUTEUR_PORTE };
-            portes[dir] = portePos(dir, dims, opts);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
 
 // ============================================================
 // 🌀 PUITS_DESCENTE — Vertical inversé, entrée au sommet, descente exploratoire
@@ -353,90 +230,6 @@ const puits_descente = {
     }
 };
 
-// ============================================================
-// 🏛 DOUBLE_ETAGE — Sol bas (combat) + balcon haut (passage)
-// ============================================================
-// Compatible : sanctuaire, hall, pont
-// Feel : porte O au sol, porte E sur le balcon — force la montée pour
-// traverser. Escalier latéral 4 marches.
-// Reachability : escalier à gauche (hors balcon range) sol → M1..M4, jump 70
-// vert + 95 horiz vers le balcon. Balcon couvre droite jusqu'au bord pour
-// supporter porte E.
-const double_etage = {
-    id: 'double_etage',
-    nom: 'Double Étage',
-    dims: { largeur: 1700, hauteur: 800 },
-    archetypesCompatibles: ['sanctuaire', 'hall', 'pont'],
-    portesPossibles: ['E', 'O', 'N', 'S'],
-    generer({ portesActives = ['E', 'O'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 760
-        const yTopBalcon = 410;                            // balcon haut
-        const plateformes = [];
-
-        // Sol entier (niveau combat)
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // Balcon : de x=600 jusqu'au bord droit (dims.largeur). Width = 1100.
-        // Couvre la zone porte E (x ~ 1662 — voir portePos).
-        const xBalconDebut = 600;
-        const largeurBalcon = dims.largeur - xBalconDebut;
-        plateformes.push(plateforme(
-            xBalconDebut + largeurBalcon / 2,
-            yTopBalcon,
-            largeurBalcon, 18, false
-        ));
-
-        // Escalier latéral à gauche, 4 marches step. yTop M4 = 480 → jump 70
-        // vert + 95 horiz vers balcon at 410. M_n positions hors range balcon.
-        // M1: x=200, yTop=690
-        // M2: x=280, yTop=620
-        // M3: x=360, yTop=550
-        // M4: x=440, yTop=480
-        const xMarche0 = 200;
-        const xMarcheStep = 80;
-        for (let i = 1; i <= 4; i++) {
-            const yt = yTopSol - i * ECART_VERT_SAFE;
-            const x = xMarche0 + (i - 1) * xMarcheStep;
-            plateformes.push(plateforme(x, yt, 140, 14, false));
-        }
-
-        // Mezzanine combat au centre du sol (one-way pour drop-through).
-        // Sous le balcon mais à droite des marches → safe.
-        plateformes.push(plateforme(
-            dims.largeur * 0.50,
-            yTopSol - ECART_VERT_SAFE,
-            200, 14, true
-        ));
-
-        // Plateforme "ciel" pour porte N si demandée (70 px au-dessus du balcon).
-        // ONE-WAY pour éviter head-bonk avec le balcon en dessous.
-        if (portesActives.includes('N')) {
-            const yTopCiel = yTopBalcon - ECART_VERT_SAFE;
-            plateformes.push(plateforme(dims.largeur / 2, yTopCiel, 180, 16, true));
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            let opts = {};
-            if (dir === 'E') {
-                // Porte E sur le balcon (force la montée)
-                opts = { yTopE: yTopBalcon - HAUTEUR_PORTE };
-            } else if (dir === 'N') {
-                opts = { yTopN: yTopBalcon - ECART_VERT_SAFE - HAUTEUR_PORTE };
-            }
-            // Porte O reste au sol (default yTopSol)
-            portes[dir] = portePos(dir, dims, opts);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
 
 // ============================================================
 // 🧱 LABYRINTHE_MURS — Couloir cloisonné, sol entier + 3 murs à sauter
@@ -479,110 +272,7 @@ const labyrinthe_murs = {
     }
 };
 
-// ============================================================
-// 🪵 PONT_BRISE — Sol troué au centre, pont one-way en hauteur + fosse à pieux
-// ============================================================
-// Compatible : pont, hall
-// Feel : voie du bas = fosse avec pieux (risquée mais courte) ; voie du haut =
-// pont one-way (sûr mais nécessite l'escalade). Choix tactique.
-// Reachability : sol gauche/droit séparés par fosse 440 px (intraversable à plat).
-// Escalade via paliers latéraux one-way → pont central. Fosse 20 px sous le sol.
-const pont_brise = {
-    id: 'pont_brise',
-    nom: 'Pont Brisé',
-    dims: { largeur: 1600, hauteur: 720 },
-    archetypesCompatibles: ['pont', 'hall'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 680
-        const yTopFosse = 700;                            // 20 px sous le sol
-        const plateformes = [];
 
-        // Sol gauche / fosse étroite / sol droit
-        plateformes.push(solHorizontal(yTopSol, 0, 580));
-        plateformes.push(solHorizontal(yTopFosse, 580, 1020, 20));
-        plateformes.push(solHorizontal(yTopSol, 1020, dims.largeur));
-
-        // Paliers d'accès au pont (one-way, head-bonk safe avec sol en dessous)
-        plateformes.push(plateforme(460, 610, 80, 14, true));
-        plateformes.push(plateforme(1140, 610, 80, 14, true));
-
-        // Pont central one-way (drop-through possible vers la fosse)
-        plateformes.push(plateforme(800, 540, 400, 18, true));
-
-        // 5 pieux dans la fosse (largeur 24 — espacés ~80 px)
-        const obstacles = [];
-        for (const xPieu of [620, 700, 800, 900, 980]) {
-            obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles,
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
-
-// ============================================================
-// 🕳 GOUFFRE_LATERAL — Sol main path à gauche, gouffre + îlots à droite
-// ============================================================
-// Compatible : pont, arene
-// Feel : ⅔ gauche = combat normal sur sol plat. ⅓ droit = gouffre franchi via
-// 3 îlots flottants ; ratage = fosse à pieux. Porte E sur ledge final.
-// Reachability : sol → drop sur ile1 (60 px) → 2 sauts horiz 100 px → île3 →
-// jump sur ledge (60 px up). Gap edge-to-edge entre îles = 100 px (safe).
-const gouffre_lateral = {
-    id: 'gouffre_lateral',
-    nom: 'Gouffre Latéral',
-    dims: { largeur: 1700, hauteur: 800 },
-    archetypesCompatibles: ['pont', 'arene'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 760
-        const yTopFosse = 780;
-        const yTopIles = 700;
-        const plateformes = [];
-
-        // Sol main (gauche)
-        plateformes.push(solHorizontal(yTopSol, 0, 1100));
-        // Fosse (sol abaissé 20 px) sous les îlots
-        plateformes.push(solHorizontal(yTopFosse, 1100, 1600, 20));
-        // Ledge de retour (porte E)
-        plateformes.push(solHorizontal(yTopSol, 1600, dims.largeur));
-
-        // 3 îlots étroits flottants au-dessus de la fosse
-        for (const xIle of [1180, 1340, 1500]) {
-            plateformes.push(plateforme(xIle, yTopIles, 60, 14, false));
-        }
-
-        // 5 pieux dans la fosse, sous les îlots et entre eux
-        const obstacles = [];
-        for (const xPieu of [1140, 1230, 1320, 1430, 1560]) {
-            obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles,
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
 
 // ============================================================
 // 🏛 ARENE_ESTRADE — Sol plat + estrade centrale solide + 2 corniches one-way
@@ -637,147 +327,8 @@ const arene_estrade = {
     }
 };
 
-// ============================================================
-// ⛰ FALAISE_MONTANTE — Sol bas + 4 paliers en escalier ascendants → porte E haute
-// ============================================================
-// Compatible : pont, arene, hall
-// Feel : on entre en bas (porte O au sol) et on escalade jusqu'à la porte E en
-// haut à droite. Combat au sol + traversée verticale. Le sol bas couvre toute
-// la largeur → spawn ennemis sans surprise.
-// Reachability : 4 paliers flottants de 220 px width, ascendants par pas de 70
-// vert. Palier final (280 wide) héberge porte E.
-const falaise_montante = {
-    id: 'falaise_montante',
-    nom: 'Falaise Montante',
-    dims: { largeur: 1700, hauteur: 900 },
-    archetypesCompatibles: ['pont', 'arene', 'hall'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 860
-        const plateformes = [];
 
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
 
-        // 4 paliers flottants montants
-        const paliers = [
-            { x: 450,  yTop: 790 },
-            { x: 750,  yTop: 720 },
-            { x: 1050, yTop: 650 },
-            { x: 1380, yTop: 580 }
-        ];
-        for (const p of paliers) {
-            plateformes.push(plateforme(p.x, p.yTop, 220, 14, false));
-        }
-
-        // Palier final élargi (hosts porte E)
-        const yTopPorteE = 510;
-        plateformes.push(plateforme(dims.largeur - 160, yTopPorteE, 280, 16, false));
-
-        const portes = {};
-        for (const dir of portesActives) {
-            let opts = {};
-            if (dir === 'E') {
-                opts = { yTopE: yTopPorteE - HAUTEUR_PORTE };
-            }
-            portes[dir] = portePos(dir, dims, opts);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
-
-// ============================================================
-// 🏛 SALLE_COLONNES — 4 colonnes ornementales + lustre suspendu en hauteur
-// ============================================================
-// Compatible : sanctuaire, hall
-// Feel : déambulation entre colonnes, lustre en hauteur récompense l'escalade.
-// Reachability : sol entier ; colonnes 40×70 (jumpables) servent de stepping
-// stones vers le lustre (one-way) à sol-150.
-const salle_colonnes = {
-    id: 'salle_colonnes',
-    nom: 'Salle aux Colonnes',
-    dims: { largeur: 1500, hauteur: 720 },
-    archetypesCompatibles: ['sanctuaire', 'hall'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 680
-        const plateformes = [];
-
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // 4 colonnes ornementales (40×70, jumpables, top utilisable comme palier)
-        for (const xCol of [275, 575, 875, 1175]) {
-            plateformes.push(plateforme(xCol, yTopSol - 70, 40, 70, false));
-        }
-
-        // Lustre suspendu (one-way, atteignable depuis col2 ou col3)
-        plateformes.push(plateforme(725, yTopSol - 150, 200, 14, true));
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
-
-// ============================================================
-// 📏 COULOIR_ETROIT — Plafond bas claustrophobe + pieux suspendus + paliers bypass
-// ============================================================
-// Compatible : hall, crypte
-// Feel : couloir oppressant ; deux pieux pendent au-dessus du sol et frappent
-// le joueur qui marche en-dessous. Bypass via 3 paliers one-way en hauteur.
-// Reachability : sol entier ; 3 paliers en chaîne (gap horiz 110 < 130 safe).
-const couloir_etroit = {
-    id: 'couloir_etroit',
-    nom: 'Couloir Oppressant',
-    dims: { largeur: 1400, hauteur: 500 },
-    archetypesCompatibles: ['hall', 'crypte'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 460
-        const plateformes = [];
-
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // 3 paliers one-way en chaîne (gap edge-to-edge 110 px)
-        for (const xPalier of [350, 700, 1050]) {
-            plateformes.push(plateforme(xPalier, yTopSol - 70, 240, 14, true));
-        }
-
-        // 2 pieux plafond qui pendent bas (frappent en marchant au sol)
-        const obstacles = [];
-        for (const xPieu of [525, 875]) {
-            obstacles.push({ type: 'pieu', x: xPieu, y: yTopSol - 40, orientation: 'plafond' });
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles,
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
 
 // ============================================================
 // ⚰ CRYPTE_DALLES — 3 dalles solides à hauteurs irrégulières
@@ -970,44 +521,6 @@ const salle_pieux_sol = {
     }
 };
 
-// ============================================================
-// 🪜 PASSERELLES_PARALLELES — 3 galeries horizontales empilées (toutes one-way)
-// ============================================================
-// Compatible : pont, hall
-// Feel : feuilleté de galeries où le combat se déroule à plusieurs niveaux.
-// Reachability : 3 passerelles stackées au même x (650), toutes one-way →
-// pas de head-bonk même à 70 vert. Player monte/descend par jump/drop-through.
-const passerelles_paralleles = {
-    id: 'passerelles_paralleles',
-    nom: 'Passerelles Parallèles',
-    dims: { largeur: 1500, hauteur: 720 },
-    archetypesCompatibles: ['pont', 'hall'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 680
-        const plateformes = [];
-
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // 3 passerelles superposées (toutes one-way → drop-through libre)
-        for (const yTop of [yTopSol - 70, yTopSol - 140, yTopSol - 210]) {
-            plateformes.push(plateforme(dims.largeur / 2, yTop, 700, 14, true));
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
 
 // ============================================================
 // 🪨 ARENE_FRAGMENTEE — Sol divisé en 4 îlots solides séparés par 3 trous à pieux
@@ -1059,56 +572,6 @@ const arene_fragmentee = {
     }
 };
 
-// ============================================================
-// 🌀 CORRIDOR_RESSORTS — 2 ressorts au sol catapultent vers paliers hauts
-// ============================================================
-// Compatible : hall, pont, crypte
-// Feel : rebond signature ; le ressort lance ~190 px de haut, atteint plate
-// suspendue. Mouvement vertical inattendu.
-// Reachability : 2 ressorts sur le sol, 2 paliers one-way au-dessus (sol-180).
-// Sans ressort, paliers atteignables aussi par jump direct (180 trop haut →
-// nécessite ressort ou détour).
-const corridor_ressorts = {
-    id: 'corridor_ressorts',
-    nom: 'Corridor des Ressorts',
-    dims: { largeur: 1500, hauteur: 720 },
-    archetypesCompatibles: ['hall', 'pont', 'crypte'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 680
-        const plateformes = [];
-
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // 2 paliers one-way en hauteur (sol-180, atteignables au ressort)
-        plateformes.push(plateforme(400, yTopSol - 180, 220, 14, true));
-        plateformes.push(plateforme(1100, yTopSol - 180, 220, 14, true));
-
-        // Pont entre paliers (un peu plus haut, optionnel)
-        plateformes.push(plateforme(750, yTopSol - 250, 320, 14, true));
-
-        const obstacles = [];
-        for (const xRess of [400, 1100]) {
-            obstacles.push(ressort(xRess, yTopSol - 7));
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles,
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 },
-            // Coffre forcé sur le pont haut (sol-250) — récompense secrète
-            // accessible une fois que des items boostent la vélocité du ressort.
-            coffreForce: { x: 750, y: yTopSol - 250 - 24 }
-        };
-    }
-};
 
 // ============================================================
 // 🪺 AILE_DECHIREE — Sol coupé au centre, plateforme mobile horizontale traverse
@@ -1513,56 +976,6 @@ const palais_etages = {
     }
 };
 
-// ============================================================
-// 🏛 COLONNADE_HAUTE — Sol + escalier + plate haute couverte de 3 colonnes
-// ============================================================
-// Compatible : hall, sanctuaire
-// Feel : temple supérieur avec colonnade. Combat sur la plate haute = navigation
-// entre piliers.
-// Reachability : escalier à x=150 (6 plates one-way) ; top plat solide w=900 ;
-// 3 colonnes 24×80 jumpables sur le top plat.
-const colonnade_haute = {
-    id: 'colonnade_haute',
-    nom: 'Colonnade Haute',
-    dims: { largeur: 1400, hauteur: 900 },
-    archetypesCompatibles: ['hall', 'sanctuaire'],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;       // 860
-        const plateformes = [];
-
-        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-
-        // Escalier gauche
-        let yTop = yTopSol - 70;
-        while (yTop >= 460) {
-            plateformes.push(plateforme(150, yTop, 180, 14, true));
-            yTop -= ECART_VERT_SAFE;
-        }
-
-        // Top plat solide
-        const yTopTop = 390;
-        plateformes.push(plateforme(700, yTopTop, 900, 18, false));
-
-        // 3 colonnes décor (sur le top plat, jumpables 80 tall avec 16 px marge)
-        for (const xCol of [400, 700, 1000]) {
-            plateformes.push(plateforme(xCol, yTopTop - 80, 24, 80, false));
-        }
-
-        const portes = {};
-        for (const dir of portesActives) {
-            portes[dir] = portePos(dir, dims);
-        }
-
-        return {
-            plateformes,
-            obstacles: [],
-            portes,
-            spawnDefault: { x: 80, y: yTopSol - 20 }
-        };
-    }
-};
 
 // ============================================================
 // 🔒 DONJON_CELLULES — Sol + escalier + mid floor cloisonné par 2 murs internes
@@ -1991,24 +1404,14 @@ export const BOSS_ARENA_PAR_ETAGE = {
 // ============================================================
 export const TOPOGRAPHIES = {
     arene_ouverte,
-    tour_verticale,
-    croix_centrale,
     puits_descente,
-    double_etage,
     labyrinthe_murs,
-    pont_brise,
-    gouffre_lateral,
     arene_estrade,
-    falaise_montante,
-    salle_colonnes,
-    couloir_etroit,
     crypte_dalles,
     arene_anneau,
     pont_etroit,
     salle_pieux_sol,
-    passerelles_paralleles,
     arene_fragmentee,
-    corridor_ressorts,
     aile_dechiree,
     puits_spirale,
     tour_marches,
@@ -2017,7 +1420,6 @@ export const TOPOGRAPHIES = {
     cascade_droite,
     mezzanine_haute,
     palais_etages,
-    colonnade_haute,
     donjon_cellules,
     arene_montee,
     // Boss arenas — référencées via BOSS_ARENA_PAR_ETAGE, listées ici uniquement

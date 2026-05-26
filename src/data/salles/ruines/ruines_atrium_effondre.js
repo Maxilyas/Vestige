@@ -40,6 +40,7 @@ export const ruines_atrium_effondre = {
     archetypesCompatibles: ['hall', 'crypte', 'sanctuaire'],
     rolesAutorises: ['main', 'alt'],
     unique: true,                       // 1 seule fois par étage tant que test
+    tirageWeight: 3,                    // x3 dans le tirage pondéré (signature biome)
 
     generer({ portesActives = ['O', 'E'] } = {}) {
         const plateformes = [];

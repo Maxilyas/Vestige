@@ -415,15 +415,16 @@ export class GameScene extends Phaser.Scene {
         this._posEntreeSalle = { x: spawn.x, y: spawn.y };
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
-        // Gouffre mortel : on désactive la collision bottom-bound pour laisser
-        // le joueur tomber dans le vide. _declencherMortGouffre s'active dans
-        // update() quand player.y dépasse le bottom de la salle.
+        // Gouffre mortel : on étend les bounds du joueur vers le BAS via
+        // setBoundsRectangle pour permettre la chute sous le canvas. La détection
+        // dans update() (player.y > dims.hauteur + 30) déclenche le retour Cité.
+        // NB : Phaser 3.70 n'a PAS Body.setBoundsCollision (uniquement sur World),
+        // on passe par un Rectangle custom plus grand vers le bas.
         if (this._gouffreMort) {
-            this.player.body.checkCollision.down = true;  // garde collision plateformes
-            this.player.body.onWorldBounds = false;
-            // Le bottom du world bounds reste actif mais on tue le joueur AVANT
-            // qu'il l'atteigne (cf. _declencherMortGouffre). On laisse 30 px de
-            // marge de chute pour le feedback visuel "il tombe vraiment".
+            const d = this._dimsSalle;
+            this.player.body.setBoundsRectangle(
+                new Phaser.Geom.Rectangle(0, 0, d.largeur, d.hauteur + 200)
+            );
         }
         this.physics.add.collider(this.player, this.platforms);
 
@@ -979,6 +980,23 @@ export class GameScene extends Phaser.Scene {
         // l'abîme : tu refais ton run depuis la Cité.
         if (this._gouffreMort && this.player.y > this._dimsSalle.hauteur + 30) {
             this._declencherMortGouffre();
+        }
+
+        // --- Ennemis tombés dans la fosse mortelle ---
+        // Mort silencieuse (pas de drop, pas d'event 'enemy:dead') : ils sont
+        // simplement engloutis par l'abîme. Évite d'avoir des ennemis qui
+        // se baladent dans la fosse mortelle au lieu de mourir comme le joueur.
+        if (this._gouffreMort && this.enemies) {
+            const seuilMort = this._dimsSalle.hauteur + 30;
+            for (const e of this.enemies) {
+                if (e.mort || !e.sprite) continue;
+                if (e.sprite.y > seuilMort) {
+                    e.mort = true;
+                    if (e.sprite.body) e.sprite.body.enable = false;
+                    e.sprite.destroy();
+                    e.visual?.destroy();
+                }
+            }
         }
 
         // --- Update du visuel joueur ---
@@ -1600,6 +1618,15 @@ export class GameScene extends Phaser.Scene {
         }
         const ennemi = new Enemy(this, defFinale, x, y, idx);
         ennemi.sprite.setDepth(DEPTH.ENTITES);
+        // Gouffre mortel : étend les bounds des ennemis vers le bas (même
+        // approche que le joueur, cf. _creerJoueur). Sinon ils restent collés
+        // au bord bottom et se baladent dans la fosse mortelle.
+        if (this._gouffreMort && ennemi.sprite?.body && this._dimsSalle) {
+            const d = this._dimsSalle;
+            ennemi.sprite.body.setBoundsRectangle(
+                new Phaser.Geom.Rectangle(0, 0, d.largeur, d.hauteur + 200)
+            );
+        }
         if (defFinale.gravite) {
             this.physics.add.collider(ennemi.sprite, this.platforms);
             // Les obstacles solides (éboulis, murs fissurés) doivent bloquer
