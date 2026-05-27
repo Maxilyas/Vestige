@@ -1,65 +1,48 @@
-// Salle : Halls Cendrés — Sanctuaire éteint (impasse O)
-//
-// ARCHITECTURE : petite salle close, ambiance recueillie. 3 murs latéraux
-// pleins (sauf O). Foyer central éteint sur estrade. Coffre garanti.
+// Salle : Halls Cendrés — Sanctuaire Éteint (impasse O compact)
+// (Phase 9.6 — Migration, fixed BFS)
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
-    porteO,
-    mur, murLateralDroit,
-    brasier, eboulis, murSecret
+    porteO
 } from '../_format.js';
 
-const W = 1400;
-const H = 900;
-const Y_SOL = H - HAUTEUR_SOL;        // 860
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_impasse_O = {
     id: 'halls_impasse_O',
     biome: 'halls_cendres',
-    nom: 'Sanctuaire éteint',
+    nom: 'Sanctuaire Éteint',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['O'],
-    archetypesCompatibles: ['sanctuaire', 'crypte'],
-    rolesAutorises: ['deadend', 'alt'],
+    archetypesCompatibles: ['sanctuaire'],
+    rolesAutorises: ['deadend'],
 
     generer({ portesActives = ['O'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(plafondCathedrale(40, W - 40, 24));
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND voûte basse (sanctuaire)
-            plafondCathedrale(0,    400, Y_PLAFOND + 80),
-            plafondCathedrale(400,  900, Y_PLAFOND + 160),  // voûte centrale
-            plafondCathedrale(900,  W,   Y_PLAFOND + 80),
+        // Foyer éteint surélevé
+        plateformes.push(plateforme(580, Y_SOL - 30, 180));
 
-            // ─── MURS LATÉRAUX
-            mur(15, Y_PLAFOND, Y_SOL - 100),  // gauche partial (porte O)
-            murLateralDroit(W, Y_PLAFOND, Y_SOL),  // droit plein
-
-            // ─── ESTRADE FOYER (centre)
-            plateforme(W - 400, Y_SOL - 50, 280, { oneWay: false }),
-
-            // ─── PALIERS latéraux
-            plateforme(700, 770, 130, { oneWay: true }),
-            plateforme(900, 770, 130, { oneWay: true })
-        ];
-
-        const obstacles = [
-            // Brasier mourant sur l'estrade (cycle TRÈS long)
-            brasier(W - 400, Y_SOL - 50, { largeur: 160, cycleMs: 6000, offsetMs: 0 }),
-            eboulis(450, Y_SOL - 110, { largeur: 80, hauteur: 110, hp: 2 }),
-
-            // Mur SECRET dans le mur droit (cache une niche secondaire — bonus)
-            murSecret(W - 45, Y_SOL - 200, 60, 100, { hp: 4, orientation: 'mur', dropSel: true })
-        ];
+        // Chaîne d'ascension vers estrade coffre
+        plateformes.push(plateforme(200, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(380, 360, 110, { oneWay: true }));
+        plateformes.push(plateforme(580, 290, 130, { oneWay: true }));
+        plateformes.push(plateforme(580, 210, 160, { oneWay: true }));   // estrade coffre
 
         const portes = {};
         if (portesActives.includes('O')) portes.O = porteO(Y_SOL);
 
+        const coffreForce = { x: 580, y: 210 - 12 };
+
         return {
-            plateformes, obstacles, zones: [], portes,
-            spawnDefault: { x: 80, y: Y_SOL - 20 }
+            plateformes, obstacles: [], zones: [], portes,
+            spawnDefault: { x: 80, y: Y_SOL - 20 },
+            coffreForce
         };
     }
 };

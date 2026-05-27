@@ -15,10 +15,9 @@
 //     ne dessine que les portes activées à la génération).
 //
 // ═════════════════════════════════════════════════════════════════════
-// PHASE 9 — Toutes les salles Ruines sont compactes (960×540, caméra figée).
-// Les anciennes salles XL ont été supprimées en Phase 9.3d (cleanup post-refonte).
-// Les biomes 2-5 (Halls, Cristaux, Voile, Cœur) restent en XL legacy
-// jusqu'à leur propre migration compact (9.4+).
+// PHASE 9 — Toutes les salles Ruines + Halls sont compactes (960×540).
+// XL legacy supprimé Ruines 9.3d / Halls 9.6. Biomes 3-5 (Cristaux,
+// Voile, Cœur) restent XL legacy jusqu'à leur propre migration.
 // ═════════════════════════════════════════════════════════════════════
 
 // ─── Phase 9.2 : 1ère salle test compacte 960×540 ─────────────────────
@@ -46,8 +45,21 @@ import { ruines_impasse_N_compact }   from './ruines/ruines_impasse_N_compact.js
 import { ruines_impasse_S_compact }   from './ruines/ruines_impasse_S_compact.js';
 // ─── Phase 9.4 Vague 1 : salle signature mécanique mobile ─────────────
 import { ruines_sanctuaire_suspendu } from './ruines/ruines_sanctuaire_suspendu.js';
+// ─── Phase 9.4 Vague 1 : pool diversité 8 NSEO + 3 ciblées (Mario/Rayman) ─
+import { ruines_grand_saut }          from './ruines/ruines_grand_saut.js';
+import { ruines_tour_chute }          from './ruines/ruines_tour_chute.js';
+import { ruines_champignons }         from './ruines/ruines_champignons.js';
+import { ruines_lames_pendulantes }   from './ruines/ruines_lames_pendulantes.js';
+import { ruines_ascension_ressort }   from './ruines/ruines_ascension_ressort.js';
+import { ruines_corniches_zigzag }    from './ruines/ruines_corniches_zigzag.js';
+import { ruines_pont_effrite }        from './ruines/ruines_pont_effrite.js';
+import { ruines_voutes_brisees }      from './ruines/ruines_voutes_brisees.js';
+import { ruines_tour_garde_alt }      from './ruines/ruines_tour_garde_alt.js';
+import { ruines_belvedere_pendule }   from './ruines/ruines_belvedere_pendule.js';
+import { ruines_puits_double }        from './ruines/ruines_puits_double.js';
 
-// ─── Halls Cendrés (Phase 8 — 25 salles + 1 fallback) ────────────
+// ─── Halls Cendrés (Phase 9.6 — migration compact 960×540) ───────
+// 25 salles legacy refondues compact + 11 nouvelles diversité pool.
 import { halls_couloir_brasiers }     from './halls/halls_couloir_brasiers.js';
 import { halls_grand_mur }            from './halls/halls_grand_mur.js';
 import { halls_cascade_pierres }      from './halls/halls_cascade_pierres.js';
@@ -74,6 +86,30 @@ import { halls_impasse_S }            from './halls/halls_impasse_S.js';
 import { halls_foyer_eteint }         from './halls/halls_foyer_eteint.js';
 import { halls_reseau_plaques }       from './halls/halls_reseau_plaques.js';
 import { halls_carrefour_brasier }    from './halls/halls_carrefour_brasier.js';
+// ─── Phase 9.6 : 11 nouvelles salles diversité Halls ────────────
+import { halls_arene_braseros }       from './halls/halls_arene_braseros.js';
+import { halls_marteau_destructeur }  from './halls/halls_marteau_destructeur.js';
+import { halls_fournaise_centrale }   from './halls/halls_fournaise_centrale.js';
+import { halls_tunnel_cendres }       from './halls/halls_tunnel_cendres.js';
+import { halls_dais_du_marteau }      from './halls/halls_dais_du_marteau.js';
+import { halls_chaine_braseros }      from './halls/halls_chaine_braseros.js';
+import { halls_fosse_explosive }      from './halls/halls_fosse_explosive.js';
+import { halls_cendres_eternelles }   from './halls/halls_cendres_eternelles.js';
+import { halls_ascension_NE }         from './halls/halls_ascension_NE.js';
+import { halls_descente_SO }          from './halls/halls_descente_SO.js';
+import { halls_double_puits_NS }      from './halls/halls_double_puits_NS.js';
+// ─── Phase 9.7 : 5 signatures nouvelles mécaniques (geyser/acide/charbon) ─
+import { halls_geyser_central }       from './halls/halls_geyser_central.js';
+import { halls_rideau_acide_couloir } from './halls/halls_rideau_acide_couloir.js';
+import { halls_blocs_pousseurs }      from './halls/halls_blocs_pousseurs.js';
+import { halls_combo_total }          from './halls/halls_combo_total.js';
+import { halls_lave_jets }            from './halls/halls_lave_jets.js';
+// ─── Phase 9.8 : 5 signatures medium-cost (marteau/piston/scie) ─
+import { halls_marteaux_pilons }      from './halls/halls_marteaux_pilons.js';
+import { halls_pistons_thermiques }   from './halls/halls_pistons_thermiques.js';
+import { halls_scies_couloir }        from './halls/halls_scies_couloir.js';
+import { halls_forge_meca }           from './halls/halls_forge_meca.js';
+import { halls_arene_chaos }          from './halls/halls_arene_chaos.js';
 
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
 // sont EXCLUES : elles ne sortent que via salleFallback() quand le pool
@@ -103,6 +139,19 @@ const TOUTES_SALLES = [
     ruines_impasse_S_compact,  // S    — caveau profond (descente coffre)
     // ─── Phase 9.4 Vague 1 : signature mobile ─────────────────────
     ruines_sanctuaire_suspendu, // OE   — timing plateformes mobiles, coffre haut (unique)
+    // ─── Phase 9.4 Vague 1 : pool diversité (8 NSEO + 3 ciblées) ──
+    // Garantit ≥ 8 candidats par config de portes. Style Mario/Rayman hard.
+    ruines_grand_saut,          // NSEO — fosse + 3 plateformes flottantes
+    ruines_tour_chute,          // NSEO — ascension sols effrités
+    ruines_champignons,         // NSEO — ressorts catapultes + pieux plafond
+    ruines_lames_pendulantes,   // NSEO — mobile sous pieux plafond (unique)
+    ruines_ascension_ressort,   // NSEO — paliers étroits + 3 ressorts
+    ruines_corniches_zigzag,    // NSEO — corniches 70 px en zigzag + pieux
+    ruines_pont_effrite,        // NSEO — pont effrité au-dessus fosse (unique)
+    ruines_voutes_brisees,      // NSEO — 3 étages empilés + ressorts
+    ruines_tour_garde_alt,      // NE   — ascension droite punitive (alt)
+    ruines_belvedere_pendule,   // NO   — mobile longue + fosse (unique)
+    ruines_puits_double,        // NS   — 2 colonnes + ressorts (alt)
 
     // ─── Halls Cendrés (25 salles ; mécanique = destruction) ──────
     // OE bus principal (8)
@@ -135,7 +184,31 @@ const TOUTES_SALLES = [
     halls_impasse_S,           // S    — fosse brasiers vertical bas
     // Signature OES/NEO (2)
     halls_foyer_eteint,        // OES  — 3 niveaux + sous-salle mur explosif (unique)
-    halls_reseau_plaques       // NEO  — 3 plaques pression puzzle (unique)
+    halls_reseau_plaques,      // NEO  — 3 plaques pression puzzle (unique)
+    // ─── Phase 9.6 : 11 salles diversité Halls (8 NSEO + 3 ciblées) ──
+    halls_arene_braseros,      // NSEO — arène 4 brasiers quinconce
+    halls_marteau_destructeur, // NSEO — séquence éboulis + mur explosif
+    halls_fournaise_centrale,  // NSEO — foyer permanent énorme (unique)
+    halls_tunnel_cendres,      // NSEO — 3 étages sols effrités
+    halls_dais_du_marteau,     // NSEO — voûte basse pieux plafond (unique)
+    halls_chaine_braseros,     // NSEO — 5 brasiers vague séquencée
+    halls_fosse_explosive,     // NSEO — fosse mortelle + murs explosifs
+    halls_cendres_eternelles,  // NSEO — multi-niveaux rocs tombants
+    halls_ascension_NE,        // NE   — alt ascension foyers escalier
+    halls_descente_SO,         // SO   — alt descente sols effrités
+    halls_double_puits_NS,     // NS   — alt puits + murs explosifs
+    // ─── Phase 9.7 : signatures nouvelles mécaniques ─────────────────
+    halls_geyser_central,      // OE   — geyser permanent (unique)
+    halls_rideau_acide_couloir,// OE   — 3 rideaux acide à sprinter (unique)
+    halls_blocs_pousseurs,     // OE   — puzzle blocs charbon + brasiers (unique)
+    halls_combo_total,         // NSEO — combo total geyser+acide+charbon (unique)
+    halls_lave_jets,           // NS   — ascension verticale geysers (unique)
+    // ─── Phase 9.8 : signatures medium-cost (marteau/piston/scie) ────
+    halls_marteaux_pilons,     // OE   — 3 marteaux décalés (unique)
+    halls_pistons_thermiques,  // OE   — 4 pistons latéraux + brasier (unique)
+    halls_scies_couloir,       // OE   — 3 scies H+V (unique)
+    halls_forge_meca,          // NSEO — combo marteau+piston+scie (unique)
+    halls_arene_chaos          // NSEO — combo v1+v2 méga (unique)
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes
@@ -180,11 +253,11 @@ export function sallesCompatibles(biomeId, portesReq, role, dejaUtilisees) {
     return TOUTES_SALLES.filter(s => {
         if (s.biome !== biomeId) return false;
         if (!portesReq.every(d => s.portesPossibles.includes(d))) return false;
-        // Pour Ruines (tout compact, pool dense), on ignore le filtre
-        // rolesAutorises pour maximiser la variété même sur deadends.
-        // Pour Halls (toujours XL), filtre normal pour préserver les
-        // salles signature des rôles main uniquement.
-        const ignoreRole = biomeId === 'ruines_basses';
+        // Pour Ruines et Halls (tous compacts, pool dense), on ignore le
+        // filtre rolesAutorises pour maximiser la variété même sur deadends.
+        // Pour biomes encore XL legacy (Cristaux, Voile, Cœur), filtre
+        // normal pour préserver les salles signature des rôles main.
+        const ignoreRole = biomeId === 'ruines_basses' || biomeId === 'halls_cendres';
         if (role && s.rolesAutorises && !s.rolesAutorises.includes(role) && !ignoreRole) return false;
         // Salles "unique" : max 1 par étage (signature). Si déjà tirée → exclue.
         if (s.unique && dejaUtilisees?.has(s.id)) return false;

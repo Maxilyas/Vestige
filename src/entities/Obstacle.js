@@ -76,6 +76,14 @@ export class Obstacle {
         else if (data.type === 'brasier_mobile')    this._creerBrasierMobile();
         else if (data.type === 'mur_explosif')      this._creerCassable('mur_explosif');
         else if (data.type === 'mur_secret')        this._creerMurSecret();
+        // ─── Vague 4 (Phase 9.7) ───
+        else if (data.type === 'geyser_vapeur')     this._creerGeyserVapeur();
+        else if (data.type === 'rideau_acide')      this._creerRideauAcide();
+        else if (data.type === 'bloc_charbon')      this._creerBlocCharbon();
+        // ─── Vague 5 (Phase 9.8) ───
+        else if (data.type === 'marteau_pilon')     this._creerMarteauPilon();
+        else if (data.type === 'piston_thermique')  this._creerPistonThermique();
+        else if (data.type === 'scie_circulaire')   this._creerScieCirculaire();
     }
 
     _creerPieu() {
@@ -219,6 +227,29 @@ export class Obstacle {
                     this.data.hauteur ?? this.def.hauteurDefault);
             }
         }
+        else if (this.data.type === 'geyser_vapeur') {
+            if (!this.sprite || !this.sprite.active) return;
+            this._updateGeyserVapeur(this.scene.time.now);
+        }
+        else if (this.data.type === 'rideau_acide') {
+            if (this.visual?.active) this._dessinerRideauAcide(this.scene.time.now);
+        }
+        else if (this.data.type === 'bloc_charbon') {
+            if (!this.sprite || !this.sprite.active) return;
+            this._updateBlocCharbon(this.scene.time.now);
+        }
+        else if (this.data.type === 'marteau_pilon') {
+            if (!this.sprite || !this.sprite.active) return;
+            this._updateMarteauPilon(this.scene.time.now);
+        }
+        else if (this.data.type === 'piston_thermique') {
+            if (!this.sprite || !this.sprite.active) return;
+            this._updatePistonThermique(this.scene.time.now);
+        }
+        else if (this.data.type === 'scie_circulaire') {
+            if (!this.sprite || !this.sprite.active) return;
+            this._updateScieCirculaire(this.scene.time.now);
+        }
     }
 
     /**
@@ -263,6 +294,52 @@ export class Obstacle {
             if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
             this.dernierHit = now;
             scene.events.emit('obstacle:pieu:hit', this);
+        } else if (this.data.type === 'geyser_vapeur') {
+            // Phase ON : dégâts + boost vy fort (catapulte verticale)
+            if (this.geyserPhase !== 'vapeur') return;
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            // Catapulte : on impose vy = boostVy (au lieu d'additionner)
+            const cooldownB = this.def.cooldownBoostMs ?? 250;
+            if (now - this.dernierBoost > cooldownB) {
+                this.dernierBoost = now;
+                player.body.setVelocityY(this.data.boostVy ?? this.def.boostVy);
+            }
+            scene.events.emit('obstacle:pieu:hit', this);
+        } else if (this.data.type === 'rideau_acide') {
+            // Dégâts continus (avec invincibilité brève pour permettre traversée)
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            scene.events.emit('obstacle:pieu:hit', this);
+        }
+        // bloc_charbon : pas de dégâts au contact normal (c'est une plateforme).
+        // Le push se gère dans GameScene via collider standard.
+        else if (this.data.type === 'marteau_pilon') {
+            // Dégâts uniquement en phase 'chute' ou 'impact'
+            if (this.marteauPhase !== 'chute' && this.marteauPhase !== 'impact') return;
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            // Knockback horizontal selon position joueur vs marteau
+            const dir = Math.sign(player.x - this.data.x) || 1;
+            player.body.setVelocityX(dir * this.def.knockbackHorizontal);
+            player.body.setVelocityY(-200);  // petit pop pour éviter sticky
+            scene.events.emit('obstacle:pieu:hit', { def: { degatsImpact: this.def.degatsImpact } });
+        }
+        else if (this.data.type === 'piston_thermique') {
+            // Knockback à l'impact initial de la sortie (déclenché par _updatePiston)
+            // Le contact en extension/etendu inflige des dégâts normaux.
+            if (this.pistonPhase === 'rentre') return;
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            // Knockback dans la direction de sortie
+            const dir = this.data.orientation === 'gauche' ? -1 : 1;
+            player.body.setVelocityX(dir * this.def.knockbackHorizontal);
+            scene.events.emit('obstacle:pieu:hit', { def: { degatsImpact: this.def.degatsContact } });
+        }
+        else if (this.data.type === 'scie_circulaire') {
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            scene.events.emit('obstacle:pieu:hit', { def: { degatsImpact: this.def.degatsContact } });
         }
     }
 
@@ -1251,5 +1328,760 @@ export class Obstacle {
                 }
             });
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 4 — Halls Cendrés Phase 9.7 (extension toolkit)
+    // ════════════════════════════════════════════════════════════════
+
+    _creerGeyserVapeur() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+
+        // Sprite overlap (pas de collision physique — c'est une zone de dégâts/boost)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this.geyserPhase = 'inerte';
+        this._t0 = this.scene.time.now + (this.data.offsetMs ?? 0);
+    }
+
+    _updateGeyserVapeur(now) {
+        const cycle = this.data.cycleMs ?? this.def.cycleMs;
+        const t = ((now - this._t0) % cycle) / cycle;
+        // vapeurRatio = 45% du cycle = ON
+        const enVapeur = t < this.def.vapeurRatio;
+        this.geyserPhase = enVapeur ? 'vapeur' : 'inerte';
+
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        const cx = this.data.x;
+        const cyBase = this.data.y + h / 2;   // base (sol)
+        const yTop = this.data.y - h / 2;
+
+        const g = this.visual;
+        g.clear();
+
+        // Socle (bouche du geyser au sol — cuivre terni)
+        const socleH = 14;
+        g.fillStyle(COULEUR_SUIE, 1);
+        g.fillRect(cx - w / 2 - 4, cyBase - socleH, w + 8, socleH);
+        g.fillStyle(COULEUR_CUIVRE_TERNI, 1);
+        g.fillRect(cx - w / 2, cyBase - socleH + 2, w, socleH - 4);
+        // Trou central (vapeur sort d'ici)
+        g.fillStyle(0x000000, 1);
+        g.fillRect(cx - w / 4, cyBase - socleH + 4, w / 2, socleH - 8);
+
+        if (enVapeur) {
+            // PHASE ON : jet de vapeur blanc/gris s'élevant
+            const phaseProgress = t / this.def.vapeurRatio;
+            let intensite;
+            if (phaseProgress < 0.10) intensite = phaseProgress / 0.10;     // montée
+            else if (phaseProgress > 0.90) intensite = (1 - phaseProgress) / 0.10;
+            else intensite = 1;
+
+            const hauteurJet = h * 0.95 * intensite;
+            const jetTopY = cyBase - socleH - hauteurJet;
+
+            // Halo diffus (large)
+            g.fillStyle(0xc8d8e8, 0.18 * intensite);
+            g.fillRect(cx - w / 2 - 12, jetTopY - 8, w + 24, hauteurJet + 14);
+
+            // Colonne de vapeur (3-4 bandes verticales irrégulières)
+            const dance = Math.sin(now / 60) * 3;
+            const nbBandes = 4;
+            for (let i = 0; i < nbBandes; i++) {
+                const bx = cx - w / 3 + (i + 0.5) * (w * 2 / 3 / nbBandes);
+                const swirl = Math.sin(now / 90 + i * 1.7) * 5;
+                const yTopBande = jetTopY + (i % 2) * 8;
+                const wBande = 10 + Math.sin(now / 110 + i) * 2;
+                // Tons de gris/blanc en dégradé
+                g.fillStyle(0xe8eef4, 0.7 * intensite);
+                g.fillRect(bx - wBande / 2 + swirl, yTopBande, wBande, hauteurJet - (i % 2) * 8);
+                g.fillStyle(0xffffff, 0.4 * intensite);
+                g.fillRect(bx - wBande / 4 + swirl, yTopBande + 4, wBande / 2, hauteurJet - 8);
+            }
+
+            // Gouttes condensées qui retombent (lecture "haut sous pression")
+            for (let i = 0; i < 5; i++) {
+                const dx = Math.sin(now / 70 + i * 0.9) * w * 0.6;
+                const dy = ((now / 4 + i * 200) % hauteurJet);
+                g.fillStyle(0xb8c8d8, 0.6 * intensite);
+                g.fillCircle(cx + dx, jetTopY + dy, 2);
+            }
+
+            // Lumière au socle (la vapeur a sa source)
+            g.fillStyle(0xffffff, 0.5 * intensite);
+            g.fillRect(cx - w / 4, cyBase - socleH + 5, w / 2, socleH - 10);
+        } else {
+            // PHASE OFF : silhouette inerte + craquement orange (le geyser charge)
+            const tCharge = (t - this.def.vapeurRatio) / (1 - this.def.vapeurRatio);
+            // Lueur croissante au socle (lecture "ça va péter")
+            g.fillStyle(0xff9040, 0.2 + tCharge * 0.4);
+            g.fillRect(cx - w / 4, cyBase - socleH + 5, w / 2, socleH - 10);
+
+            // Petite vapeur résiduelle (avertissement)
+            const wisp = Math.sin(now / 200) * 0.5 + 0.5;
+            g.fillStyle(0xa8b8c8, 0.25 * tCharge * wisp);
+            g.fillRect(cx - 6, cyBase - socleH - 20, 12, 18);
+        }
+    }
+
+    _creerRideauAcide() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+
+        // Sprite overlap (zone dégâts)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        // Tableau de gouttes virtuelles (offset y aléatoires)
+        const nbGouttes = Math.max(8, Math.floor(h / 18));
+        this._gouttesAcide = Array.from({ length: nbGouttes }, (_, i) => ({
+            offset: (i / nbGouttes) * h + Math.random() * 12,
+            dx: (Math.random() - 0.5) * (w * 0.6),
+            vitesse: 1 + Math.random() * 0.5,
+            taille: 1.5 + Math.random() * 1.8
+        }));
+    }
+
+    _dessinerRideauAcide(now) {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        const cx = this.data.x;
+        const yTop = this.data.y - h / 2;
+        const yBot = this.data.y + h / 2;
+
+        const g = this.visual;
+        g.clear();
+
+        // Halo vert pâle de la zone (lecture danger continue)
+        g.fillStyle(0x60a040, 0.08);
+        g.fillRect(cx - w / 2 - 4, yTop, w + 8, h);
+
+        // Tube de bave central (lecture verticale forte)
+        g.fillStyle(0x305018, 0.5);
+        g.fillRect(cx - w / 4, yTop, w / 2, h);
+
+        // Gouttes en chute continue (boucle infinie)
+        for (const goutte of this._gouttesAcide) {
+            const y = yTop + ((now / 4 * goutte.vitesse + goutte.offset) % h);
+            const x = cx + goutte.dx;
+            // Goutte (ellipse étirée vers le bas)
+            g.fillStyle(0x80c040, 0.85);
+            g.fillEllipse(x, y, goutte.taille * 1.4, goutte.taille * 3);
+            g.fillStyle(0xc0e060, 0.7);
+            g.fillEllipse(x, y - goutte.taille, goutte.taille * 0.8, goutte.taille * 1.6);
+        }
+
+        // Flaque acide en bas (s'élargit horizontalement)
+        g.fillStyle(0x507030, 0.7);
+        g.fillEllipse(cx, yBot - 4, w * 1.2, 8);
+        g.fillStyle(0x80c040, 0.5);
+        const bulle = Math.sin(now / 200) * 2 + 4;
+        g.fillCircle(cx - 4, yBot - bulle - 2, 1.5);
+        g.fillCircle(cx + 6, yBot - bulle * 0.7 - 2, 1.2);
+    }
+
+    _creerBlocCharbon() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        this.hp = this.data.hp ?? this.def.hpDefault;
+
+        // Sprite physique DYNAMIQUE (peut être poussé par le joueur)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite); // dynamic body
+        const body = this.sprite.body;
+        body.allowGravity = true;
+        body.setDragX(this.def.friction);
+        body.setMaxVelocity(this.def.vitessePushMax, 1000);
+        body.setCollideWorldBounds(false);
+        this.sprite._obstacle = this;
+
+        // Note : on N'AJOUTE PAS au platforms staticGroup (le bloc est dynamic).
+        // GameScene crée les colliders nécessaires : bloc ↔ platforms (gravité),
+        // bloc ↔ joueur (push), bloc ↔ obstaclesSolides.
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this.enflammeDepuis = 0;       // timestamp début enflamme
+        this.estEnflamme = false;
+        this._dessinerBlocCharbon(this.scene.time.now);
+    }
+
+    _updateBlocCharbon(now) {
+        // Suit le sprite physique
+        const x = this.sprite.x;
+        const y = this.sprite.y;
+
+        // Détection contact brasier en phase ON → s'enflamme
+        if (!this.estEnflamme && this.scene.obstacles) {
+            for (const o of this.scene.obstacles) {
+                if (o === this) continue;
+                if (o.data.type !== 'brasier_mobile') continue;
+                if (o.brasierPhase !== 'feu') continue;
+                // Overlap rectangle simple
+                const dx = Math.abs(x - o.data.x);
+                const dy = Math.abs(y - o.data.y);
+                const ww = (this.data.largeur + (o.data.largeur ?? o.def.largeurDefault)) / 2;
+                const hh = (this.data.hauteur + (o.data.hauteur ?? o.def.hauteurDefault)) / 2;
+                if (dx < ww && dy < hh) {
+                    this.estEnflamme = true;
+                    this.enflammeDepuis = now;
+                    break;
+                }
+            }
+        }
+
+        // Si enflammé, compte à rebours → explose
+        if (this.estEnflamme && now - this.enflammeDepuis >= this.def.delaiEnflammeMs) {
+            this._exploserBlocCharbon();
+            return;
+        }
+
+        // Redraw visuel
+        this._dessinerBlocCharbon(now);
+    }
+
+    _dessinerBlocCharbon(now) {
+        const w = this.data.largeur;
+        const h = this.data.hauteur;
+        const cx = this.sprite ? this.sprite.x : this.data.x;
+        const cy = this.sprite ? this.sprite.y : this.data.y;
+
+        const g = this.visual;
+        g.clear();
+
+        if (this.estEnflamme) {
+            // ENFLAMMÉ : pulse rouge + halo orangé qui croît
+            const tEnflamme = (now - this.enflammeDepuis) / this.def.delaiEnflammeMs;
+            // Halo
+            g.fillStyle(COULEUR_BRAISE, 0.3 + tEnflamme * 0.4);
+            g.fillRect(cx - w / 2 - 6, cy - h / 2 - 6, w + 12, h + 12);
+            // Corps charbon ardent
+            g.fillStyle(0x402010, 1);
+            g.fillRect(cx - w / 2, cy - h / 2, w, h);
+            // Fissures incandescentes
+            const flicker = Math.sin(now / 60) * 0.2 + 0.8;
+            g.fillStyle(COULEUR_BRAISE_VIVE, flicker);
+            const nbFissures = 5;
+            for (let i = 0; i < nbFissures; i++) {
+                const fx = cx - w / 2 + 4 + (i / nbFissures) * (w - 8);
+                const fy = cy - h / 2 + 4 + Math.sin(i * 1.7) * 4;
+                const fh = h - 8 - Math.abs(Math.sin(i * 0.7)) * 6;
+                g.fillRect(fx, fy, 2, fh);
+            }
+            // Étincelles
+            for (let i = 0; i < 3; i++) {
+                const sx = cx + Math.sin(now / 70 + i * 2.1) * w / 3;
+                const sy = cy - h / 2 - 2 - Math.abs(Math.cos(now / 90 + i)) * 4;
+                g.fillStyle(0xffaa30, 0.9);
+                g.fillCircle(sx, sy, 1.5);
+            }
+        } else {
+            // INERTE : bloc charbon noir avec texture granuleuse
+            // Ombre portée
+            g.fillStyle(0x000000, 0.5);
+            g.fillRect(cx - w / 2 + 3, cy - h / 2 + 3, w, h);
+            // Corps
+            g.fillStyle(COULEUR_SUIE, 1);
+            g.fillRect(cx - w / 2, cy - h / 2, w, h);
+            // Bord biseauté
+            g.fillStyle(0x282018, 1);
+            g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, w - 4, 2);
+            g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, 2, h - 4);
+            // Reflets cuivrés discrets (charbon de forge)
+            g.fillStyle(COULEUR_CUIVRE_TERNI, 0.3);
+            for (let i = 0; i < 4; i++) {
+                const rx = cx - w / 2 + 6 + (i * (w - 12) / 3);
+                const ry = cy - h / 2 + 8 + Math.sin(i * 2.3) * 6;
+                g.fillCircle(rx, ry, 1.5);
+            }
+            // Trait noir au centre
+            g.lineStyle(1, 0x000000, 0.4);
+            g.strokeRect(cx - w / 2 + 4, cy - h / 2 + 4, w - 8, h - 8);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 5 — Halls Cendrés Phase 9.8 (toolkit medium-cost)
+    // ════════════════════════════════════════════════════════════════
+
+    _creerMarteauPilon() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+
+        // Sprite static — on déplace manuellement via setPosition + body.updateFromGameObject
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this.marteauPhase = 'repos_haut';
+        this._t0 = this.scene.time.now + (this.data.offsetMs ?? 0);
+        // Tracking position pour la phase chute
+        this._yCurrent = this.data.yTopRepos + h / 2;
+        this._dessinerMarteauPilon(this.scene.time.now);
+    }
+
+    _updateMarteauPilon(now) {
+        const cycle = this.data.cycleMs ?? this.def.cycleMs;
+        const t = ((now - this._t0) % cycle) / cycle;
+        const def = this.def;
+        const h = this.data.hauteur ?? def.hauteurDefault;
+        const yReposC = this.data.yTopRepos + h / 2;
+        const yImpactC = this.data.yTopImpact + h / 2;
+
+        // Détermine la phase
+        let phase, phaseT;
+        if (t < def.ratioReposHaut) {
+            phase = 'repos_haut';
+            phaseT = t / def.ratioReposHaut;
+            this._yCurrent = yReposC;
+        } else if (t < def.ratioReposHaut + def.ratioChute) {
+            phase = 'chute';
+            phaseT = (t - def.ratioReposHaut) / def.ratioChute;
+            // Ease-in (accélération de la chute)
+            const eased = phaseT * phaseT;
+            this._yCurrent = yReposC + (yImpactC - yReposC) * eased;
+        } else if (t < def.ratioReposHaut + def.ratioChute + def.ratioReposBas) {
+            const justImpacted = this.marteauPhase === 'chute';
+            phase = 'impact';
+            this._yCurrent = yImpactC;
+            // Shake + particules au premier frame post-chute
+            if (justImpacted) {
+                this.scene.cameras.main.shake(100, 0.006);
+                // Bouffée de poussière à l'impact
+                const x = this.data.x;
+                const yBas = yImpactC + h / 2;
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI + Math.PI;  // arc supérieur
+                    const dx = Math.cos(angle) * 24;
+                    const dy = Math.sin(angle) * 6;
+                    const p = this.scene.add.circle(x + dx, yBas + dy, 4, 0x5a4838, 0.7);
+                    p.setDepth(10);
+                    this.scene.tweens.add({
+                        targets: p,
+                        x: x + dx * 2.5,
+                        y: yBas + dy - 12,
+                        alpha: 0,
+                        scaleX: 0.3,
+                        scaleY: 0.3,
+                        duration: 500,
+                        onComplete: () => p.destroy()
+                    });
+                }
+            }
+            // Sub-phase pour distinguer impact instantané vs repos bas
+            if (this.marteauPhase === 'chute') phase = 'impact';
+            else phase = 'repos_bas';
+        } else {
+            phase = 'remonte';
+            const localT = (t - def.ratioReposHaut - def.ratioChute - def.ratioReposBas) / def.ratioRemonte;
+            // Ease-out (remontée qui ralentit)
+            const eased = 1 - (1 - localT) * (1 - localT);
+            this._yCurrent = yImpactC + (yReposC - yImpactC) * eased;
+        }
+
+        this.marteauPhase = phase;
+        // Met à jour le sprite physique
+        this.sprite.y = this._yCurrent;
+        this.sprite.body.updateFromGameObject();
+        // Redraw visuel
+        this._dessinerMarteauPilon(now);
+    }
+
+    _dessinerMarteauPilon(now) {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        const cx = this.data.x;
+        const cy = this._yCurrent;
+        const yReposC = this.data.yTopRepos + h / 2;
+        const yImpactC = this.data.yTopImpact + h / 2;
+
+        const g = this.visual;
+        g.clear();
+
+        // Câble suspendu (du plafond au marteau) — tige métallique
+        const yCableTop = this.data.yTopRepos - 8;
+        g.lineStyle(4, 0x3a2a1a, 1);
+        g.lineBetween(cx, yCableTop, cx, cy - h / 2);
+        g.lineStyle(2, 0x6a4a30, 1);
+        g.lineBetween(cx - 1, yCableTop, cx - 1, cy - h / 2);
+
+        // Ombre projetée au sol (lecture danger en phase repos_haut)
+        if (this.marteauPhase === 'repos_haut') {
+            const tProche = ((now - this._t0) % (this.data.cycleMs ?? this.def.cycleMs)) /
+                           (this.data.cycleMs ?? this.def.cycleMs);
+            const proximite = tProche / this.def.ratioReposHaut;     // 0..1
+            const intensite = 0.15 + proximite * 0.4;
+            g.fillStyle(0x000000, intensite);
+            const ombreLargeur = w * 1.1;
+            g.fillEllipse(cx, yImpactC + h / 2 - 4, ombreLargeur, 8);
+        }
+
+        // Corps du marteau : bloc fer/cuivre
+        // Ombre portée
+        g.fillStyle(0x000000, 0.4);
+        g.fillRect(cx - w / 2 + 3, cy - h / 2 + 3, w, h);
+        // Corps principal (fer noirâtre)
+        g.fillStyle(0x2a2018, 1);
+        g.fillRect(cx - w / 2, cy - h / 2, w, h);
+        // Bandes cuivrées horizontales (3 niveaux)
+        g.fillStyle(COULEUR_CUIVRE_TERNI, 1);
+        g.fillRect(cx - w / 2 + 2, cy - h / 2 + 4, w - 4, 6);
+        g.fillRect(cx - w / 2 + 2, cy - h / 4 - 3, w - 4, 6);
+        g.fillRect(cx - w / 2 + 2, cy + h / 4 - 3, w - 4, 6);
+        // Rivets aux coins (cuivre clair)
+        g.fillStyle(0xd89860, 1);
+        g.fillCircle(cx - w / 2 + 5, cy - h / 2 + 6, 2);
+        g.fillCircle(cx + w / 2 - 5, cy - h / 2 + 6, 2);
+        g.fillCircle(cx - w / 2 + 5, cy + h / 2 - 6, 2);
+        g.fillCircle(cx + w / 2 - 5, cy + h / 2 - 6, 2);
+        // Face d'impact (bas) — bord plus sombre + lueur orange si chute/impact
+        g.fillStyle(0x18120a, 1);
+        g.fillRect(cx - w / 2, cy + h / 2 - 8, w, 8);
+        if (this.marteauPhase === 'chute' || this.marteauPhase === 'impact') {
+            const glow = this.marteauPhase === 'impact' ? 0.9 : 0.5;
+            g.fillStyle(COULEUR_BRAISE, glow);
+            g.fillRect(cx - w / 2 + 3, cy + h / 2 - 4, w - 6, 4);
+            // Étincelles
+            for (let i = 0; i < 3; i++) {
+                const ex = cx + Math.sin(now / 50 + i * 1.7) * (w / 3);
+                g.fillStyle(0xffaa30, glow * 0.8);
+                g.fillCircle(ex, cy + h / 2 + 2, 2);
+            }
+        }
+        // Liseré clair (lumière oblique gauche)
+        g.fillStyle(0x504030, 0.6);
+        g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, 3, h - 4);
+    }
+
+    _creerPistonThermique() {
+        const def = this.def;
+        const wRentre = this.data.largeur ?? def.largeurRentreDefault;
+        const h = this.data.hauteur ?? def.hauteurDefault;
+        const longExt = this.data.longueurExtension ?? def.longueurExtensionDefault;
+
+        // Sprite dynamic dimensions : on resize/move selon la phase
+        // Initialement rentré (longueur = wRentre)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, wRentre, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        // Le piston EST bloquant — on l'ajoute aux obstacles solides
+        if (this.scene.obstaclesSolides) this.scene.obstaclesSolides.add(this.sprite);
+        else if (this.scene.platforms) this.scene.platforms.add(this.sprite);
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this.pistonPhase = 'rentre';
+        this._t0 = this.scene.time.now + (this.data.offsetMs ?? 0);
+        // x rentré sauvegardé pour calculs
+        this._xRentre = this.data.x;
+        this._dessinerPistonThermique(this.scene.time.now);
+    }
+
+    _updatePistonThermique(now) {
+        const cycle = this.data.cycleMs ?? this.def.cycleMs;
+        const t = ((now - this._t0) % cycle) / cycle;
+        const def = this.def;
+        const orient = this.data.orientation;
+        const sens = orient === 'gauche' ? -1 : 1;
+        const wRentre = this.data.largeur ?? def.largeurRentreDefault;
+        const h = this.data.hauteur ?? def.hauteurDefault;
+        const longExt = this.data.longueurExtension ?? def.longueurExtensionDefault;
+
+        let phase, longueur, xCentre;
+        if (t < def.ratioRentre) {
+            phase = 'rentre';
+            longueur = wRentre;
+            xCentre = this._xRentre;
+        } else if (t < def.ratioRentre + def.ratioSortie) {
+            phase = 'sortie';
+            const localT = (t - def.ratioRentre) / def.ratioSortie;
+            const eased = 1 - (1 - localT) * (1 - localT);    // ease-out
+            longueur = wRentre + longExt * eased;
+            // x décalé pour que la base reste collée au mur
+            xCentre = this._xRentre + sens * (longueur - wRentre) / 2;
+        } else if (t < def.ratioRentre + def.ratioSortie + def.ratioEtendu) {
+            phase = 'etendu';
+            longueur = wRentre + longExt;
+            xCentre = this._xRentre + sens * (longExt) / 2;
+        } else {
+            phase = 'retraction';
+            const localT = (t - def.ratioRentre - def.ratioSortie - def.ratioEtendu) / def.ratioRetraction;
+            const eased = localT * localT;                     // ease-in
+            longueur = wRentre + longExt * (1 - eased);
+            xCentre = this._xRentre + sens * (longueur - wRentre) / 2;
+        }
+
+        this.pistonPhase = phase;
+
+        // Met à jour le sprite physique
+        this.sprite.x = xCentre;
+        this.sprite.setSize(longueur, h);
+        this.sprite.body.updateFromGameObject();
+
+        this._currentLongueur = longueur;
+        this._currentXCentre = xCentre;
+        this._dessinerPistonThermique(now);
+    }
+
+    _dessinerPistonThermique(now) {
+        const def = this.def;
+        const h = this.data.hauteur ?? def.hauteurDefault;
+        const orient = this.data.orientation;
+        const sens = orient === 'gauche' ? -1 : 1;
+        const longueur = this._currentLongueur ?? (this.data.largeur ?? def.largeurRentreDefault);
+        const xCentre = this._currentXCentre ?? this.data.x;
+        const cy = this.data.y;
+
+        const g = this.visual;
+        g.clear();
+
+        // Base ancrée au mur (carré cuivré toujours visible)
+        const xBase = this._xRentre - sens * (def.largeurRentreDefault / 2);
+        // tube principal
+        const xLeft = xCentre - longueur / 2;
+        const xRight = xCentre + longueur / 2;
+
+        // Ombre portée
+        g.fillStyle(0x000000, 0.4);
+        g.fillRect(xLeft + 2, cy - h / 2 + 2, longueur, h);
+
+        // Tige (gris fer)
+        g.fillStyle(0x404048, 1);
+        g.fillRect(xLeft, cy - h / 2, longueur, h);
+
+        // Bandes cuivrées horizontales (signature Halls)
+        g.fillStyle(COULEUR_CUIVRE_TERNI, 1);
+        g.fillRect(xLeft + 2, cy - h / 2 + 3, longueur - 4, 4);
+        g.fillRect(xLeft + 2, cy + h / 2 - 7, longueur - 4, 4);
+
+        // Tête du piston (plus large, à la pointe de la sortie)
+        const teteW = 12;
+        const teteH = h + 12;
+        const teteX = orient === 'gauche' ? xLeft - teteW / 2 + 6 : xRight + teteW / 2 - 6;
+        g.fillStyle(0x000000, 0.5);
+        g.fillRect(teteX - teteW / 2 + 2, cy - teteH / 2 + 2, teteW, teteH);
+        g.fillStyle(0x2a2520, 1);
+        g.fillRect(teteX - teteW / 2, cy - teteH / 2, teteW, teteH);
+        g.fillStyle(COULEUR_CUIVRE_TERNI, 1);
+        g.fillRect(teteX - teteW / 2 + 2, cy - teteH / 2 + 3, teteW - 4, 4);
+        g.fillRect(teteX - teteW / 2 + 2, cy + teteH / 2 - 7, teteW - 4, 4);
+
+        // Liseré incandescent en phase sortie/etendu (jet thermique)
+        if (this.pistonPhase === 'sortie' || this.pistonPhase === 'etendu') {
+            const intensite = this.pistonPhase === 'sortie' ? 0.9 : 0.6;
+            g.fillStyle(COULEUR_BRAISE, intensite);
+            g.fillRect(xLeft + 4, cy - 2, longueur - 8, 4);
+            // Étincelles à la tête
+            for (let i = 0; i < 3; i++) {
+                const sy = cy + Math.sin(now / 60 + i * 2.1) * (h / 3);
+                g.fillStyle(0xffaa30, intensite * 0.8);
+                g.fillCircle(teteX, sy, 2);
+            }
+        }
+
+        // Trait noir au centre de la tige (lecture sous-jacente)
+        g.lineStyle(1, 0x000000, 0.5);
+        g.strokeRect(xLeft + 3, cy - h / 2 + 3, longueur - 6, h - 6);
+    }
+
+    _creerScieCirculaire() {
+        const r = this.data.rayon ?? this.def.rayonDefault;
+
+        // Sprite dynamic — body se déplace via setVelocity (comme plateforme_mobile)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, r * 1.4, r * 1.4, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite);
+        const body = this.sprite.body;
+        body.allowGravity = false;
+        body.immovable = true;
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this._t0 = this.scene.time.now;
+        this._centreX = this.data.x;
+        this._centreY = this.data.y;
+        this._dessinerScieCirculaire(this.scene.time.now);
+    }
+
+    _updateScieCirculaire(now) {
+        const axe = this.data.axe ?? 'horizontale';
+        const amp = this.data.amplitude ?? this.def.amplitudeDefault;
+        const periode = this.data.periode ?? this.def.periodeDefault;
+        const omega = (Math.PI * 2) / (periode / 1000);
+        const t = (now - this._t0) / periode;
+        const v = Math.cos(t * Math.PI * 2) * amp * omega;
+        const body = this.sprite.body;
+        if (axe === 'horizontale') {
+            body.setVelocity(v, 0);
+            const dx = this.sprite.x - this._centreX;
+            if (Math.abs(dx) > amp * 1.08) {
+                this.sprite.x = this._centreX + Math.sign(dx) * amp;
+            }
+        } else {
+            body.setVelocity(0, v);
+            const dy = this.sprite.y - this._centreY;
+            if (Math.abs(dy) > amp * 1.08) {
+                this.sprite.y = this._centreY + Math.sign(dy) * amp;
+            }
+        }
+        this._dessinerScieCirculaire(now);
+    }
+
+    _dessinerScieCirculaire(now) {
+        const r = this.data.rayon ?? this.def.rayonDefault;
+        const cx = this.sprite.x;
+        const cy = this.sprite.y;
+        const rotation = (now / 1000) * (this.def.vitesseRotDefault) * Math.PI * 2;
+
+        const g = this.visual;
+        g.clear();
+
+        // Rail (ligne en pointillé selon l'axe)
+        g.lineStyle(2, 0x3a2a1a, 0.6);
+        const amp = this.data.amplitude ?? this.def.amplitudeDefault;
+        if ((this.data.axe ?? 'horizontale') === 'horizontale') {
+            g.lineBetween(this._centreX - amp - 4, cy, this._centreX + amp + 4, cy);
+        } else {
+            g.lineBetween(cx, this._centreY - amp - 4, cx, this._centreY + amp + 4);
+        }
+
+        // Ombre portée
+        g.fillStyle(0x000000, 0.5);
+        g.fillCircle(cx + 2, cy + 2, r);
+
+        // Disque (acier sombre)
+        g.fillStyle(0x707880, 1);
+        g.fillCircle(cx, cy, r);
+        // Bordure cuivrée
+        g.lineStyle(2, COULEUR_CUIVRE_TERNI, 1);
+        g.strokeCircle(cx, cy, r);
+
+        // Dents crantées (8 dents qui tournent)
+        const nbDents = 8;
+        for (let i = 0; i < nbDents; i++) {
+            const angle = rotation + (i / nbDents) * Math.PI * 2;
+            const dx = Math.cos(angle);
+            const dy = Math.sin(angle);
+            // Pointe extérieure
+            const px = cx + dx * (r + 5);
+            const py = cy + dy * (r + 5);
+            // Base intérieure (2 points pour faire un triangle)
+            const a1 = angle - 0.15;
+            const a2 = angle + 0.15;
+            const b1x = cx + Math.cos(a1) * (r - 1);
+            const b1y = cy + Math.sin(a1) * (r - 1);
+            const b2x = cx + Math.cos(a2) * (r - 1);
+            const b2y = cy + Math.sin(a2) * (r - 1);
+            g.fillStyle(0x404048, 1);
+            g.beginPath();
+            g.moveTo(px, py);
+            g.lineTo(b1x, b1y);
+            g.lineTo(b2x, b2y);
+            g.closePath();
+            g.fillPath();
+        }
+
+        // Centre (axe de rotation)
+        g.fillStyle(0x18120a, 1);
+        g.fillCircle(cx, cy, r * 0.4);
+        g.fillStyle(COULEUR_CUIVRE_TERNI, 1);
+        g.fillCircle(cx, cy, r * 0.3);
+        // Croix de l'axe (tourne avec le disque)
+        g.lineStyle(2, 0x18120a, 1);
+        const a = rotation;
+        g.lineBetween(
+            cx + Math.cos(a) * r * 0.25, cy + Math.sin(a) * r * 0.25,
+            cx - Math.cos(a) * r * 0.25, cy - Math.sin(a) * r * 0.25
+        );
+        g.lineBetween(
+            cx + Math.cos(a + Math.PI / 2) * r * 0.25, cy + Math.sin(a + Math.PI / 2) * r * 0.25,
+            cx - Math.cos(a + Math.PI / 2) * r * 0.25, cy - Math.sin(a + Math.PI / 2) * r * 0.25
+        );
+
+        // Étincelles d'usinage (jaillissent du périmètre)
+        for (let i = 0; i < 4; i++) {
+            const a = rotation * 0.3 + i * 1.5;
+            const sx = cx + Math.cos(a) * r * 1.1;
+            const sy = cy + Math.sin(a) * r * 1.1;
+            g.fillStyle(0xffaa30, 0.8);
+            g.fillCircle(sx, sy, 1.5);
+            // Trainée d'étincelle (court trait)
+            g.lineStyle(1.5, 0xffd070, 0.6);
+            g.lineBetween(sx, sy, sx + Math.cos(a) * 4, sy + Math.sin(a) * 4);
+        }
+    }
+
+    _exploserBlocCharbon() {
+        // Mêmes effets qu'un mur explosif détruit
+        const cx = this.sprite.x;
+        const cy = this.sprite.y;
+        // Projectiles radiaux
+        const nbProj = this.def.nbProjectilesExplosion;
+        const vitesse = this.def.vitesseProjectileExplosion;
+        for (let i = 0; i < nbProj; i++) {
+            const angle = (i / nbProj) * Math.PI * 2;
+            const dx = Math.cos(angle);
+            const dy = Math.sin(angle);
+            const proj = this.scene.add.rectangle(cx, cy, 12, 12, 0xffffff, 0);
+            proj.setAlpha(0);
+            this.scene.physics.add.existing(proj);
+            proj.body.allowGravity = false;
+            proj.body.setVelocity(dx * vitesse, dy * vitesse);
+
+            // Overlap dégâts joueur
+            const overlap = this.scene.physics.add.overlap(proj, this.scene.player, () => {
+                this.scene.events.emit('obstacle:pieu:hit', { def: { degatsImpact: this.def.degatsProjectile } });
+                overlap?.destroy();
+                proj?.destroy();
+            });
+
+            const visuel = this.scene.add.graphics();
+            visuel.setDepth(12);
+            const t0 = this.scene.time.now;
+            const dureeVie = (this.def.rayonExplosion / vitesse) * 1000;
+            this.scene.tweens.addCounter({
+                from: 0, to: 1, duration: dureeVie,
+                onUpdate: (tw) => {
+                    const fade = 1 - tw.getValue();
+                    if (!proj.active) return;
+                    visuel.clear();
+                    visuel.fillStyle(COULEUR_BRAISE_FONCE, 0.4 * fade);
+                    visuel.fillCircle(proj.x - dx * 12, proj.y - dy * 12, 8);
+                    visuel.fillStyle(COULEUR_BRAISE, 0.6 * fade);
+                    visuel.fillCircle(proj.x - dx * 6, proj.y - dy * 6, 6);
+                    visuel.fillStyle(COULEUR_BRAISE_VIVE, fade);
+                    visuel.fillCircle(proj.x, proj.y, 5);
+                    visuel.fillStyle(0xffffff, fade * 0.7);
+                    visuel.fillCircle(proj.x, proj.y, 2);
+                },
+                onComplete: () => {
+                    overlap?.destroy();
+                    proj?.destroy();
+                    visuel?.destroy();
+                }
+            });
+        }
+        // Particules + shake
+        this.scene.cameras.main.shake(140, 0.008);
+        // Détruit l'instance
+        this.detruire();
     }
 }

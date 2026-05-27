@@ -1,67 +1,45 @@
-// Salle : Halls Cendrés — Couloir Explosif
+// Salle : Halls Cendrés — Couloir Explosif (OE compact)
+// (Phase 9.6 — Migration)
 //
-// ARCHITECTURE : couloir bas avec 2 murs explosifs visibles (runes rouges
-// = avertissement). Murs latéraux pleins. Route haute alt safe via paliers.
-// Casser à distance OU contourner.
+// INTENTION : 2 murs explosifs au sol bloquent le passage bas. Route haute
+// safe via paliers (alt). Casser à distance OU contourner par le haut.
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
     porteO, porteE,
-    mur, murLateralGauche, murLateralDroit,
-    murExplosif, brasier
+    murExplosif
 } from '../_format.js';
 
-const W = 2600;
-const H = 1100;
-const Y_SOL = H - HAUTEUR_SOL;        // 1060
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_couloir_explosif = {
     id: 'halls_couloir_explosif',
     biome: 'halls_cendres',
-    nom: 'Couloir Explosif',
+    nom: 'Le Couloir Explosif',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['O', 'E'],
     archetypesCompatibles: ['hall', 'pont'],
+    rolesAutorises: ['main', 'alt'],
 
     generer({ portesActives = ['O', 'E'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(plafondCathedrale(40, W - 40, 24));
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND irrégulier
-            plafondCathedrale(0,    600,  Y_PLAFOND + 80),
-            plafondCathedrale(600,  1000, Y_PLAFOND + 180),
-            plafondCathedrale(1000, 1400, Y_PLAFOND + 80),
-            plafondCathedrale(1400, 1800, Y_PLAFOND + 180),
-            plafondCathedrale(1800, W,    Y_PLAFOND + 80),
-
-            // ─── MURS LATÉRAUX
-            ...(portesActives.includes('O') ? [mur(15, Y_PLAFOND, Y_SOL - 100)] : [murLateralGauche(Y_PLAFOND, Y_SOL)]),
-            ...(portesActives.includes('E') ? [mur(W - 15, Y_PLAFOND, Y_SOL - 100)] : [murLateralDroit(W, Y_PLAFOND, Y_SOL)]),
-
-            // ─── ROUTE HAUTE (paliers safe au-dessus des murs explosifs)
-            plateforme(280,  990, 130, { oneWay: true }),
-            plateforme(480,  920, 130, { oneWay: true }),
-            plateforme(700,  850, 140, { oneWay: true }),
-            plateforme(920,  780, 140, { oneWay: true }),
-            plateforme(1140, 710, 140, { oneWay: true }),
-            plateforme(W / 2, 650, 380, { oneWay: false }),    // pont haut central
-            plateforme(W - 1140, 710, 140, { oneWay: true }),
-            plateforme(W - 920,  780, 140, { oneWay: true }),
-            plateforme(W - 700,  850, 140, { oneWay: true }),
-            plateforme(W - 480,  920, 130, { oneWay: true }),
-            plateforme(W - 280,  990, 130, { oneWay: true })
-        ];
+        // Route haute alt safe : paliers latéraux + pont central
+        plateformes.push(plateforme(140, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(820, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(290, 350, 110, { oneWay: true }));
+        plateformes.push(plateforme(670, 350, 110, { oneWay: true }));
+        plateformes.push(plateforme(480, 280, 180, { oneWay: true }));
 
         const obstacles = [
-            // 2 murs explosifs au sol (rayon d'explosion 220 chacun)
-            // Ces murs SONT visiblement dangereux (runes rouges) — c'est voulu :
-            // contrairement à mur_secret, mur_explosif est un AVERTISSEMENT.
-            murExplosif(900,  Y_SOL - 140, { largeur: 40, hauteur: 140, hp: 3, dropSel: true }),
-            murExplosif(1700, Y_SOL - 140, { largeur: 40, hauteur: 140, hp: 3, dropSel: true }),
-
-            // 1 brasier d'ambiance dans une niche entre les 2 murs explosifs
-            brasier(W / 2, Y_SOL, { largeur: 100, cycleMs: 3500, offsetMs: 0 })
+            // 2 murs explosifs au sol — runes rouges visibles d'avance
+            murExplosif(330, Y_SOL - 130, { largeur: 32, hauteur: 130, hp: 3, dropSel: true }),
+            murExplosif(630, Y_SOL - 130, { largeur: 32, hauteur: 130, hp: 3, dropFragmentFamille: 'noir' })
         ];
 
         const portes = {};

@@ -1,79 +1,63 @@
-// Salle : Halls Cendrés — Fosse aux braises (impasse S)
-//
-// ARCHITECTURE : deadend vertical bas. Entrée par porte S (bas centre).
-// Murs latéraux pleins. Coffre haut sur estrade. Brasiers au sol forment
-// une fosse dangereuse — grimper évite la marche.
+// Salle : Halls Cendrés — Fosse aux Braises (impasse S compact)
+// (Phase 9.6 — Migration, fixed BFS)
 
 import {
-    HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
+    HAUTEUR_SOL, sol, plateforme,
     porteS,
-    mur, murLateralGauche, murLateralDroit,
-    brasier
+    brasier, pieuSol
 } from '../_format.js';
 
-const W = 1400;
-const H = 1000;
-const Y_SOL = H - HAUTEUR_SOL;        // 960
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_impasse_S = {
     id: 'halls_impasse_S',
     biome: 'halls_cendres',
-    nom: 'Fosse aux braises',
+    nom: 'Fosse aux Braises',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['S'],
     archetypesCompatibles: ['crypte', 'sanctuaire'],
-    rolesAutorises: ['deadend', 'alt'],
+    rolesAutorises: ['deadend'],
 
     generer({ portesActives = ['S'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND voûte basse cintrée
-            plafondCathedrale(0,    400, Y_PLAFOND + 80),
-            plafondCathedrale(400,  900, Y_PLAFOND + 180),
-            plafondCathedrale(900,  W,   Y_PLAFOND + 80),
+        // 3 foyers brasiers surélevés au sol
+        plateformes.push(plateforme(200, Y_SOL - 20, 80));
+        plateformes.push(plateforme(480, Y_SOL - 20, 80));
+        plateformes.push(plateforme(760, Y_SOL - 20, 80));
 
-            // ─── MURS LATÉRAUX PLEINS
-            murLateralGauche(Y_PLAFOND, Y_SOL),
-            murLateralDroit(W, Y_PLAFOND, Y_SOL),
+        // Palier S surélevé (entrée)
+        plateformes.push(plateforme(480, 440, 140, { oneWay: true }));
 
-            // ─── ESTRADES BRASIERS (cuvettes pour les feux, pas sol plat)
-            plateforme(300,  Y_SOL - 50, 160, { oneWay: false }),
-            plateforme(700,  Y_SOL - 50, 160, { oneWay: false }),
-            plateforme(1100, Y_SOL - 50, 160, { oneWay: false }),
-
-            // ─── ESTRADE HAUTE (coffre)
-            plateforme(W / 2, 480, 280, { oneWay: false }),
-
-            // ─── PALIERS de montée
-            plateforme(280,  890, 130, { oneWay: true }),
-            plateforme(440,  820, 130, { oneWay: true }),
-            plateforme(280,  750, 130, { oneWay: true }),
-            plateforme(440,  680, 130, { oneWay: true }),
-            plateforme(280,  610, 130, { oneWay: true }),
-            plateforme(440,  540, 130, { oneWay: true }),
-            plateforme(W - 280, 890, 130, { oneWay: true }),
-            plateforme(W - 440, 820, 130, { oneWay: true }),
-            plateforme(W - 280, 750, 130, { oneWay: true }),
-            plateforme(W - 440, 680, 130, { oneWay: true }),
-            plateforme(W - 280, 610, 130, { oneWay: true }),
-            plateforme(W - 440, 540, 130, { oneWay: true })
-        ];
+        // Chaîne stepping vers estrade coffre
+        plateformes.push(plateforme(150, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(810, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(300, 355, 110, { oneWay: true }));
+        plateformes.push(plateforme(660, 355, 110, { oneWay: true }));
+        plateformes.push(plateforme(480, 280, 130, { oneWay: true }));
+        plateformes.push(plateforme(480, 200, 160, { oneWay: true }));   // estrade coffre
 
         const obstacles = [
-            // Brasiers SUR les estrades (justifiés visuellement)
-            brasier(300,  Y_SOL - 50, { largeur: 120, offsetMs: 0 }),
-            brasier(700,  Y_SOL - 50, { largeur: 120, offsetMs: 833 }),
-            brasier(1100, Y_SOL - 50, { largeur: 120, offsetMs: 1667 })
+            brasier(200, Y_SOL - 20, { cycleMs: 2400, offsetMs: 0,    largeur: 70 }),
+            brasier(480, Y_SOL - 20, { cycleMs: 2400, offsetMs: 800,  largeur: 70 }),
+            brasier(760, Y_SOL - 20, { cycleMs: 2400, offsetMs: 1600, largeur: 70 }),
+            pieuSol(340, Y_SOL),
+            pieuSol(620, Y_SOL)
         ];
 
         const portes = {};
-        if (portesActives.includes('S')) portes.S = porteS(W / 2, Y_SOL);
+        if (portesActives.includes('S')) portes.S = porteS(480, 440);
+
+        const coffreForce = { x: 480, y: 200 - 12 };
 
         return {
             plateformes, obstacles, zones: [], portes,
-            spawnDefault: { x: W / 2, y: Y_SOL - 20 }
+            spawnDefault: { x: 480, y: 440 - 20 },
+            coffreForce
         };
     }
 };

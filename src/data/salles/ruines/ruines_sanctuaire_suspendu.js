@@ -26,7 +26,7 @@ import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale, plafond,
     porteO, porteE,
     plateformeMobile, pieuPlafond,
-    murSecret, antiAncrage, mur
+    murSecret, antiAncrage, mur, vestigeLore
 } from '../_format.js';
 
 const W = 960;
@@ -151,10 +151,16 @@ export const ruines_sanctuaire_suspendu = {
         // Coffre principal sur sommet pilier
         const coffreForce = { x: 490, y: 80 - 12 };
 
+        // ─── MONOLITHE LORE sur refuge G (récompense Statue tuée + 1ʳᵉ ouverture du lore) ─
+        // Posé à x=410 (à côté du drop Sel x=440), base sur le palier y=250.
+        const zones = [
+            vestigeLore(410, 250, { loreId: 'sanctuaire_suspendu' })
+        ];
+
         return {
             plateformes,
             obstacles,
-            zones: [],
+            zones,
             portes,
             spawnDefault: { x: 80, y: Y_SOL - 20 },
             coffreForce,

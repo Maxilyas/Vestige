@@ -1,102 +1,68 @@
-// Salle : Halls Cendrés — Voûte Fendue (signature, T-NEO)
+// Salle : Halls Cendrés — Voûte Fendue (NEO compact, signature)
+// (Phase 9.6 — Migration)
 //
-// ARCHITECTURE : grande nef 3 étages. Murs latéraux pleins selon portes.
-// Mezzanine fendue par un mur fissuré central (raccourci si cassé). Plafond
-// haut avec cheminée porte N. Brasiers latéraux dans niches d'autel.
+// SIGNATURE : 3 étages avec mur fissuré central (raccourci si cassé).
+// Brasiers latéraux sur foyers d'autel.
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
-    porteO, porteE, porteN,
-    mur, murLateralGauche, murLateralDroit,
-    murFissure, brasier, eboulis, murSecret
+    porteN, porteE, porteO,
+    brasier, murFissure
 } from '../_format.js';
 
-const W = 2400;
-const H = 1400;
-const Y_SOL = H - HAUTEUR_SOL;        // 1360
-const Y_MEZZ = 900;
-const Y_PALIER_N = 330;
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_t_NEO = {
     id: 'halls_t_NEO',
     biome: 'halls_cendres',
-    nom: 'Voûte Fendue',
+    nom: 'La Voûte Fendue',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['N', 'E', 'O'],
-    archetypesCompatibles: ['hall', 'crypte'],
+    archetypesCompatibles: ['hall', 'sanctuaire'],
     rolesAutorises: ['main', 'alt', 'entree'],
     unique: true,
+    tirageWeight: 3,
 
     generer({ portesActives = ['N', 'E', 'O'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(plafondCathedrale(40, 380, 24));
+        plateformes.push(plafondCathedrale(580, W - 40, 24));
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND : cheminée porte N centrale + voûte aux bords
-            plafondCathedrale(0,           W / 2 - 200, Y_PLAFOND + 80),
-            plafondCathedrale(W / 2 + 200, W,           Y_PLAFOND + 80),
+        // Foyers latéraux (brasiers d'autel)
+        plateformes.push(plateforme(200, Y_SOL - 20, 80));
+        plateformes.push(plateforme(760, Y_SOL - 20, 80));
 
-            // ─── MURS LATÉRAUX
-            ...(portesActives.includes('O') ? [mur(15, Y_PLAFOND, Y_SOL - 100)] : [murLateralGauche(Y_PLAFOND, Y_SOL)]),
-            ...(portesActives.includes('E') ? [mur(W - 15, Y_PLAFOND, Y_SOL - 100)] : [murLateralDroit(W, Y_PLAFOND, Y_SOL)]),
+        // Étage 1 latéraux
+        plateformes.push(plateforme(160, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(800, 430, 110, { oneWay: true }));
 
-            // ─── NICHES D'AUTEL (estrades latérales pour brasiers)
-            plateforme(200,    Y_SOL - 60, 200, { oneWay: false }),
-            plateforme(W - 200, Y_SOL - 60, 200, { oneWay: false }),
+        // Étage 2 (mid-haut)
+        plateformes.push(plateforme(310, 360, 110, { oneWay: true }));
+        plateformes.push(plateforme(650, 360, 110, { oneWay: true }));
 
-            // ─── ÉTAGE 1 : mezzanine continue fendue (mur central HP=5)
-            plateforme(W / 2 - 540, Y_MEZZ, 700, { oneWay: false }),
-            plateforme(W / 2 + 540, Y_MEZZ, 700, { oneWay: false }),
+        // Étage 3 (passerelle centrale, coupée par mur fissuré)
+        plateformes.push(plateforme(390, 280, 90, { oneWay: true }));
+        plateformes.push(plateforme(570, 280, 90, { oneWay: true }));
 
-            // ─── ACCÈS MEZZANINE côté gauche (Δ80 chaîne)
-            plateforme(220,  1290, 130, { oneWay: true }),
-            plateforme(400,  1210, 130, { oneWay: true }),
-            plateforme(220,  1130, 130, { oneWay: true }),
-            plateforme(400,  1050, 130, { oneWay: true }),
-            plateforme(220,   970, 130, { oneWay: true }),
-            // Accès mezzanine côté droit
-            plateforme(W - 220, 1290, 130, { oneWay: true }),
-            plateforme(W - 400, 1210, 130, { oneWay: true }),
-            plateforme(W - 220, 1130, 130, { oneWay: true }),
-            plateforme(W - 400, 1050, 130, { oneWay: true }),
-            plateforme(W - 220,  970, 130, { oneWay: true }),
-
-            // ─── ÉTAGE 2 : approche porte N (Δ80 chaîne)
-            plateforme(W / 2 - 320, 820, 160, { oneWay: true }),
-            plateforme(W / 2 + 320, 820, 160, { oneWay: true }),
-            plateforme(W / 2 - 160, 740, 160, { oneWay: true }),
-            plateforme(W / 2 + 160, 740, 160, { oneWay: true }),
-            plateforme(W / 2,       660, 200, { oneWay: true }),
-            plateforme(W / 2,       580, 200, { oneWay: true }),
-            plateforme(W / 2,       500, 200, { oneWay: true }),
-            plateforme(W / 2,       430, 220, { oneWay: true }),
-
-            // ─── PALIER porte N
-            plateforme(W / 2, Y_PALIER_N + 70, 280, { oneWay: true }),
-            plateforme(W / 2, Y_PALIER_N,      280, { oneWay: true })
-        ];
+        // Palier N
+        plateformes.push(plateforme(480, 190, 140, { oneWay: true }));
+        plateformes.push(plateforme(480, 110, 130, { oneWay: true }));
 
         const obstacles = [
-            // Mur fissuré central qui fend la mezzanine (raccourci visible)
-            murFissure(W / 2, Y_MEZZ - 130, { largeur: 50, hauteur: 130, hp: 5, dropSel: true, dropFragmentFamille: 'blanc' }),
-
-            // Éboulis ambiance au sol
-            eboulis(W / 2 - 200, Y_SOL - 110, { largeur: 90, hauteur: 110, hp: 2 }),
-            eboulis(W / 2 + 200, Y_SOL - 110, { largeur: 90, hauteur: 110, hp: 2 }),
-
-            // Brasiers sur les niches d'autel (foyers funéraires latéraux)
-            brasier(200,    Y_SOL - 60, { largeur: 140, cycleMs: 4000, offsetMs: 0 }),
-            brasier(W - 200, Y_SOL - 60, { largeur: 140, cycleMs: 4000, offsetMs: 2000 }),
-
-            // Mur SECRET dans le plafond du couloir gauche de la mezzanine
-            // (au-dessus du palier 740, à gauche)
-            murSecret(W / 2 - 160, 690, 160, 40, { hp: 4, orientation: 'sol', dropSel: true })
+            brasier(200, Y_SOL - 20, { cycleMs: 2800, offsetMs: 0,    largeur: 70 }),
+            brasier(760, Y_SOL - 20, { cycleMs: 2800, offsetMs: 1400, largeur: 70 }),
+            // Mur fissuré central (raccourci entre 2 paliers de l'étage 3)
+            murFissure(480, 250, { largeur: 30, hauteur: 60, hp: 4, dropSel: true })
         ];
 
         const portes = {};
-        if (portesActives.includes('O')) portes.O = porteO(Y_SOL);
+        if (portesActives.includes('N')) portes.N = porteN(480, 30);
         if (portesActives.includes('E')) portes.E = porteE(W, Y_SOL);
-        if (portesActives.includes('N')) portes.N = porteN(W / 2, Y_PALIER_N - 90);
+        if (portesActives.includes('O')) portes.O = porteO(Y_SOL);
 
         return {
             plateformes, obstacles, zones: [], portes,

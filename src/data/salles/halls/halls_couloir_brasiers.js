@@ -1,74 +1,51 @@
-// Salle : Halls Cendrés — Couloir des Brasiers
+// Salle : Halls Cendrés — Couloir des Brasiers (OE compact)
+// (Phase 9.6 — Migration Halls XL → compact 960×540)
 //
-// ARCHITECTURE : couloir tendu, voûte basse, murs latéraux pleins.
-// 3 brasiers SURÉLEVÉS dans des cuvettes de pierre (foyers) — pas au sol plat.
-// Mur SECRET dans une portion du plafond → niche coffre haute.
+// INTENTION : 3 brasiers cycliques décalés sur foyers surélevés → traversée
+// timing. Paliers latéraux pour combat aérien.
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
     porteO, porteE,
-    mur, murLateralGauche, murLateralDroit,
-    brasier, murSecret
+    brasier
 } from '../_format.js';
 
-const W = 2600;
-const H = 1000;
-const Y_SOL = H - HAUTEUR_SOL;        // 960
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_couloir_brasiers = {
     id: 'halls_couloir_brasiers',
     biome: 'halls_cendres',
-    nom: 'Couloir des Brasiers',
+    nom: 'Le Couloir des Brasiers',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['O', 'E'],
-    archetypesCompatibles: ['hall', 'crypte'],
+    archetypesCompatibles: ['hall', 'pont'],
+    rolesAutorises: ['main', 'alt', 'entree'],
 
     generer({ portesActives = ['O', 'E'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(plafondCathedrale(40, W - 40, 24));
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND ORGANIQUE (voûte basse irrégulière, stalactites)
-            plafondCathedrale(0,        500,  Y_PLAFOND + 100),
-            plafondCathedrale(500,      900,  Y_PLAFOND + 200),
-            plafondCathedrale(900,      1300, Y_PLAFOND + 130),
-            plafondCathedrale(1300,     1700, Y_PLAFOND + 200),
-            plafondCathedrale(1700,     2100, Y_PLAFOND + 130),
-            plafondCathedrale(2100,     W,    Y_PLAFOND + 100),
+        // 3 foyers surélevés (cuvettes brasiers)
+        plateformes.push(plateforme(240, Y_SOL - 20, 80));
+        plateformes.push(plateforme(480, Y_SOL - 20, 80));
+        plateformes.push(plateforme(720, Y_SOL - 20, 80));
 
-            // ─── MURS LATÉRAUX ──
-            ...(portesActives.includes('O') ? [mur(15, Y_PLAFOND, Y_SOL - 100)] : [murLateralGauche(Y_PLAFOND, Y_SOL)]),
-            ...(portesActives.includes('E') ? [mur(W - 15, Y_PLAFOND, Y_SOL - 100)] : [murLateralDroit(W, Y_PLAFOND, Y_SOL)]),
+        // Paliers latéraux safe
+        plateformes.push(plateforme(120, 430, 100, { oneWay: true }));
+        plateformes.push(plateforme(840, 430, 100, { oneWay: true }));
 
-            // ─── FOYERS SURÉLEVÉS (cuvettes de pierre où les brasiers brûlent)
-            plateforme(700,  Y_SOL - 60, 160, { oneWay: false }),
-            plateforme(1300, Y_SOL - 60, 160, { oneWay: false }),
-            plateforme(1900, Y_SOL - 60, 160, { oneWay: false }),
-
-            // ─── MEZZANINE HAUTE (route alt safe au-dessus des brasiers)
-            plateforme(360, 870, 140, { oneWay: true }),
-            plateforme(560, 790, 140, { oneWay: true }),
-            plateforme(760, 720, 140, { oneWay: true }),
-            plateforme(960, 700, 140, { oneWay: true }),       // bridge vers pont (gap≤130)
-            plateforme(W / 2, 650, 320, { oneWay: false }),    // pont haut central
-            plateforme(W - 960, 700, 140, { oneWay: true }),
-            plateforme(W - 760, 720, 140, { oneWay: true }),
-            plateforme(W - 560, 790, 140, { oneWay: true }),
-            plateforme(W - 360, 870, 140, { oneWay: true }),
-
-            // ─── NICHE COFFRE CACHÉE (au-dessus du pont, accès via mur secret)
-            plateforme(W / 2, 580, 200, { oneWay: false })  // palier coffre (Δ70 depuis pont 650)
-        ];
+        // Paliers mid combat aérien
+        plateformes.push(plateforme(330, 360, 110, { oneWay: true }));
+        plateformes.push(plateforme(630, 360, 110, { oneWay: true }));
 
         const obstacles = [
-            // Brasiers SUR les foyers surélevés (visuellement justifiés)
-            brasier(700,  Y_SOL - 60, { largeur: 100, offsetMs: 0 }),
-            brasier(1300, Y_SOL - 60, { largeur: 100, offsetMs: 833 }),
-            brasier(1900, Y_SOL - 60, { largeur: 100, offsetMs: 1667 }),
-
-            // Mur SECRET dans le PLAFOND du pont central — révèle la niche coffre
-            // Aucun indice visuel : c'est juste un morceau de plafond standard
-            murSecret(W / 2, 620, 200, 30, { hp: 4, orientation: 'sol', dropSel: true })
+            brasier(240, Y_SOL - 20, { cycleMs: 2400, offsetMs: 0,    largeur: 70 }),
+            brasier(480, Y_SOL - 20, { cycleMs: 2400, offsetMs: 800,  largeur: 70 }),
+            brasier(720, Y_SOL - 20, { cycleMs: 2400, offsetMs: 1600, largeur: 70 })
         ];
 
         const portes = {};

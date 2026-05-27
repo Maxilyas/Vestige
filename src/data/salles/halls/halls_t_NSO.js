@@ -1,76 +1,52 @@
-// Salle : Halls Cendrés — Passage triple Ouest (T-NSO)
+// Salle : Halls Cendrés — Passage Triple Ouest (NSO compact)
+// (Phase 9.6 — Migration)
 //
-// ARCHITECTURE : 2 étages. Mur lateral DROIT plein. Escalier vertical côté
-// gauche pour atteindre porte N. Mur SECRET dans le plafond → niche cachée
-// au-dessus de la mezzanine.
+// INTENTION : verticale N/S + sortie latérale O. Escalier vertical droit.
 
 import {
-    HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
-    porteO, porteN, porteS,
-    mur, murLateralDroit,
-    murSecret, brasier
+    HAUTEUR_SOL, sol, plateforme,
+    porteN, porteS, porteO,
+    brasier
 } from '../_format.js';
 
-const W = 2000;
-const H = 1400;
-const Y_SOL = H - HAUTEUR_SOL;        // 1360
-const Y_PALIER_N = 250;
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_t_NSO = {
     id: 'halls_t_NSO',
     biome: 'halls_cendres',
-    nom: 'Passage triple Ouest',
+    nom: 'Passage Triple Ouest',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['N', 'S', 'O'],
-    archetypesCompatibles: ['hall', 'crypte'],
+    archetypesCompatibles: ['hall', 'puits'],
 
     generer({ portesActives = ['N', 'S', 'O'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND avec cheminée porte N côté gauche
-            plafondCathedrale(0,    100, Y_PLAFOND + 60),
-            plafondCathedrale(400,  W,   Y_PLAFOND + 80),
+        // Escalier ascendant droit (force traversée)
+        plateformes.push(plateforme(820, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(640, 360, 110, { oneWay: true }));
+        plateformes.push(plateforme(800, 290, 110, { oneWay: true }));   // foyer brasier
+        plateformes.push(plateforme(620, 220, 130, { oneWay: true }));
+        plateformes.push(plateforme(480, 130, 150, { oneWay: true }));
 
-            // ─── MURS LATÉRAUX
-            ...(portesActives.includes('O') ? [mur(15, Y_PLAFOND, Y_SOL - 100)] : []),
-            murLateralDroit(W, Y_PLAFOND, Y_SOL),  // DROIT plein
+        // Palier S surélevé droit
+        plateformes.push(plateforme(720, 440, 140, { oneWay: true }));
 
-            // ─── ESCALIER vertical côté gauche jusqu'à porte N
-            plateforme(280,  1290, 140, { oneWay: true }),
-            plateforme(460,  1210, 140, { oneWay: true }),
-            plateforme(280,  1130, 140, { oneWay: true }),
-            plateforme(460,  1050, 140, { oneWay: true }),
-            plateforme(280,   970, 140, { oneWay: true }),
-            plateforme(460,   890, 140, { oneWay: true }),
-            plateforme(280,   810, 140, { oneWay: true }),
-            plateforme(460,   730, 140, { oneWay: true }),
-            plateforme(280,   650, 140, { oneWay: true }),
-            plateforme(460,   570, 140, { oneWay: true }),
-            plateforme(280,   490, 140, { oneWay: true }),
-            plateforme(460,   410, 140, { oneWay: true }),
-            plateforme(280,   330, 140, { oneWay: true }),
-
-            // ─── MEZZANINE PORTE N
-            plateforme(280, Y_PALIER_N + 70, 220, { oneWay: true }),
-            plateforme(280, Y_PALIER_N,      220, { oneWay: true }),
-
-            // ─── NICHE COFFRE (à côté de la mezzanine, accès via mur secret latéral)
-            plateforme(560, Y_PALIER_N + 70, 160, { oneWay: false })  // proche mezz (gap 50)
-        ];
+        // Palier mid-gauche
+        plateformes.push(plateforme(200, 430, 110, { oneWay: true }));
 
         const obstacles = [
-            // Mur SECRET vertical entre mezzanine et niche (cache la niche)
-            murSecret(430, Y_PALIER_N + 70, 50, 90, { hp: 4, orientation: 'mur', dropSel: true }),
-            // Brasier marqueur porte S (côté droit)
-            brasier(W - 400, Y_SOL, { largeur: 120, cycleMs: 3500, offsetMs: 0 })
+            brasier(800, 290, { cycleMs: 2600, offsetMs: 0, largeur: 100 })
         ];
 
         const portes = {};
+        if (portesActives.includes('N')) portes.N = porteN(480, 40);
+        if (portesActives.includes('S')) portes.S = porteS(720, 440);
         if (portesActives.includes('O')) portes.O = porteO(Y_SOL);
-        if (portesActives.includes('S')) portes.S = porteS(W - 300, Y_SOL);
-        if (portesActives.includes('N')) portes.N = porteN(280, Y_PALIER_N - 90);
 
         return {
             plateformes, obstacles, zones: [], portes,

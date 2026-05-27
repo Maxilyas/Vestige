@@ -138,7 +138,13 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'ruines_impasse_N_compact','ruines_impasse_S_compact',
              // ─── Phase 9.4 Vague 1 ───
              'ruines_sanctuaire_suspendu',
-             // ─── Halls Cendrés (Phase 8, vague 5) ───
+             // ─── Phase 9.4 Vague 1 : pool diversité (8 NSEO + 3 ciblées) ───
+             'ruines_grand_saut','ruines_tour_chute','ruines_champignons',
+             'ruines_lames_pendulantes','ruines_ascension_ressort',
+             'ruines_corniches_zigzag','ruines_pont_effrite',
+             'ruines_voutes_brisees','ruines_tour_garde_alt',
+             'ruines_belvedere_pendule','ruines_puits_double',
+             // ─── Halls Cendrés (Phase 9.6 — migration compact 960×540) ───
              'halls_couloir_brasiers','halls_grand_mur','halls_cascade_pierres',
              'halls_brasserie','halls_voute_basse','halls_pont_braise',
              'halls_atelier_marteau','halls_couloir_explosif',
@@ -146,7 +152,19 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'halls_coin_NE','halls_coin_SO','halls_coin_NO','halls_coin_SE',
              'halls_t_NEO','halls_t_SEO','halls_t_NSO','halls_t_NSE',
              'halls_impasse_O','halls_impasse_E','halls_impasse_N','halls_impasse_S',
-             'halls_foyer_eteint','halls_reseau_plaques','halls_carrefour_brasier'];
+             'halls_foyer_eteint','halls_reseau_plaques','halls_carrefour_brasier',
+             // ─── Phase 9.6 : 11 nouvelles diversité Halls ───
+             'halls_arene_braseros','halls_marteau_destructeur',
+             'halls_fournaise_centrale','halls_tunnel_cendres',
+             'halls_dais_du_marteau','halls_chaine_braseros',
+             'halls_fosse_explosive','halls_cendres_eternelles',
+             'halls_ascension_NE','halls_descente_SO','halls_double_puits_NS',
+             // ─── Phase 9.7 : 5 signatures nouvelles mécaniques ───
+             'halls_geyser_central','halls_rideau_acide_couloir',
+             'halls_blocs_pousseurs','halls_combo_total','halls_lave_jets',
+             // ─── Phase 9.8 : 5 signatures medium-cost ───
+             'halls_marteaux_pilons','halls_pistons_thermiques',
+             'halls_scies_couloir','halls_forge_meca','halls_arene_chaos'];
 
 let totalBugs = 0;
 for (const id of ids) {

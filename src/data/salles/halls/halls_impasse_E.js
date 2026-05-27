@@ -1,66 +1,55 @@
-// Salle : Halls Cendrés — Chambre du Brasier (impasse E)
-//
-// ARCHITECTURE : chambre close avec brasier central PERMANENT. Mur lateral
-// gauche plein. Plafond bas (étouffant). Coffre haut sur estrade — timer
-// le brasier pour passer.
+// Salle : Halls Cendrés — Chambre du Brasier (impasse E compact)
+// (Phase 9.6 — Migration, fixed BFS)
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
     porteE,
-    mur, murLateralGauche,
     brasier
 } from '../_format.js';
 
-const W = 1400;
-const H = 900;
-const Y_SOL = H - HAUTEUR_SOL;        // 860
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_impasse_E = {
     id: 'halls_impasse_E',
     biome: 'halls_cendres',
     nom: 'Chambre du Brasier',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['E'],
-    archetypesCompatibles: ['sanctuaire', 'crypte'],
-    rolesAutorises: ['deadend', 'alt'],
+    archetypesCompatibles: ['sanctuaire'],
+    rolesAutorises: ['deadend'],
 
     generer({ portesActives = ['E'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(plafondCathedrale(40, W - 40, 24));
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND bas étouffant
-            plafondCathedrale(0,    500,  Y_PLAFOND + 80),
-            plafondCathedrale(500,  900,  Y_PLAFOND + 150),
-            plafondCathedrale(900,  W,    Y_PLAFOND + 80),
+        // Foyer central + brasier majeur
+        plateformes.push(plateforme(480, Y_SOL - 25, 220));
 
-            // ─── MURS LATÉRAUX
-            murLateralGauche(Y_PLAFOND, Y_SOL),  // GAUCHE plein
-            mur(W - 15, Y_PLAFOND, Y_SOL - 100),  // droit partial (porte E)
-
-            // ─── FOYER CENTRAL (estrade massive surélevée)
-            plateforme(W / 2, Y_SOL - 60, 280, { oneWay: false }),
-
-            // ─── PALIERS d'évitement (timing brasier)
-            plateforme(200,  790, 140, { oneWay: true }),
-            plateforme(400,  720, 140, { oneWay: true }),
-            plateforme(200,  650, 140, { oneWay: true }),
-            plateforme(400,  580, 140, { oneWay: true }),
-            // Estrade haute (coffre)
-            plateforme(280, 510, 220, { oneWay: false })
-        ];
+        // Chaîne d'ascension paliers latéraux + estrade
+        plateformes.push(plateforme(200, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(800, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(330, 360, 100, { oneWay: true }));
+        plateformes.push(plateforme(630, 360, 100, { oneWay: true }));
+        plateformes.push(plateforme(480, 285, 160, { oneWay: true }));
+        plateformes.push(plateforme(480, 205, 180, { oneWay: true }));   // estrade coffre
 
         const obstacles = [
-            // Brasier central permanent (cycle long inversé : actif 60% du temps)
-            brasier(W / 2, Y_SOL - 60, { largeur: 220, cycleMs: 4000, offsetMs: 0 })
+            brasier(480, Y_SOL - 25, { cycleMs: 2400, offsetMs: 0, largeur: 200 })
         ];
 
         const portes = {};
         if (portesActives.includes('E')) portes.E = porteE(W, Y_SOL);
 
+        const coffreForce = { x: 480, y: 205 - 12 };
+
         return {
             plateformes, obstacles, zones: [], portes,
-            spawnDefault: { x: W - 80, y: Y_SOL - 20 }
+            spawnDefault: { x: W - 80, y: Y_SOL - 20 },
+            coffreForce
         };
     }
 };

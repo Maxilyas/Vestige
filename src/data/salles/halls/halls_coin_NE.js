@@ -1,74 +1,48 @@
-// Salle : Halls Cendrés — Coin NE (tour-atelier)
+// Salle : Halls Cendrés — Coin NE (compact)
+// (Phase 9.6 — Migration)
 //
-// ARCHITECTURE : coin en L (entrée E droite, sortie N haut-droite). Mur
-// lateral GAUCHE plein (fermeture L), plafond organique avec ouverture N.
-// Niche brasier à mi-hauteur. Mur SECRET dans le mur lateral gauche (en bas).
+// INTENTION : ascension droite, sortie N en haut, entrée E au sol.
+// Niche brasier à mi-hauteur, escalier vertical zigzag.
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
-    porteE, porteN,
-    mur, murLateralGauche,
-    murSecret, brasier
+    porteN, porteE,
+    brasier
 } from '../_format.js';
 
-const W = 1600;
-const H = 1200;
-const Y_SOL = H - HAUTEUR_SOL;        // 1160
-const Y_PALIER_HAUT = 250;
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_coin_NE = {
     id: 'halls_coin_NE',
     biome: 'halls_cendres',
-    nom: 'Coin NE (tour-atelier)',
+    nom: 'Le Coin du Forgeron (NE)',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['E', 'N'],
     archetypesCompatibles: ['hall', 'crypte'],
 
     generer({ portesActives = ['E', 'N'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(plafondCathedrale(40, 380, 24));
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND avec cheminée porte N (au-dessus du palier haut)
-            plafondCathedrale(0,           W - 400,     Y_PLAFOND + 80),
-            plafondCathedrale(W - 100,     W,           Y_PLAFOND + 60),
-
-            // ─── MURS LATÉRAUX
-            murLateralGauche(Y_PLAFOND + 60, Y_SOL),  // GAUCHE plein (pas de porte O)
-            ...(portesActives.includes('E') ? [mur(W - 15, Y_PLAFOND, Y_SOL - 100)] : []),
-
-            // ─── ESCALIER VERTICAL CÔTÉ DROIT (montée vers porte N)
-            plateforme(W - 200, 1090, 120, { oneWay: true }),
-            plateforme(W - 360, 1020, 130, { oneWay: true }),
-            plateforme(W - 200,  950, 130, { oneWay: true }),
-            plateforme(W - 360,  880, 130, { oneWay: true }),
-            plateforme(W - 200,  810, 130, { oneWay: true }),
-            plateforme(W - 360,  740, 130, { oneWay: true }),
-            plateforme(W - 200,  670, 130, { oneWay: true }),
-            plateforme(W - 360,  600, 130, { oneWay: true }),
-            plateforme(W - 200,  530, 130, { oneWay: true }),
-            plateforme(W - 360,  460, 130, { oneWay: true }),
-            plateforme(W - 200,  390, 130, { oneWay: true }),
-            plateforme(W - 360,  320, 130, { oneWay: true }),
-
-            // ─── MEZZANINE PORTE N
-            plateforme(W - 240, Y_PALIER_HAUT, 220, { oneWay: true }),
-
-            // ─── NICHE COFFRE — déplacée près de l'escalier (Δ accessible)
-            plateforme(W - 580, 1050, 180, { oneWay: false })   // proche palier W-360/1020
-        ];
+        // Escalier ascension droite (zigzag vers porte N)
+        plateformes.push(plateforme(170, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(380, 370, 110, { oneWay: true }));
+        plateformes.push(plateforme(600, 310, 110, { oneWay: true }));   // foyer brasier
+        plateformes.push(plateforme(780, 240, 110, { oneWay: true }));
+        plateformes.push(plateforme(600, 170, 130, { oneWay: true }));
+        plateformes.push(plateforme(480, 110, 150, { oneWay: true }));   // sous porte N
 
         const obstacles = [
-            // Brasier d'ambiance au sol (foyer simple)
-            brasier(W / 2, Y_SOL, { largeur: 120, cycleMs: 3500, offsetMs: 0 }),
-
-            // Mur SECRET entre escalier et niche (vertical, gauche du palier W-580)
-            murSecret(W - 480, 1010, 50, 100, { hp: 4, orientation: 'mur', dropSel: true })
+            brasier(600, 310, { cycleMs: 2600, offsetMs: 0, largeur: 100 })
         ];
 
         const portes = {};
+        if (portesActives.includes('N')) portes.N = porteN(480, 30);
         if (portesActives.includes('E')) portes.E = porteE(W, Y_SOL);
-        if (portesActives.includes('N')) portes.N = porteN(W - 240, Y_PALIER_HAUT - 90);
 
         return {
             plateformes, obstacles, zones: [], portes,

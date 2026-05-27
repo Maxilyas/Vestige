@@ -248,6 +248,35 @@ export function ressort(x, yTopSol) {
 }
 
 /**
+ * Zone MONOLITHE VESTIGE — point d'intérêt narratif interactif.
+ *
+ * Le joueur s'approche + touche E → popup texte de lore + drop Fragment Noir
+ * à la 1ère lecture seulement (persistance localStorage). Re-lecture autorisée
+ * sans drop. Visuellement c'est un grand bloc de pierre debout avec runes
+ * Reflux pulsantes, attire l'œil de loin.
+ *
+ * Convention : poser sur un palier safe (refuge), pas dans la zone de combat
+ * principale. Le joueur doit grimper/atteindre le palier pour lire — c'est
+ * une récompense d'exploration, pas une obstruction.
+ *
+ * @param {number} x        centre x du monolithe
+ * @param {number} yTopPalier  top du palier sur lequel le monolithe repose
+ * @param {object} opts     { loreId, largeur?=30, hauteur?=60 }
+ */
+export function vestigeLore(x, yTopPalier, opts = {}) {
+    const largeur = opts.largeur ?? 30;
+    const hauteur = opts.hauteur ?? 60;
+    return {
+        type: 'vestige_lore',
+        x,
+        y: yTopPalier - hauteur / 2,  // monolithe POSÉ sur le palier (sa base = yTopPalier)
+        largeur,
+        hauteur,
+        loreId: opts.loreId
+    };
+}
+
+/**
  * Zone d'ANTI-ANCRAGE — désactive le geste d'ancrage du joueur dans le rectangle.
  * Zone non-physique, lue par AncrageSystem qui refuse de poser une ancre si le
  * joueur (ou la position cible) est dedans. Utile pour empêcher de tricher sur
@@ -441,6 +470,146 @@ export function murSecret(x, yTop, w, h, opts = {}) {
         orientation: opts.orientation ?? 'mur',
         dropSel: opts.dropSel ?? false,
         dropFragmentFamille: opts.dropFragmentFamille ?? null
+    };
+}
+
+// ─── Helpers obstacles Vague 4 (Halls Cendrés Phase 9.7) ───
+
+/**
+ * Geyser de vapeur : jet vertical cyclique (on/off comme brasier). Phase
+ * ON = dégâts ET catapulte verticale (boostVy ~-720, plus fort que ressort).
+ * Mécanique double : utiliser pour atteindre paliers hauts, mais subir si
+ * timing rate.
+ * @param {number} x         centre x
+ * @param {number} yTopSol   top du sol sur lequel le geyser est ancré
+ * @param {object} [opts]    { hauteur?, cycleMs?, offsetMs?, boostVy? }
+ */
+export function geyserVapeur(x, yTopSol, opts = {}) {
+    const largeur = opts.largeur ?? 48;
+    const hauteur = opts.hauteur ?? 180;
+    return {
+        type: 'geyser_vapeur',
+        x,
+        y: yTopSol - hauteur / 2,    // base = yTopSol, top = yTopSol - hauteur
+        largeur, hauteur,
+        cycleMs: opts.cycleMs ?? 2800,
+        offsetMs: opts.offsetMs ?? 0,
+        boostVy: opts.boostVy ?? -720
+    };
+}
+
+/**
+ * Rideau d'acide : zone fine verticale (du plafond au sol), gouttes vertes
+ * en chute continue, toujours actif. Dégâts au contact mais invincibilité
+ * brève — encourage la traversée rapide (sprint à travers).
+ * @param {number} x            centre x
+ * @param {number} yTopPlafond  top du rideau (au plafond ou suspendu)
+ * @param {number} hauteur      hauteur totale du rideau
+ * @param {object} [opts]       { largeur? = 30 }
+ */
+export function rideauAcide(x, yTopPlafond, hauteur, opts = {}) {
+    const largeur = opts.largeur ?? 30;
+    return {
+        type: 'rideau_acide',
+        x,
+        y: yTopPlafond + hauteur / 2,
+        largeur, hauteur
+    };
+}
+
+/**
+ * Bloc de charbon : plateforme dynamique pushable par le joueur (marche
+ * contre = pousse). Friction au sol pour ralentir. Combo signature : si
+ * en overlap avec brasier ON → s'enflamme → explose en projectiles braises.
+ * Le joueur peut donc utiliser un bloc pour étouffer un brasier, ou le
+ * pousser dans un brasier pour ouvrir un passage explosif.
+ * @param {number} x         centre x (position initiale du bloc)
+ * @param {number} yTopSol   top du sol sur lequel le bloc repose
+ * @param {object} [opts]    { taille? = 50, hp? }
+ */
+export function blocCharbon(x, yTopSol, opts = {}) {
+    const taille = opts.taille ?? 50;
+    return {
+        type: 'bloc_charbon',
+        x,
+        y: yTopSol - taille / 2,    // base = yTopSol
+        largeur: taille,
+        hauteur: taille,
+        hp: opts.hp ?? 3
+    };
+}
+
+// ─── Helpers obstacles Vague 5 (Halls Cendrés Phase 9.8 medium-cost) ───
+
+/**
+ * Marteau-pilon : bloc qui descend du plafond, écrase et remonte cycliquement.
+ * Position fixe en x. Dégâts massifs pendant chute + knockback horizontal.
+ * @param {number} x            centre x du marteau
+ * @param {number} yTopRepos    top du marteau en position repos haute (proche plafond)
+ * @param {number} yTopImpact   top du marteau en position impact bas
+ * @param {object} [opts]       { largeur?=60, hauteur?=80, cycleMs?, offsetMs? }
+ */
+export function marteauPilon(x, yTopRepos, yTopImpact, opts = {}) {
+    const largeur = opts.largeur ?? 60;
+    const hauteur = opts.hauteur ?? 80;
+    // y centre initial = position repos haute
+    return {
+        type: 'marteau_pilon',
+        x,
+        y: yTopRepos + hauteur / 2,
+        largeur, hauteur,
+        yTopRepos,
+        yTopImpact,
+        cycleMs: opts.cycleMs ?? 2700,
+        offsetMs: opts.offsetMs ?? 0
+    };
+}
+
+/**
+ * Piston à injection thermique : sort horizontalement du mur, repousse.
+ * Solide bloquant en extension + knockback fort à l'impact initial.
+ * @param {number} xRentre      centre x du piston rentré (au mur)
+ * @param {number} yTop         top du piston (face haute)
+ * @param {string} orientation  'gauche' (sort vers la gauche) | 'droite'
+ * @param {object} [opts]       { hauteur?=50, longueurExtension?=110, cycleMs?, offsetMs? }
+ */
+export function pistonThermique(xRentre, yTop, orientation, opts = {}) {
+    const hauteur = opts.hauteur ?? 50;
+    const largeurRentre = opts.largeurRentre ?? 24;
+    const longueurExtension = opts.longueurExtension ?? 110;
+    return {
+        type: 'piston_thermique',
+        x: xRentre,           // position de référence (centre rentré)
+        y: yTop + hauteur / 2,
+        largeur: largeurRentre,
+        hauteur,
+        orientation,
+        longueurExtension,
+        cycleMs: opts.cycleMs ?? 3000,
+        offsetMs: opts.offsetMs ?? 0
+    };
+}
+
+/**
+ * Scie circulaire : disque cranté glissant sur rail H ou V (sinusoïdal).
+ * Rotation continue = dégâts au contact permanents.
+ * @param {number} x          centre x (position de repos)
+ * @param {number} y          centre y (position de repos)
+ * @param {string} axe        'horizontale' | 'verticale'
+ * @param {object} [opts]     { rayon?=22, amplitude?=160, periode?=2400 }
+ */
+export function scieCirculaire(x, y, axe, opts = {}) {
+    const rayon = opts.rayon ?? 22;
+    return {
+        type: 'scie_circulaire',
+        x, y,
+        rayon,
+        // largeur/hauteur servent pour le sprite hitbox (carré inscrit dans le cercle)
+        largeur: rayon * 2,
+        hauteur: rayon * 2,
+        axe,
+        amplitude: opts.amplitude ?? 160,
+        periode: opts.periode ?? 2400
     };
 }
 

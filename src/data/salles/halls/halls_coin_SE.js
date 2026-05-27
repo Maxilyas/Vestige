@@ -1,74 +1,58 @@
 // Salle : Halls Cendrés — Coin SE (descente de forge)
+// (Phase 9.6 — Migration)
 //
-// ARCHITECTURE : coin en L (entrée E, sortie S). Mur lateral GAUCHE plein.
-// Plafond avec poutres. Forge active sur l'étage haut droit (foyer puissant).
-// Plaque de pression active pieux dans le couloir descendant.
+// INTENTION : descente droite. Plaque de pression active des pieux dans le
+// couloir descendant (timing requis).
 
 import {
-    HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
-    porteE, porteS,
-    mur, murLateralGauche,
-    plaque, brasier
+    HAUTEUR_SOL, sol, plateforme,
+    porteS, porteE,
+    plaque, brasier, pieuSol
 } from '../_format.js';
 
-const W = 1600;
-const H = 1100;
-const Y_SOL = H - HAUTEUR_SOL;        // 1060
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_coin_SE = {
     id: 'halls_coin_SE',
     biome: 'halls_cendres',
-    nom: 'Coin SE (descente de forge)',
+    nom: 'Descente de Forge (SE)',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['E', 'S'],
     archetypesCompatibles: ['hall', 'crypte'],
 
     generer({ portesActives = ['E', 'S'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND avec poutres
-            plafondCathedrale(0,    600,  Y_PLAFOND + 100),
-            plafondCathedrale(600,  1000, Y_PLAFOND + 200),
-            plafondCathedrale(1000, W,    Y_PLAFOND + 80),
+        // Foyer haut + brasier majeur
+        plateformes.push(plateforme(800, 340, 140));
 
-            // ─── MURS LATÉRAUX
-            murLateralGauche(Y_PLAFOND, Y_SOL),  // GAUCHE plein
-            ...(portesActives.includes('E') ? [mur(W - 15, Y_PLAFOND, Y_SOL - 100)] : []),
+        // Paliers descente
+        plateformes.push(plateforme(700, 430, 100, { oneWay: true }));
+        plateformes.push(plateforme(520, 360, 100, { oneWay: true }));
+        plateformes.push(plateforme(340, 290, 100, { oneWay: true }));
 
-            // ─── ESCALIER vers forge (côté droit, Δ70 chaîne)
-            plateforme(W - 200, 990, 160, { oneWay: true }),
-            plateforme(W - 380, 920, 160, { oneWay: true }),
-            plateforme(W - 200, 850, 160, { oneWay: true }),
-            plateforme(W - 380, 780, 160, { oneWay: true }),
-            plateforme(W - 200, 710, 160, { oneWay: false }),  // palier forge
-
-            // Voie centrale
-            plateforme(600, 990, 200, { oneWay: true })
-        ];
+        // Palier S surélevé
+        plateformes.push(plateforme(240, 440, 140, { oneWay: true }));
 
         const obstacles = [
-            // Plaque qui spawn 3 pieux dans le couloir bas
-            plaque(W / 2, Y_SOL, 'pieux', {
-                positions: [
-                    { x: W / 2 - 200, y: Y_SOL - 14 },
-                    { x: W / 2,        y: Y_SOL - 14 },
-                    { x: W / 2 + 200, y: Y_SOL - 14 }
-                ],
-                dureeMs: 3000
+            brasier(800, 340, { cycleMs: 3000, offsetMs: 0, largeur: 130 }),
+            plaque(140, Y_SOL, 'pieux', {
+                positions: [{ x: 380, y: Y_SOL }, { x: 480, y: Y_SOL }, { x: 580, y: Y_SOL }]
             }),
-            // Brasier de forge SUR le palier haut (justifié)
-            brasier(W - 280, 710, { largeur: 100, cycleMs: 2800, offsetMs: 0 })
+            pieuSol(680, Y_SOL)
         ];
 
         const portes = {};
         if (portesActives.includes('E')) portes.E = porteE(W, Y_SOL);
-        if (portesActives.includes('S')) portes.S = porteS(W / 2, Y_SOL);
+        if (portesActives.includes('S')) portes.S = porteS(240, 440);
 
         return {
             plateformes, obstacles, zones: [], portes,
-            spawnDefault: { x: 80, y: Y_SOL - 20 }
+            spawnDefault: { x: W - 80, y: Y_SOL - 20 }
         };
     }
 };

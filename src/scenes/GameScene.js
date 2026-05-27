@@ -38,6 +38,7 @@ import { Projectile } from '../entities/Projectile.js';
 import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { AncrageSystem } from '../systems/AncrageSystem.js';
+import { NarrativeSystem } from '../systems/NarrativeSystem.js';
 import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { executerGeste } from '../systems/GesteSystem.js';
 import { lancerCinematiqueFin } from '../systems/CinematiqueFusion.js';
@@ -451,6 +452,14 @@ export class GameScene extends Phaser.Scene {
         this.ancrage = new AncrageSystem(this, this.resonance);
         this.ancrage.initSalle(salle.zones ?? []);
 
+        // --- Système narratif (monolithes Vestige, touche E → popup lore) ---
+        // Lit les zones type 'vestige_lore' de la salle. État "lus" persisté
+        // localStorage : 1ère lecture = drop Fragment Noir bonus.
+        this.narrative = new NarrativeSystem(this, this.economy);
+        this._zonesSalle = salle.zones ?? [];
+        this.narrative.initSalle(this._zonesSalle);
+        this._poserMonolithesLore(this._zonesSalle);
+
         // --- Caméra : 2 modes selon Phase 9 ─
         //   • Salle compacte (dimsCanvas) : caméra FIGÉE sur 0,0 → 960×540.
         //     La salle = l'écran. Pas de scroll, pas de follow, pas de zoom-out
@@ -571,6 +580,39 @@ export class GameScene extends Phaser.Scene {
                 } else if (t === 'brasier_mobile') {
                     // Zone d'overlap pure : dégâts seulement en phase 'feu'
                     // (gérée par onContactJoueur qui check this.brasierPhase).
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'geyser_vapeur') {
+                    // Zone d'overlap : dégâts + catapulte verticale en phase ON
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'rideau_acide') {
+                    // Zone d'overlap : dégâts continus
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'bloc_charbon') {
+                    // Dynamic body pushable : 3 colliders
+                    //   1. bloc ↔ sol/platforms (gravité, repose dessus)
+                    //   2. bloc ↔ joueur (push latéral)
+                    //   3. bloc ↔ obstaclesSolides (s'il existe)
+                    this.physics.add.collider(obs.sprite, this.platforms);
+                    if (this.obstaclesSolides) {
+                        this.physics.add.collider(obs.sprite, this.obstaclesSolides);
+                    }
+                    this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'marteau_pilon') {
+                    // Sprite static qu'on déplace manuellement : overlap suffit
+                    // (collide bloquant serait dangereux : le marteau pousserait le
+                    // joueur hors limites pendant la chute)
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'piston_thermique') {
+                    // Bloquant en extension (sprite ajouté à obstaclesSolides)
+                    // + overlap pour knockback à l'impact initial
+                    this.physics.add.collider(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'scie_circulaire') {
+                    // Zone d'overlap pure : dégâts continus (avec invincibilité)
                     this.physics.add.overlap(this.player, obs.sprite, () =>
                         obs.onContactJoueur(this, this.player));
                 }
@@ -2069,6 +2111,9 @@ export class GameScene extends Phaser.Scene {
         if (this.fondeurEntite && prochePNJ(this.fondeurEntite)) { this.ouvrirFondeur(); return; }
         if (this.identifieurEntite && prochePNJ(this.identifieurEntite)) { this.ouvrirIdentifieur(); return; }
         if (this.marchandEntite && prochePNJ(this.marchandEntite)) { this.ouvrirMarchand(); return; }
+        // Monolithe Vestige (touche E → popup lore + Fragment Noir 1ère lecture)
+        const mono = this.narrative?.monolitheProche(px, py);
+        if (mono) { this._ouvrirLore(mono); return; }
         // Portes : si le joueur overlap une porte, on traverse. Priorité plus
         // basse que les interactions explicites (coffre/PNJ) pour ne pas
         // déclencher de transit accidentel si on est sur une porte ET un PNJ.
@@ -2340,6 +2385,105 @@ export class GameScene extends Phaser.Scene {
         this.registry.events.on('resonance:vide', this.handlerVide);
         this.events.once('shutdown', () => {
             this.registry.events.off('resonance:vide', this.handlerVide);
+        });
+    }
+
+    // ============================================================
+    // MONOLITHES VESTIGE (lore narratif, touche E)
+    // ============================================================
+
+    /**
+     * Pose les visuels painterly de tous les monolithes Vestige de la salle.
+     * Style : stèle de pierre debout avec runes Reflux pulsantes. Plus marqué
+     * tant que le lore n'est pas lu (effet "appel").
+     */
+    _poserMonolithesLore(zones) {
+        this._monolithesGfx = this._monolithesGfx ?? [];
+        // Nettoyage des anciens (en cas de scene.restart où ce hook re-trigger)
+        for (const m of this._monolithesGfx) m?.destroy?.();
+        this._monolithesGfx = [];
+
+        const monos = zones.filter(z => z?.type === 'vestige_lore');
+        for (const z of monos) {
+            const lu = this.narrative.estLu(z.loreId);
+            const cont = this._dessinerMonolithe(z, lu);
+            this._monolithesGfx.push(cont);
+        }
+    }
+
+    _dessinerMonolithe(zone, lu) {
+        const w = zone.largeur;
+        const h = zone.hauteur;
+        const cont = this.add.container(zone.x, zone.y);
+        cont.setDepth(450);   // au-dessus du décor mais sous le joueur
+
+        const g = this.add.graphics();
+        // Ombre portée
+        g.fillStyle(0x000000, 0.45);
+        g.fillRoundedRect(-w / 2 + 2, -h / 2 + 4, w, h, 4);
+        // Corps stèle — pierre sombre
+        g.fillStyle(0x2a2820, 1);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, 4);
+        // Liseré clair (lumière oblique gauche)
+        g.fillStyle(0x504838, 0.7);
+        g.fillRect(-w / 2 + 2, -h / 2 + 3, 3, h - 6);
+        // Crête supérieure (sommet biseauté)
+        g.fillStyle(0x1a1814, 1);
+        g.beginPath();
+        g.moveTo(-w / 2, -h / 2);
+        g.lineTo(0, -h / 2 - 4);
+        g.lineTo(w / 2, -h / 2);
+        g.closePath();
+        g.fillPath();
+        cont.add(g);
+
+        // Runes pulsantes (3 traits horizontaux gravés au milieu)
+        const runes = this.add.graphics();
+        const couleurRune = lu ? 0x6a5040 : 0xb04060;  // rouge Reflux si non lu, terni si lu
+        const dessinerRunes = (alpha) => {
+            runes.clear();
+            runes.lineStyle(2, couleurRune, alpha);
+            for (let i = 0; i < 3; i++) {
+                const y = -h / 4 + i * 9;
+                runes.lineBetween(-w / 2 + 6, y, w / 2 - 6, y);
+            }
+        };
+        dessinerRunes(0.9);
+        cont.add(runes);
+
+        // Tween pulse (plus marqué si non lu)
+        const amplitudePulse = lu ? 0.2 : 0.6;
+        const baseAlpha = lu ? 0.45 : 0.85;
+        this.tweens.addCounter({
+            from: 0, to: Math.PI * 2,
+            duration: lu ? 4200 : 2400,
+            loop: -1,
+            onUpdate: (tw) => {
+                const a = baseAlpha + Math.sin(tw.getValue()) * amplitudePulse * 0.5;
+                dessinerRunes(Phaser.Math.Clamp(a, 0.2, 1));
+            }
+        });
+
+        return cont;
+    }
+
+    /**
+     * Ouvre le popup de lore du monolithe ciblé. À la 1ère lecture, drop un
+     * Fragment Noir et met à jour le visuel (runes se tarnissent).
+     */
+    _ouvrirLore(zone) {
+        if (!zone?.loreId) return;
+        if (this.scene.isActive('PopupLoreScene')) return;
+        const premiere = this.narrative.marquerLu(zone.loreId);
+        // Si 1ère lecture, redessiner le monolithe en mode "lu" (pulse terni)
+        if (premiere) {
+            // Reset des visuels pour refléter le nouvel état (pulse terni)
+            this._poserMonolithesLore(this._zonesSalle ?? []);
+        }
+        this.scene.pause();
+        this.scene.launch('PopupLoreScene', {
+            loreId: zone.loreId,
+            premiereLecture: premiere
         });
     }
 

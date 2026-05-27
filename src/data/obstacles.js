@@ -150,6 +150,98 @@ export const TYPES_OBSTACLES = {
         rayonExplosion: 220
     },
 
+    // ─── Vague 4 — Halls Cendrés Phase 9.7 (extension toolkit) ─────
+    geyser_vapeur: {
+        id: 'geyser_vapeur',
+        // Geyser vertical qui pulse on/off. Phase ON = dégâts au contact +
+        // catapulte le joueur verticalement (boostVy fort, ~-720). Phase
+        // OFF = silhouette inerte au sol. Mécanique de mobilité-danger
+        // (utiliser pour atteindre des paliers hauts, mais subir si timing rate).
+        // data : { x, y (centre), largeur, hauteur, cycleMs?, offsetMs?, boostVy? }
+        largeurDefault: 48, hauteurDefault: 180,
+        cycleMs: 2800,
+        vapeurRatio: 0.45,             // 45% du cycle = ON (fenêtre OFF 55%)
+        degatsVapeur: 3,
+        boostVy: -720,                  // plus fort que ressort (qui est -600)
+        invincibiliteApresHit: 500,
+        cooldownBoostMs: 250
+    },
+    rideau_acide: {
+        id: 'rideau_acide',
+        // Zone fine verticale (du plafond au sol), gouttes vertes en chute
+        // continue. PAS de phase off — toujours actif. Dégâts au contact
+        // avec invincibilité bref (le joueur peut traverser au sprint).
+        // data : { x, y (centre), largeur, hauteur }
+        largeurDefault: 30, hauteurDefault: 200,
+        degatsAcide: 2,
+        invincibiliteApresHit: 600     // plus long = encourage traversée rapide
+    },
+    bloc_charbon: {
+        id: 'bloc_charbon',
+        // Bloc dynamique pushable par le joueur (marche contre = pousse).
+        // Friction au sol pour ralentir. Si en overlap avec brasier ON →
+        // s'enflamme → explose après 1.5s (réutilise pipeline mur_explosif).
+        // data : { x, y (centre), largeur, hauteur, hp? }
+        largeurDefault: 50, hauteurDefault: 50,
+        hpDefault: 3,
+        invincibiliteApresHit: 250,
+        friction: 220,                  // décélération px/s² horizontale
+        vitessePushMax: 90,             // vitesse max quand poussé
+        delaiEnflammeMs: 1500,           // temps entre contact brasier ON et explosion
+        nbProjectilesExplosion: 5,
+        vitesseProjectileExplosion: 280,
+        degatsProjectile: 4,
+        rayonExplosion: 180
+    },
+
+    // ─── Vague 5 — Halls Cendrés Phase 9.8 (toolkit medium-cost) ──
+    marteau_pilon: {
+        id: 'marteau_pilon',
+        // Cycle vertical : repos haut (1000ms) → chute (300ms) → repos bas
+        // (800ms) → remontée (600ms). Dégâts massifs pendant chute + impact,
+        // + knockback horizontal (joueur projeté du côté opposé à son x).
+        // data : { x, y (centre), largeur, hauteur, yTopRepos, yTopImpact, cycleMs?, offsetMs? }
+        largeurDefault: 60, hauteurDefault: 80,
+        cycleMs: 2700,
+        ratioReposHaut: 0.37,     // 1000/2700
+        ratioChute: 0.11,          // 300/2700
+        ratioReposBas: 0.30,       // 800/2700
+        ratioRemonte: 0.22,        // 600/2700
+        degatsImpact: 6,
+        knockbackHorizontal: 280,
+        invincibiliteApresHit: 700
+    },
+    piston_thermique: {
+        id: 'piston_thermique',
+        // Sort horizontalement du mur. Cycle : rentré (1500ms) → sortie
+        // (400ms) → étendu (500ms) → rétraction (600ms). Solide bloquant en
+        // permanence. Knockback horizontal au début de la sortie.
+        // data : { x, y (centre rentré), largeur (rentrée), longueurExtension, hauteur, orientation: 'gauche'|'droite', cycleMs?, offsetMs? }
+        largeurRentreDefault: 24,
+        longueurExtensionDefault: 110,
+        hauteurDefault: 50,
+        cycleMs: 3000,
+        ratioRentre: 0.50,         // 1500/3000
+        ratioSortie: 0.13,          // 400/3000
+        ratioEtendu: 0.17,          // 500/3000
+        ratioRetraction: 0.20,      // 600/3000
+        degatsContact: 4,
+        knockbackHorizontal: 380,
+        invincibiliteApresHit: 600
+    },
+    scie_circulaire: {
+        id: 'scie_circulaire',
+        // Disque cranté glissant sur rail H ou V (sinusoïdal). Rotation
+        // perpétuelle = dégâts au contact continu (avec invincibilité brève).
+        // data : { x, y (centre), rayon, axe: 'horizontale'|'verticale', amplitude, periode, vitesseRot? }
+        rayonDefault: 22,
+        amplitudeDefault: 160,
+        periodeDefault: 2400,
+        vitesseRotDefault: 18,     // tr/s
+        degatsContact: 4,
+        invincibiliteApresHit: 450
+    },
+
     mur_secret: {
         id: 'mur_secret',
         // Mur cassable VISUELLEMENT IDENTIQUE à une plateforme/sol normale du

@@ -1,72 +1,57 @@
-// Salle : Halls Cendrés — Corniche oubliée (impasse N)
+// Salle : Halls Cendrés — Corniche Oubliée (impasse N compact)
+// (Phase 9.6 — Migration, fixed BFS)
 //
-// ARCHITECTURE : deadend vertical haut. On entre par le haut (porte N),
-// descend par paliers. Murs latéraux pleins. Sol final = coffre. Mur SECRET
-// dans le mur lateral droit (deuxième coffre bonus).
+// Tous les paliers accessibles depuis le sol via stepping (sol+70, +140 via
+// stepping, etc.) — pas seulement par drop depuis porte N.
 
 import {
-    HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
+    HAUTEUR_SOL, sol, plateforme,
     porteN,
-    mur, murLateralGauche, murLateralDroit,
-    murSecret, eboulis
+    brasier
 } from '../_format.js';
 
-const W = 1400;
-const H = 1100;
-const Y_SOL = H - HAUTEUR_SOL;        // 1060
-const Y_PALIER_HAUT = 330;
-const Y_PLAFOND = 60;
+const W = 960;
+const H = 540;
+const Y_SOL = H - HAUTEUR_SOL;
 
 export const halls_impasse_N = {
     id: 'halls_impasse_N',
     biome: 'halls_cendres',
-    nom: 'Corniche oubliée',
+    nom: 'Corniche Oubliée',
     dims: { largeur: W, hauteur: H },
+    dimsCanvas: true,
     portesPossibles: ['N'],
-    archetypesCompatibles: ['crypte', 'sanctuaire'],
-    rolesAutorises: ['deadend', 'alt'],
+    archetypesCompatibles: ['puits', 'crypte'],
+    rolesAutorises: ['deadend'],
 
     generer({ portesActives = ['N'] } = {}) {
-        const plateformes = [
-            sol(0, W, Y_SOL),
+        const plateformes = [];
+        plateformes.push(sol(0, W, Y_SOL));
 
-            // ─── PLAFOND avec cheminée porte N
-            plafondCathedrale(0,           W / 2 - 200, Y_PLAFOND + 60),
-            plafondCathedrale(W / 2 + 200, W,           Y_PLAFOND + 60),
-
-            // ─── MURS LATÉRAUX PLEINS
-            murLateralGauche(Y_PLAFOND + 60, Y_SOL),
-            murLateralDroit(W, Y_PLAFOND + 60, Y_SOL),
-
-            // ─── MEZZANINE porte N
-            plateforme(W / 2, Y_PALIER_HAUT,      240, { oneWay: true }),
-            plateforme(W / 2, Y_PALIER_HAUT + 70, 240, { oneWay: true }),
-
-            // ─── DESCENTE par paliers Δ85
-            plateforme(W / 2 - 110, 480, 130, { oneWay: true }),
-            plateforme(W / 2 + 110, 565, 130, { oneWay: true }),
-            plateforme(W / 2 - 110, 650, 130, { oneWay: true }),
-            plateforme(W / 2 + 110, 735, 130, { oneWay: true }),
-            plateforme(W / 2 - 110, 820, 130, { oneWay: true }),
-            plateforme(W / 2 + 110, 905, 130, { oneWay: true }),
-            plateforme(W / 2 - 110, 990, 130, { oneWay: true })
-        ];
+        // Chaîne stepping ascendante (depuis sol y=500, vers porte N y=40)
+        plateformes.push(plateforme(150, 430, 110, { oneWay: true }));   // sol+70
+        plateformes.push(plateforme(810, 430, 110, { oneWay: true }));
+        plateformes.push(plateforme(300, 350, 110, { oneWay: true }));
+        plateformes.push(plateforme(660, 350, 110, { oneWay: true }));
+        plateformes.push(plateforme(480, 270, 160, { oneWay: true }));   // foyer brasier
+        plateformes.push(plateforme(300, 190, 110, { oneWay: true }));
+        plateformes.push(plateforme(660, 190, 110, { oneWay: true }));
+        plateformes.push(plateforme(480, 110, 150, { oneWay: true }));   // sous porte N
 
         const obstacles = [
-            // Éboulis au sol (ambiance)
-            eboulis(280,    Y_SOL - 110, { largeur: 80, hauteur: 110, hp: 2 }),
-            eboulis(W - 280, Y_SOL - 110, { largeur: 80, hauteur: 110, hp: 2 }),
-
-            // Mur SECRET dans mur lateral droit (bonus secondaire)
-            murSecret(W - 45, 800, 60, 120, { hp: 4, orientation: 'mur', dropSel: true })
+            brasier(480, 270, { cycleMs: 3000, offsetMs: 0, largeur: 140 })
         ];
 
         const portes = {};
-        if (portesActives.includes('N')) portes.N = porteN(W / 2, Y_PALIER_HAUT - 90);
+        if (portesActives.includes('N')) portes.N = porteN(480, 30);
+
+        // Coffre garanti au sommet (sous la porte d'entrée)
+        const coffreForce = { x: 480, y: 110 - 12 };
 
         return {
             plateformes, obstacles, zones: [], portes,
-            spawnDefault: { x: W / 2, y: Y_PALIER_HAUT - 20 }
+            spawnDefault: { x: 480, y: 110 - 20 },
+            coffreForce
         };
     }
 };
