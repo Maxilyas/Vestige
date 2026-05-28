@@ -50,7 +50,8 @@ function valider(salle) {
         !p.tags?.includes('decoratif') &&
         !p.tags?.includes('structurel') &&
         !p.tags?.includes('secret') &&
-        !p.tags?.includes('metroidvania')
+        !p.tags?.includes('metroidvania') &&
+        !p.tags?.includes('gravite_inverse')
     );
 
     // Plateformes MOBILES (oscillation cyclique) : on génère 3 pseudo-plateformes
@@ -191,7 +192,8 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'voile_coin_NE','voile_coin_NO','voile_coin_SE','voile_coin_SO',
              'voile_t_NEO','voile_t_SEO','voile_t_NSO','voile_t_NSE',
              'voile_impasse_N','voile_impasse_S','voile_impasse_E','voile_impasse_O',
-             'voile_fragments_flottants','voile_grande_dechirure'];
+             'voile_fragments_flottants','voile_grande_dechirure',
+             'voile_chambre_inversee'];
 
 let totalBugs = 0;
 for (const id of ids) {

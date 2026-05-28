@@ -460,6 +460,15 @@ export class GameScene extends Phaser.Scene {
         this.narrative.initSalle(this._zonesSalle);
         this._poserMonolithesLore(this._zonesSalle);
 
+        // --- Zones de gravité inversée (signature Voile Inversé, prototype) ---
+        // Une colonne où la gravité du joueur tire vers le HAUT : il monte au
+        // plafond pour atteindre une récompense, puis retombe en sortant. Lu
+        // chaque frame dans update(). Désactivé en Miroir (atelier paisible).
+        this._zonesGraviteInverse = enMiroir
+            ? []
+            : this._zonesSalle.filter(z => z?.type === 'gravite_inverse');
+        this._poserZonesGraviteInverse(this._zonesGraviteInverse);
+
         // --- Caméra : 2 modes selon Phase 9 ─
         //   • Salle compacte (dimsCanvas) : caméra FIGÉE sur 0,0 → 960×540.
         //     La salle = l'écran. Pas de scroll, pas de follow, pas de zoom-out
@@ -905,7 +914,6 @@ export class GameScene extends Phaser.Scene {
 
         // --- Mouvement ---
         const body = this.player.body;
-        const auSol = body.blocked.down || body.touching.down;
         const speed = this.statsEffectives.speed;
         const now = this.time.now;
         // Effet d'immobilisation (ex: web-spinner Cendre-Tisseuse). Bloque
@@ -918,18 +926,29 @@ export class GameScene extends Phaser.Scene {
         const controleInverse = (this.player._controleInverseJusqu ?? 0) > now;
         const iGauche = controleInverse ? i.droite : i.gauche;
         const iDroite = controleInverse ? i.gauche : i.droite;
-        // Gravité inversée (Inverseur de Gravité) — net = 0 (pesanteur nulle,
-        // flottement) plutôt qu'une vraie force ascendante. Évite que le joueur
-        // soit catapulté à grande vitesse hors du monde.
-        const graviteInv = (this.player._graviteInverseJusqu ?? 0) > now;
-        if (graviteInv && !this.player._graviteInverseeAppliquee) {
-            const gWorld = this.physics.world.gravity.y;
-            body.gravity.y = -gWorld;        // net = 0
-            this.player._graviteInverseeAppliquee = true;
-        } else if (!graviteInv && this.player._graviteInverseeAppliquee) {
-            body.gravity.y = 0;
-            this.player._graviteInverseeAppliquee = false;
-        }
+        // Gravité — deux sources d'inversion possibles, résolues en une fois :
+        //   • ZONE d'inversion Voile (signature biome) : net vers le HAUT
+        //     (-2·gWorld), le joueur tombe au plafond tant qu'il est dans la zone.
+        //   • Effet ennemi inverseur_gravite (legacy) : net = 0 (flottement).
+        // La zone prime sur l'effet ennemi. On écrit body.gravity.y une seule fois.
+        const gWorld = this.physics.world.gravity.y;
+        const px = this.player.x, py = this.player.y;
+        const dansZoneInverse = this._zonesGraviteInverse?.some(z =>
+            px >= z.x - z.largeur / 2 && px <= z.x + z.largeur / 2 &&
+            py >= z.y - z.hauteur / 2 && py <= z.y + z.hauteur / 2
+        ) ?? false;
+        const floatEnnemi = (this.player._graviteInverseJusqu ?? 0) > now;
+        const gBodyVoulu = dansZoneInverse ? -2 * gWorld
+                         : floatEnnemi     ? -gWorld
+                         : 0;
+        if (body.gravity.y !== gBodyVoulu) body.gravity.y = gBodyVoulu;
+
+        // Quand la gravité tire vers le HAUT, le « sol » est le plafond : on
+        // inverse la détection d'appui ET le sens du saut (cf. plus bas).
+        const graviteVersLeHaut = dansZoneInverse;
+        const auSol = graviteVersLeHaut
+            ? (body.blocked.up || body.touching.up)
+            : (body.blocked.down || body.touching.down);
 
         // Phase 5b.2 — Pendant un dash (Sève d'Hydre), on court-circuite le
         // contrôle horizontal pour préserver la vélocité injectée par le Geste.
@@ -984,9 +1003,12 @@ export class GameScene extends Phaser.Scene {
         if (auSol) {
             this.sautsRestants = aDoubleSaut ? 1 : 0;
         }
+        // Sens du saut : vers le haut en gravité normale, vers le bas (s'éloigner
+        // du plafond) quand la gravité est inversée.
+        const signeSaut = graviteVersLeHaut ? 1 : -1;
         if (i.sauter && !immobilise) {
             if (auSol) {
-                body.setVelocityY(-this.statsEffectives.jumpVelocity);
+                body.setVelocityY(signeSaut * this.statsEffectives.jumpVelocity);
                 this.audio?.jouerSfx('jump');
                 // Phase 6 — auto-révélation par usage (saut)
                 this.revelation?.incrementer('sauts');
@@ -996,7 +1018,7 @@ export class GameScene extends Phaser.Scene {
                     this.resonance.regagner((f.params.gain ?? 1) * f.count);
                 }
             } else if (this.sautsRestants > 0 && aDoubleSaut) {
-                body.setVelocityY(-this.statsEffectives.jumpVelocity * 0.92);
+                body.setVelocityY(signeSaut * this.statsEffectives.jumpVelocity * 0.92);
                 this.sautsRestants--;
                 this.audio?.jouerSfx('jump');
                 this._jouerEffetDoubleSaut?.();
@@ -1075,6 +1097,9 @@ export class GameScene extends Phaser.Scene {
         if (this.playerVisual) {
             this.playerVisual.setPosition(this.player.x, this.player.y);
             this.playerVisual.setDirection(this.lastDirection);
+            // Le Vestige bascule tête en bas quand il marche au plafond (zone
+            // de gravité inversée). Posé avant setEtat pour qu'il en tienne compte.
+            this.playerVisual.setInverse(graviteVersLeHaut);
             this.playerVisual.setEtat({
                 auSol,
                 vx: this.player.body.velocity.x,
@@ -2627,6 +2652,53 @@ export class GameScene extends Phaser.Scene {
         peindreOrnementPlateforme(this, x, y, largeur, hauteur, this.mondeCourant, this.palette, oneWay, estSol);
 
         return rect;
+    }
+
+    /**
+     * Dessine la lecture visuelle des zones de gravité inversée (signature Voile) :
+     * une colonne magenta translucide + chevrons ascendants qui défilent vers le
+     * haut. Pure cosmétique — la logique physique est dans update().
+     */
+    _poserZonesGraviteInverse(zones) {
+        if (!zones || zones.length === 0) return;
+        for (const z of zones) {
+            const xG = z.x - z.largeur / 2;
+            const yT = z.y - z.hauteur / 2;
+            const yB = z.y + z.hauteur / 2;
+
+            // Voile d'inversion — colonne magenta translucide + cadre pointillé
+            const col = this.add.graphics();
+            col.setDepth(DEPTH.PLATEFORMES - 1);
+            col.fillStyle(0xff5078, 0.05);
+            col.fillRect(xG, yT, z.largeur, z.hauteur);
+            col.lineStyle(1, 0xff5078, 0.30);
+            col.strokeRect(xG, yT, z.largeur, z.hauteur);
+
+            // Chevrons ascendants : lecture immédiate « ici la gravité monte »
+            const nb = Math.max(3, Math.floor(z.largeur / 70));
+            for (let i = 0; i < nb; i++) {
+                const cx = xG + (i + 0.5) * (z.largeur / nb);
+                const chev = this.add.graphics();
+                chev.setDepth(DEPTH.PLATEFORMES - 1);
+                chev.setBlendMode(Phaser.BlendModes.ADD);
+                chev.lineStyle(2, 0xffb0d0, 0.6);
+                chev.beginPath();
+                chev.moveTo(-8, 6);
+                chev.lineTo(0, -6);
+                chev.lineTo(8, 6);
+                chev.strokePath();
+                chev.setPosition(cx, yB - 12);
+                this.tweens.add({
+                    targets: chev,
+                    y: yT + 12,
+                    alpha: { from: 0.7, to: 0 },
+                    duration: 1600 + Math.random() * 600,
+                    ease: 'Sine.Out',
+                    repeat: -1,
+                    delay: i * 300
+                });
+            }
+        }
     }
 
     // Éclaircit une couleur hex (0xRRGGBB) d'un facteur (0..1)

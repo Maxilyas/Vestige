@@ -173,6 +173,7 @@ import { voile_impasse_E }            from './voile/voile_impasse_E.js';
 import { voile_impasse_O }            from './voile/voile_impasse_O.js';
 import { voile_fragments_flottants }  from './voile/voile_fragments_flottants.js';
 import { voile_grande_dechirure }     from './voile/voile_grande_dechirure.js';
+import { voile_chambre_inversee }     from './voile/voile_chambre_inversee.js';
 import { voile_carrefour }            from './voile/voile_carrefour.js';
 
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
@@ -338,7 +339,9 @@ const TOUTES_SALLES = [
     voile_impasse_O,           // O    — sanctuaire muré
     // Diversité NSEO (2)
     voile_fragments_flottants, // NSEO — fragments flottants + faux-échos
-    voile_grande_dechirure     // NSEO — grande ascension + ressorts
+    voile_grande_dechirure,    // NSEO — grande ascension + ressorts
+    // Signature Vague 1 (1)
+    voile_chambre_inversee     // OE   — SIGNATURE : colonne de gravité inversée
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes

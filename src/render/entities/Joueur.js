@@ -28,6 +28,7 @@ export class JoueurVisuel {
         this.scene = scene;
         this.direction = 1;
         this.dernierAuSol = true;
+        this._signeY = 1;   // -1 = tête en bas (gravité inversée), cf. setInverse
 
         // --- Conteneur principal ---
         this.container = scene.add.container(0, 0);
@@ -127,6 +128,19 @@ export class JoueurVisuel {
     }
 
     /**
+     * Bascule la silhouette tête en bas (gravité inversée, zone Voile). Le flip
+     * vertical est porté par le signe de scaleY ; setEtat le réapplique chaque
+     * frame via this._signeY pour qu'il survive aux tweens d'animation.
+     */
+    setInverse(inverse) {
+        const s = inverse ? -1 : 1;
+        if (this._signeY === s) return;
+        this._signeY = s;
+        if (inverse && this.tweenIdle.isPlaying()) this.tweenIdle.pause();
+        this.container.scaleY = Math.abs(this.container.scaleY || 1) * s;
+    }
+
+    /**
      * Met à jour l'animation selon l'état physique :
      *   - au sol + immobile         → idle
      *   - au sol + vitesse          → marche (bobs)
@@ -137,12 +151,14 @@ export class JoueurVisuel {
     setEtat({ auSol, vx, vy }) {
         const enMouvement = Math.abs(vx) > 5;
 
+        const s = this._signeY;   // -1 si tête en bas (gravité inversée)
+
         if (auSol && !this.dernierAuSol) {
-            // Atterrissage : squash bref
+            // Atterrissage : squash bref (signe Y préservé pour le mode inversé)
             this.scene.tweens.add({
                 targets: this.container,
                 scaleX: { from: this.direction * 1.15, to: this.direction * 1 },
-                scaleY: { from: 0.85, to: 1 },
+                scaleY: { from: 0.85 * s, to: 1 * s },
                 duration: 140,
                 ease: 'Cubic.Out'
             });
@@ -152,9 +168,14 @@ export class JoueurVisuel {
         if (!auSol) {
             // En l'air : un peu d'allongement vertical pour sentir le saut
             const stretch = vy < 0 ? 1.06 : 1.02;
-            this.container.scaleY = stretch;
+            this.container.scaleY = stretch * s;
             this.container.scaleX = this.direction * (vy < 0 ? 0.94 : 0.98);
             // Pause du tween idle pendant le saut
+            if (this.tweenIdle.isPlaying()) this.tweenIdle.pause();
+        } else if (s === -1) {
+            // Au sol mais tête en bas : pas de respiration idle (figé inversé)
+            this.container.scaleX = this.direction;
+            this.container.scaleY = -1;
             if (this.tweenIdle.isPlaying()) this.tweenIdle.pause();
         } else {
             // Au sol : reprend le tween idle, scaleX = direction
