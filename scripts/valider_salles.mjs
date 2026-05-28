@@ -179,7 +179,10 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'cristaux_plateaux_flottants','cristaux_ascension_sacree',
              // ─── Tranche 2 Vague 1 : signatures « Silence & Glace » ───
              'cristaux_chapelle_silence','cristaux_patinoire',
-             'cristaux_choeur_mnesique','cristaux_faille_du_present'];
+             'cristaux_choeur_mnesique','cristaux_faille_du_present',
+             // ─── Tranche 2 Vague 2 : signatures « Le Miroir » ───
+             'cristaux_galerie_miroirs','cristaux_pas_incertains',
+             'cristaux_barrieres_phebus','cristaux_salle_des_reflets'];
 
 let totalBugs = 0;
 for (const id of ids) {

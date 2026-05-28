@@ -101,6 +101,10 @@ export class Obstacle {
         else if (data.type === 'cristal_resonant')  this._creerCristalResonant();
         else if (data.type === 'plateforme_resonance') this._creerPlateformeResonance();
         else if (data.type === 'souffle_blizzard')  this._creerSouffleBlizzard();
+        // ─── Vague 7 (Cristaux Glacés — « Le Miroir ») ───
+        else if (data.type === 'plateforme_miroir') this._creerPlateformeMiroir();
+        else if (data.type === 'faux_sol_miroir')   this._creerFauxSolMiroir();
+        else if (data.type === 'laser_prisme')      this._creerLaserPrisme();
     }
 
     _creerPieu() {
@@ -273,6 +277,15 @@ export class Obstacle {
         else if (this.data.type === 'souffle_blizzard') {
             if (this.visual?.active) this._dessinerBlizzard(this.scene.time.now);
         }
+        else if (this.data.type === 'plateforme_miroir') {
+            if (this.sprite?.active) this._updatePlateformeMiroir(this.scene.time.now);
+        }
+        else if (this.data.type === 'faux_sol_miroir') {
+            if (this.visual?.active) this._dessinerFauxSol(this.scene.time.now);
+        }
+        else if (this.data.type === 'laser_prisme') {
+            if (this.sprite?.active) this._updateLaserPrisme(this.scene.time.now);
+        }
     }
 
     /**
@@ -393,6 +406,17 @@ export class Obstacle {
         }
         // cristal_resonant : pas de contact physique (frappé via tenterAttaque).
         // plateforme_resonance : collision gérée par collider conditionnel (GameScene).
+        else if (this.data.type === 'laser_prisme') {
+            // Gel uniquement pendant le tir.
+            if (this.laserPhase !== 'tir') return;
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            player._immobiliseJusqu = now + this.def.gelMs;
+            scene.events.emit('obstacle:pieu:hit', { def: { degatsImpact: this.def.degats } });
+            scene.flashJoueur?.(0x90c0ff);
+        }
+        // plateforme_miroir : platforme (collider), pas de dégât.
+        // faux_sol_miroir : intangible, aucun contact.
     }
 
     detruire() {
@@ -2438,5 +2462,152 @@ export class Obstacle {
             const len = 26 + (i % 3) * 10;
             g.lineBetween(sx, sy, sx + dir * len, sy);
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 7 — Cristaux Glacés (« Le Miroir »)
+    // ════════════════════════════════════════════════════════════════
+
+    // ─── Plateforme-Miroir (clignote solide↔intangible) ───
+    _creerPlateformeMiroir() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);  // static
+        this.sprite._obstacle = this;
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this._t0 = this.scene.time.now;
+        this._dessinerPlateformeMiroir(true, false, this._t0);
+    }
+
+    _updatePlateformeMiroir(now) {
+        const cycle = this.data.cycleMs ?? this.def.cycleMs;
+        const off = this.data.offsetMs ?? 0;
+        const t = ((((now - this._t0 + off) % cycle) + cycle) % cycle) / cycle;
+        const solide = t < this.def.ratioSolide;
+        const avert = this.def.avertissementMs / cycle;
+        const clignote = solide && t > (this.def.ratioSolide - avert);
+        if (this.sprite.body.enable !== solide) this.sprite.body.enable = solide;
+        this._dessinerPlateformeMiroir(solide, clignote, now);
+    }
+
+    _dessinerPlateformeMiroir(solide, clignote, now) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.data.largeur, h = this.data.hauteur;
+        const x0 = cx - w / 2, y0 = cy - h / 2;
+        if (solide) {
+            const a = clignote ? (0.45 + 0.45 * Math.abs(Math.sin(now / 55))) : 1;
+            g.fillStyle(COULEUR_GLACE_FONCE, a);
+            g.fillRect(x0, y0, w, h);
+            g.fillStyle(COULEUR_GLACE_CLAIR, a);
+            g.fillRect(x0, y0, w, 4);
+            g.lineStyle(1.5, COULEUR_GLACE, a);
+            g.strokeRect(x0, y0, w, h);
+        } else {
+            // Reflet fantôme (intangible)
+            g.fillStyle(COULEUR_GLACE, 0.06);
+            g.fillRect(x0, y0, w, h);
+            g.lineStyle(1, COULEUR_GLACE_CLAIR, 0.22);
+            g.strokeRect(x0, y0, w, h);
+        }
+    }
+
+    // ─── Faux sol miroir (intangible, ondulation « eau » = indice) ───
+    _creerFauxSolMiroir() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        // PAS de body : intangible (le joueur tombe au travers)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.sprite._obstacle = this;
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this._t0 = this.scene.time.now;
+        this._dessinerFauxSol(this.scene.time.now);
+    }
+
+    _dessinerFauxSol(now) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.data.largeur, h = this.data.hauteur;
+        const x0 = cx - w / 2, y0 = cy - h / 2;
+        // Ressemble à une plateforme Cristaux normale...
+        g.fillStyle(COULEUR_GLACE_FONCE, 0.9);
+        g.fillRect(x0, y0, w, h);
+        g.fillStyle(COULEUR_GLACE, 0.9);
+        g.fillRect(x0, y0, w, 4);
+        g.lineStyle(1.5, COULEUR_GLACE, 0.8);
+        g.strokeRect(x0, y0, w, h);
+        // ...mais INDICE : ondulations de reflet « eau » qui se déplacent
+        const t = (now - this._t0) / 1000;
+        g.lineStyle(2, COULEUR_GLACE_CLAIR, 0.55);
+        for (let i = 0; i < 3; i++) {
+            const prog = ((t * 0.5 + i / 3) % 1);
+            const sx = x0 + 4 + prog * (w - 8);
+            g.lineBetween(sx, y0 + 2, sx + 9, y0 + h - 2);
+        }
+    }
+
+    // ─── Barrière laser de Phébus (faisceau cyclique, gel au contact) ───
+    _creerLaserPrisme() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);  // static, overlap
+        this.sprite._obstacle = this;
+        this.sprite.body.enable = false;                     // actif seulement en phase 'tir'
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(9);
+        this._t0 = this.scene.time.now;
+        this.laserPhase = 'repos';
+        this._dessinerLaserPrisme(this._t0, 'repos');
+    }
+
+    _updateLaserPrisme(now) {
+        const cycle = this.data.cycleMs ?? this.def.cycleMs;
+        const off = this.data.offsetMs ?? 0;
+        const t = ((((now - this._t0 + off) % cycle) + cycle) % cycle) / cycle;
+        const charge = this.def.chargeMs / cycle;
+        const tirStart = 1 - this.def.tirRatio;
+        let phase;
+        if (t >= tirStart) phase = 'tir';
+        else if (t >= tirStart - charge) phase = 'charge';
+        else phase = 'repos';
+        this.laserPhase = phase;
+        const actif = phase === 'tir';
+        if (this.sprite.body.enable !== actif) this.sprite.body.enable = actif;
+        this._dessinerLaserPrisme(now, phase);
+    }
+
+    _dessinerLaserPrisme(now, phase) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.data.largeur, h = this.data.hauteur;
+        const horiz = (this.data.axe ?? 'horizontale') === 'horizontale';
+        const e1x = horiz ? cx - w / 2 : cx, e1y = horiz ? cy : cy - h / 2;
+        const e2x = horiz ? cx + w / 2 : cx, e2y = horiz ? cy : cy + h / 2;
+
+        // Faisceau / charge entre les lentilles
+        if (phase === 'tir') {
+            const x0 = cx - w / 2, y0 = cy - h / 2;
+            g.fillStyle(COULEUR_MNESIQUE, 0.35);
+            g.fillRect(x0 - 2, y0 - 2, w + 4, h + 4);
+            g.fillStyle(COULEUR_MNESIQUE_VIF, 0.7);
+            g.fillRect(x0, y0, w, h);
+            g.fillStyle(0xffffff, 0.95);
+            if (horiz) g.fillRect(x0, cy - 2, w, 4);
+            else g.fillRect(cx - 2, y0, 4, h);
+        } else if (phase === 'charge') {
+            const pulse = 0.3 + 0.5 * Math.abs(Math.sin(now / 50));
+            g.lineStyle(2, COULEUR_MNESIQUE_VIF, pulse);
+            g.lineBetween(e1x, e1y, e2x, e2y);
+        }
+
+        // Lentilles aux extrémités (toujours visibles)
+        const lentille = (lx, ly) => {
+            g.fillStyle(COULEUR_GLACE_FONCE, 1); g.fillCircle(lx, ly, 9);
+            g.fillStyle(COULEUR_MNESIQUE, phase === 'repos' ? 0.6 : 1); g.fillCircle(lx, ly, 6);
+            g.fillStyle(0xffffff, phase === 'tir' ? 1 : 0.6); g.fillCircle(lx, ly, 2);
+        };
+        lentille(e1x, e1y);
+        lentille(e2x, e2y);
     }
 }

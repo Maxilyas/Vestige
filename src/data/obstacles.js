@@ -304,6 +304,40 @@ export const TYPES_OBSTACLES = {
         forceDefault: 80             // px/s ajoutés à la vélocité X par frame d'overlap
     },
 
+    // ─── Vague 7 — Cristaux Glacés (toolkit « Le Miroir ») ───────
+    plateforme_miroir: {
+        id: 'plateforme_miroir',
+        // Plateforme qui clignote solide↔intangible sur un cycle (oscille
+        // entre « Présent » et « Miroir »). Solide pendant ratioSolide du
+        // cycle, avec un clignotement d'avertissement avant de disparaître.
+        // data : { x, y (centre), largeur, hauteur, cycleMs?, offsetMs? }
+        largeurDefault: 120, hauteurDefault: 16,
+        cycleMs: 3000,
+        ratioSolide: 0.6,            // 60% du cycle = solide (40% absente)
+        avertissementMs: 550         // clignotement avant disparition
+    },
+    faux_sol_miroir: {
+        id: 'faux_sol_miroir',
+        // Ressemble à une plateforme/sol Cristaux normale mais INTANGIBLE :
+        // le joueur tombe au travers. Indice apprenable = ondulation « eau »
+        // (le vrai marbre est mat). Aucune physique.
+        // data : { x, y (centre), largeur, hauteur }
+        largeurDefault: 120, hauteurDefault: 16
+    },
+    laser_prisme: {
+        id: 'laser_prisme',
+        // Barrière laser entre deux lentilles cristal. Cycle : repos → charge
+        // (télégraphe) → tir. Contact pendant le tir = GEL (immobilise) + léger
+        // dégât. Lumière, pas feu (serein).
+        // data : { x, y (centre), largeur, hauteur, axe, cycleMs?, offsetMs? }
+        cycleMs: 2600,
+        tirRatio: 0.38,              // 38% du cycle = faisceau actif
+        chargeMs: 500,              // télégraphe avant le tir
+        degats: 2,
+        gelMs: 1000,                // durée d'immobilisation
+        invincibiliteApresHit: 700
+    },
+
     mur_secret: {
         id: 'mur_secret',
         // Mur cassable VISUELLEMENT IDENTIQUE à une plateforme/sol normale du

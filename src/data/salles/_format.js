@@ -749,3 +749,69 @@ export function souffleBlizzard(x, yTop, largeur, hauteur, opts = {}) {
     };
 }
 
+// ─── Helpers obstacles Vague 7 (Cristaux Glacés — « Le Miroir ») ───
+
+/**
+ * Plateforme-Miroir : clignote solide↔intangible sur un cycle (oscille entre
+ * « Présent » et « Miroir »). Avertissement visuel avant de disparaître.
+ * Décaler `offsetMs` entre plusieurs pour créer un chemin qui se déplace.
+ * @param {number} x        centre x
+ * @param {number} yTop     top de la plateforme
+ * @param {number} largeur
+ * @param {object} [opts]   { hauteur? = 16, cycleMs?, offsetMs? }
+ */
+export function plateformeMiroir(x, yTop, largeur, opts = {}) {
+    const hauteur = opts.hauteur ?? 16;
+    return {
+        type: 'plateforme_miroir',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur,
+        cycleMs: opts.cycleMs ?? 3000,
+        offsetMs: opts.offsetMs ?? 0
+    };
+}
+
+/**
+ * Faux sol miroir : ressemble à une plateforme Cristaux mais INTANGIBLE (on
+ * tombe au travers). Indice = ondulation « eau ». Placer parmi de vraies
+ * plateformes au-dessus d'un gouffre = piège de lecture.
+ * @param {number} x        centre x
+ * @param {number} yTop     top de la (fausse) plateforme
+ * @param {number} largeur
+ * @param {object} [opts]   { hauteur? = 16 }
+ */
+export function fauxSolMiroir(x, yTop, largeur, opts = {}) {
+    const hauteur = opts.hauteur ?? 16;
+    return {
+        type: 'faux_sol_miroir',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur
+    };
+}
+
+/**
+ * Barrière laser de Phébus : faisceau cyclique on/off entre deux lentilles.
+ * Contact pendant le tir = gel (immobilise) + léger dégât. Décaler `offsetMs`
+ * entre plusieurs pour créer un rythme à franchir.
+ * @param {number} xCentre  centre x du faisceau
+ * @param {number} yCentre  centre y du faisceau
+ * @param {number} longueur longueur du faisceau (selon l'axe)
+ * @param {object} [opts]   { axe? = 'horizontale'|'verticale', epaisseur? = 10, cycleMs?, offsetMs? }
+ */
+export function laserPrisme(xCentre, yCentre, longueur, opts = {}) {
+    const axe = opts.axe ?? 'horizontale';
+    const epaisseur = opts.epaisseur ?? 10;
+    return {
+        type: 'laser_prisme',
+        x: xCentre,
+        y: yCentre,
+        largeur: axe === 'horizontale' ? longueur : epaisseur,
+        hauteur: axe === 'horizontale' ? epaisseur : longueur,
+        axe,
+        cycleMs: opts.cycleMs ?? 2600,
+        offsetMs: opts.offsetMs ?? 0
+    };
+}
+

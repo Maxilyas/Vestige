@@ -629,7 +629,15 @@ export class GameScene extends Phaser.Scene {
                     // Plateforme intangible par défaut (body.enable=false) ;
                     // devient solide quand un cristal lié est frappé (setRevele).
                     this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'plateforme_miroir') {
+                    // Plateforme qui clignote solide↔intangible (body.enable cyclé)
+                    this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'laser_prisme') {
+                    // Faisceau cyclique : overlap actif seulement en phase 'tir'
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
                 }
+                // faux_sol_miroir : intangible (pas de body), aucune physique.
                 // cristal_resonant : pas de physique (frappé via tenterAttaque).
                 // anti_ancrage : pas de sprite physique, lecture par AncrageSystem
             }

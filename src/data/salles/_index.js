@@ -142,6 +142,11 @@ import { cristaux_chapelle_silence }  from './cristaux/cristaux_chapelle_silence
 import { cristaux_patinoire }         from './cristaux/cristaux_patinoire.js';
 import { cristaux_choeur_mnesique }   from './cristaux/cristaux_choeur_mnesique.js';
 import { cristaux_faille_du_present } from './cristaux/cristaux_faille_du_present.js';
+// ─── Cristaux Glacés — Tranche 2 Vague 2 : signatures « Le Miroir » ─
+import { cristaux_galerie_miroirs }   from './cristaux/cristaux_galerie_miroirs.js';
+import { cristaux_pas_incertains }    from './cristaux/cristaux_pas_incertains.js';
+import { cristaux_barrieres_phebus }  from './cristaux/cristaux_barrieres_phebus.js';
+import { cristaux_salle_des_reflets } from './cristaux/cristaux_salle_des_reflets.js';
 
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
 // sont EXCLUES : elles ne sortent que via salleFallback() quand le pool
@@ -273,7 +278,12 @@ const TOUTES_SALLES = [
     cristaux_chapelle_silence,   // OE   — stalactites de résonance (unique)
     cristaux_patinoire,          // OE   — verglas + stalagmites (unique)
     cristaux_choeur_mnesique,    // NSEO — chant révèle l'ascension (unique)
-    cristaux_faille_du_present   // OE   — failles de vide + blizzard (unique)
+    cristaux_faille_du_present,  // OE   — failles de vide + blizzard (unique)
+    // ─── Tranche 2 Vague 2 : signatures « Le Miroir » (4) ───
+    cristaux_galerie_miroirs,    // OE   — faux sols miroirs (unique)
+    cristaux_pas_incertains,     // OE   — plateformes-miroirs oscillantes (unique)
+    cristaux_barrieres_phebus,   // OE   — barrières laser cycliques (unique)
+    cristaux_salle_des_reflets   // NSEO — combo Miroir + ascension (unique)
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes
