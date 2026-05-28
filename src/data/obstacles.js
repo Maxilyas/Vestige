@@ -242,6 +242,68 @@ export const TYPES_OBSTACLES = {
         invincibiliteApresHit: 450
     },
 
+    // ─── Vague 6 — Cristaux Glacés (toolkit « Silence & Glace ») ──
+    stalactite_resonance: {
+        id: 'stalactite_resonance',
+        // Pic de cristal gris « résonance morte » suspendu au plafond. Ne tombe
+        // PAS sous le poids du joueur — tombe quand le joueur fait DU BRUIT
+        // (attaque X à proximité). Fissure d'avertissement brève puis chute.
+        // data : { x, yTop (suspendu), yTopImpact (zone de chute) }
+        largeur: 30, hauteur: 56,
+        degatsImpact: 4,
+        vitesseChute: 760,
+        rayonBruit: 190,              // rayon de déclenchement autour de l'attaque
+        delaiFissureMs: 420,         // avertissement (fissure + son) avant chute
+        invincibiliteApresHit: 600
+    },
+    verglas: {
+        id: 'verglas',
+        // Zone-overlap posée sur un sol/palier : tant que le joueur la touche,
+        // le mouvement devient glissant (réutilise player._tileEffectGlissant,
+        // déjà géré par GameScene). Aucun dégât — c'est un défi de mouvement.
+        // data : { x, y (centre), largeur, hauteur }
+        largeurDefault: 160, hauteurDefault: 50,
+        dureeEffetMs: 220            // glissant rafraîchi tant qu'on overlap
+    },
+    faille_vide: {
+        id: 'faille_vide',
+        // Fissure de « Présent pur » (vide d'existence) dans le sol. Tomber
+        // dedans draine une grosse part de Résonance (pas la mort) + repousse
+        // le joueur vers le haut. Cooldown pour éviter le multi-drain.
+        // data : { x, y (centre), largeur, hauteur }
+        largeurDefault: 90, hauteurDefault: 40,
+        drainResonance: 28,
+        knockbackVy: -520,
+        cooldownMs: 1200
+    },
+    cristal_resonant: {
+        id: 'cristal_resonant',
+        // Cristal violet « mnésique » : le frapper (attaque) émet une note qui
+        // RÉVÈLE/solidifie temporairement les plateforme_resonance liées (même
+        // `lien`). Contrepoint de la stalactite : ici le bruit OUVRE la voie.
+        // data : { x, y (centre), lien }
+        largeur: 34, hauteur: 52,
+        dureeRevelMs: 4500,          // durée pendant laquelle les plateformes liées sont solides
+        invincibiliteApresHit: 250
+    },
+    plateforme_resonance: {
+        id: 'plateforme_resonance',
+        // Plateforme translucide intangible par défaut. Devient solide (one-way)
+        // quand un cristal_resonant lié est frappé, pour dureeRevelMs. Translucide
+        // au repos (silhouette visible mais on tombe au travers).
+        // data : { x, y (centre), largeur, hauteur, lien }
+        largeurDefault: 120, hauteurDefault: 16
+    },
+    souffle_blizzard: {
+        id: 'souffle_blizzard',
+        // Courant d'air froid : pousse doucement le joueur latéralement tant
+        // qu'il est dans la zone (modifie surtout la trajectoire en plein saut).
+        // Aucun dégât. Vend la sérénité « figée mais vivante » du biome.
+        // data : { x, y (centre), largeur, hauteur, force (signée, +droite/-gauche) }
+        largeurDefault: 200, hauteurDefault: 300,
+        forceDefault: 80             // px/s ajoutés à la vélocité X par frame d'overlap
+    },
+
     mur_secret: {
         id: 'mur_secret',
         // Mur cassable VISUELLEMENT IDENTIQUE à une plateforme/sol normale du

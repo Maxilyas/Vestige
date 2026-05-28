@@ -633,3 +633,119 @@ export function murExplosif(x, yTop, opts = {}) {
     };
 }
 
+// ─── Helpers obstacles Vague 6 (Cristaux Glacés — « Silence & Glace ») ───
+
+/**
+ * Stalactite de Résonance : pic de cristal gris suspendu qui tombe quand le
+ * joueur fait DU BRUIT (attaque à proximité), pas sous son poids. Réutilise
+ * la chute du roc. Placer AU-DESSUS d'une zone de passage/combat.
+ * @param {number} x            centre x (axe de chute)
+ * @param {number} yTopHang     top du pic à sa position suspendue (plafond)
+ * @param {number} yTopImpact   top du sol/palier où le pic s'écrase
+ * @param {object} [opts]       { rayonBruit?, degatsImpact? }
+ */
+export function stalactiteResonance(x, yTopHang, yTopImpact, opts = {}) {
+    const hauteur = 56;
+    return {
+        type: 'stalactite_resonance',
+        x,
+        y: yTopHang + hauteur / 2,     // centre à la position suspendue
+        yOrigine: yTopHang + hauteur / 2,
+        yImpact: yTopImpact - hauteur / 2,
+        rayonBruit: opts.rayonBruit ?? 190
+    };
+}
+
+/**
+ * Verglas : zone glissante posée SUR un sol/palier. Tant que le joueur la
+ * touche, son mouvement devient glissant (inertie). Aucun dégât.
+ * @param {number} x         centre x
+ * @param {number} yTopSol   top du sol/palier recouvert de verglas
+ * @param {number} largeur   largeur de la plaque de verglas
+ * @param {object} [opts]    { hauteur? = 50 }
+ */
+export function verglas(x, yTopSol, largeur, opts = {}) {
+    const hauteur = opts.hauteur ?? 50;
+    return {
+        type: 'verglas',
+        x,
+        y: yTopSol - hauteur / 2,      // zone juste au-dessus du sol
+        largeur, hauteur
+    };
+}
+
+/**
+ * Faille de Vide : fissure de « Présent pur » dans le sol. Tomber dedans
+ * draine une part de Résonance + repousse vers le haut (pas la mort).
+ * Placer dans une coupure du sol (entre deux segments) pour la lecture.
+ * @param {number} x         centre x
+ * @param {number} yTopSol   top du sol au niveau de la faille
+ * @param {number} largeur
+ * @param {object} [opts]    { hauteur? = 40 }
+ */
+export function failleVide(x, yTopSol, largeur, opts = {}) {
+    const hauteur = opts.hauteur ?? 40;
+    return {
+        type: 'faille_vide',
+        x,
+        y: yTopSol - hauteur / 2,
+        largeur, hauteur
+    };
+}
+
+/**
+ * Cristal Résonant : cristal violet mnésique posé sur un palier. Le frapper
+ * révèle/solidifie les plateforme_resonance partageant le même `lien`.
+ * @param {number} x            centre x
+ * @param {number} yTopPalier   top du palier sur lequel il repose
+ * @param {object} opts         { lien (id de groupe, requis), hauteur? = 52 }
+ */
+export function cristalResonant(x, yTopPalier, opts = {}) {
+    const hauteur = opts.hauteur ?? 52;
+    return {
+        type: 'cristal_resonant',
+        x,
+        y: yTopPalier - hauteur / 2,   // posé sur le palier
+        lien: opts.lien
+    };
+}
+
+/**
+ * Plateforme de Résonance : plateforme translucide intangible, devient solide
+ * (one-way) quand un cristal_resonant de même `lien` est frappé.
+ * @param {number} x         centre x
+ * @param {number} yTop      top de la plateforme
+ * @param {number} largeur
+ * @param {object} opts      { lien (requis), hauteur? = 16 }
+ */
+export function plateformeResonance(x, yTop, largeur, opts = {}) {
+    const hauteur = opts.hauteur ?? 16;
+    return {
+        type: 'plateforme_resonance',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur,
+        lien: opts.lien
+    };
+}
+
+/**
+ * Souffle de Blizzard : zone de courant d'air qui pousse latéralement le
+ * joueur (surtout en plein saut). Aucun dégât. `force` signée : positif =
+ * pousse vers la droite, négatif vers la gauche.
+ * @param {number} x         centre x
+ * @param {number} yTop      top de la zone
+ * @param {number} largeur
+ * @param {number} hauteur
+ * @param {object} [opts]    { force? = 80 (signée) }
+ */
+export function souffleBlizzard(x, yTop, largeur, hauteur, opts = {}) {
+    return {
+        type: 'souffle_blizzard',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur,
+        force: opts.force ?? 80
+    };
+}
+

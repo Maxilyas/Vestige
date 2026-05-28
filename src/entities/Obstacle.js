@@ -42,6 +42,16 @@ const COULEUR_BRAISE_FONCE = 0xa83820;
 const COULEUR_SUIE         = 0x18120e;
 const COULEUR_CUIVRE_TERNI = 0xa86838;
 
+// Palette Cristaux Glacés (Vague 6 — stalactite/verglas/faille/chant/blizzard)
+const COULEUR_GLACE        = 0x6a92c8;   // cristal bleu (contour plateforme)
+const COULEUR_GLACE_CLAIR  = 0xd8e8ff;   // givre blanc-bleu lumineux
+const COULEUR_GLACE_FONCE  = 0x2a4262;   // pierre minéralisée gelée
+const COULEUR_MORT         = 0x8a98aa;   // gris « résonance morte » (stalactite)
+const COULEUR_MORT_FONCE   = 0x4a5566;
+const COULEUR_MNESIQUE     = 0xb898e8;   // violet mnésique (cristal résonant)
+const COULEUR_MNESIQUE_VIF = 0xe0c0ff;
+const COULEUR_VIDE         = 0x0a0612;   // « Présent pur » (faille de vide)
+
 export class Obstacle {
     /**
      * @param {Phaser.Scene} scene
@@ -84,6 +94,13 @@ export class Obstacle {
         else if (data.type === 'marteau_pilon')     this._creerMarteauPilon();
         else if (data.type === 'piston_thermique')  this._creerPistonThermique();
         else if (data.type === 'scie_circulaire')   this._creerScieCirculaire();
+        // ─── Vague 6 (Cristaux Glacés — « Silence & Glace ») ───
+        else if (data.type === 'stalactite_resonance') this._creerStalactiteResonance();
+        else if (data.type === 'verglas')           this._creerVerglas();
+        else if (data.type === 'faille_vide')       this._creerFailleVide();
+        else if (data.type === 'cristal_resonant')  this._creerCristalResonant();
+        else if (data.type === 'plateforme_resonance') this._creerPlateformeResonance();
+        else if (data.type === 'souffle_blizzard')  this._creerSouffleBlizzard();
     }
 
     _creerPieu() {
@@ -250,6 +267,12 @@ export class Obstacle {
             if (!this.sprite || !this.sprite.active) return;
             this._updateScieCirculaire(this.scene.time.now);
         }
+        else if (this.data.type === 'stalactite_resonance') {
+            if (this.sprite?.active) this._updateStalactite(this.scene.time.now);
+        }
+        else if (this.data.type === 'souffle_blizzard') {
+            if (this.visual?.active) this._dessinerBlizzard(this.scene.time.now);
+        }
     }
 
     /**
@@ -341,12 +364,43 @@ export class Obstacle {
             this.dernierHit = now;
             scene.events.emit('obstacle:pieu:hit', { def: { degatsImpact: this.def.degatsContact } });
         }
+        // ─── Vague 6 — Cristaux Glacés ───
+        else if (this.data.type === 'stalactite_resonance') {
+            // Dégâts uniquement pendant la chute (le pic s'écrase dessus)
+            if (this.stalPhase !== 'chute') return;
+            if (now - this.dernierHit < this.def.invincibiliteApresHit) return;
+            this.dernierHit = now;
+            scene.events.emit('obstacle:pieu:hit', this);  // def.degatsImpact
+        }
+        else if (this.data.type === 'verglas') {
+            // Pas de dégâts : pose l'effet glissant tant que le joueur overlap.
+            player._tileEffectGlissant = now + this.def.dureeEffetMs;
+        }
+        else if (this.data.type === 'faille_vide') {
+            // Draine une part de Résonance + repousse vers le haut (pas la mort).
+            if (now - this.dernierHit < this.def.cooldownMs) return;
+            this.dernierHit = now;
+            scene.resonance.prendreDegats(this.def.drainResonance);
+            player.body.setVelocityY(this.def.knockbackVy);
+            scene.flashJoueur?.(0x9a6ad8);
+            scene.afficherMessageFlottant?.(`-${this.def.drainResonance}`, '#b898e8');
+            scene.cameras.main.shake(120, 0.006);
+        }
+        else if (this.data.type === 'souffle_blizzard') {
+            // Pousse latéralement (lu par le code de mouvement). Aucun dégât.
+            player._blizzardForce = this.data.force;
+            player._blizzardJusqu = now + 120;
+        }
+        // cristal_resonant : pas de contact physique (frappé via tenterAttaque).
+        // plateforme_resonance : collision gérée par collider conditionnel (GameScene).
     }
 
     detruire() {
         this.sprite?.destroy();
         this.visual?.destroy();
         this.ornement?.destroy();
+        this.ombre?.destroy();
+        if (this._extraVisuals) for (const v of this._extraVisuals) v?.destroy?.();
         if (this._timers) for (const t of this._timers) t?.remove?.();
     }
 
@@ -2083,5 +2137,306 @@ export class Obstacle {
         this.scene.cameras.main.shake(140, 0.008);
         // Détruit l'instance
         this.detruire();
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 6 — Cristaux Glacés (« Silence & Glace »)
+    // ════════════════════════════════════════════════════════════════
+
+    // ─── Stalactite de Résonance (tombe sur le bruit du joueur) ───
+    _creerStalactiteResonance() {
+        const w = this.def.largeur, h = this.def.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.yOrigine, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite);
+        this.sprite._obstacle = this;
+        const body = this.sprite.body;
+        body.allowGravity = false;
+        body.immovable = true;
+        body.setVelocity(0, 0);
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this._dessinerStalactite(this.data.x, this.data.yOrigine, false);
+
+        this.ombre = this.scene.add.ellipse(this.data.x, this.data.yImpact + h / 2 + 6,
+                                            w * 1.3, 9, 0x000000, 0.35);
+        this.ombre.setDepth(6);
+        this.ombre.setAlpha(0);
+
+        this.stalPhase = 'repos';     // 'repos' | 'avertir' | 'chute' | 'brise'
+        this._timers = [];
+    }
+
+    _dessinerStalactite(cx, cy, fissure) {
+        const g = this.visual;
+        g.clear();
+        const w = this.def.largeur, h = this.def.hauteur;
+        // Pic gris « résonance morte » pointant vers le bas
+        g.fillStyle(COULEUR_MORT_FONCE, 1);
+        g.beginPath();
+        g.moveTo(cx - w / 2, cy - h / 2);
+        g.lineTo(cx + w / 2, cy - h / 2);
+        g.lineTo(cx, cy + h / 2);
+        g.closePath(); g.fillPath();
+        // Facette claire (volume)
+        g.fillStyle(COULEUR_MORT, 1);
+        g.beginPath();
+        g.moveTo(cx - w / 2 + 3, cy - h / 2);
+        g.lineTo(cx + 1, cy - h / 2);
+        g.lineTo(cx - 2, cy + h / 2 - 6);
+        g.closePath(); g.fillPath();
+        // Reflet froid
+        g.lineStyle(1.5, COULEUR_GLACE_CLAIR, 0.4);
+        g.lineBetween(cx - 3, cy - h / 2 + 4, cx - 1, cy + h / 2 - 10);
+        // Base d'ancrage au plafond
+        g.fillStyle(COULEUR_MORT_FONCE, 1);
+        g.fillRect(cx - w / 2 - 2, cy - h / 2 - 4, w + 4, 6);
+        // Fissures d'avertissement
+        if (fissure) {
+            g.lineStyle(1.5, 0x12121a, 0.9);
+            g.lineBetween(cx - w / 4, cy - h / 2 + 2, cx - 2, cy);
+            g.lineBetween(cx + w / 5, cy - h / 2 + 4, cx + 1, cy + h / 4);
+        }
+    }
+
+    /** Appelé par GameScene quand le joueur attaque dans le rayon de bruit. */
+    declencherChuteBruit() {
+        if (this.stalPhase !== 'repos') return;
+        this.stalPhase = 'avertir';
+        this._dessinerStalactite(this.data.x, this.data.yOrigine, true);
+        // Tremblement (offset du Graphics)
+        this.scene.tweens.add({
+            targets: this.visual, x: { from: -1.5, to: 1.5 },
+            duration: 55, yoyo: true, repeat: Math.floor(this.def.delaiFissureMs / 110)
+        });
+        this.scene.tweens.add({
+            targets: this.ombre, alpha: { from: 0, to: 0.6 }, scaleX: { from: 0.7, to: 1.2 },
+            duration: this.def.delaiFissureMs, ease: 'Sine.easeIn'
+        });
+        this._timers.push(this.scene.time.delayedCall(this.def.delaiFissureMs, () => {
+            if (!this.sprite || this.stalPhase !== 'avertir') return;
+            this.visual.x = 0;
+            this.stalPhase = 'chute';
+            this.sprite.body.setVelocityY(this.def.vitesseChute);
+        }));
+    }
+
+    _updateStalactite() {
+        if (this.stalPhase !== 'chute') return;
+        this._dessinerStalactite(this.data.x, this.sprite.y, false);
+        if (this.sprite.y >= this.data.yImpact) {
+            this.sprite.y = this.data.yImpact;
+            this.sprite.body.setVelocity(0, 0);
+            this.sprite.body.enable = false;   // pas de mur invisible au sol
+            this.stalPhase = 'brise';
+            if (this.scene.textures.exists('_particule')) {
+                const burst = this.scene.add.particles(this.data.x, this.data.yImpact + this.def.hauteur / 2,
+                    '_particule', {
+                        lifespan: 380, speed: { min: 80, max: 200 },
+                        angle: { min: -160, max: -20 }, scale: { start: 0.5, end: 0 },
+                        tint: [COULEUR_MORT, COULEUR_GLACE_CLAIR], quantity: 10, alpha: { start: 1, end: 0 }
+                    });
+                burst.setDepth(15); burst.explode(10);
+                this.scene.time.delayedCall(420, () => burst.destroy());
+            }
+            this.scene.cameras.main.shake(90, 0.004);
+            this.visual.clear();
+            if (this.ombre) this.ombre.setAlpha(0).setScale(1);
+            // Re-suspension après un délai → la salle reste dangereuse
+            this._timers.push(this.scene.time.delayedCall(2600, () => {
+                if (!this.sprite) return;
+                this.sprite.y = this.data.yOrigine;
+                this.sprite.body.setVelocity(0, 0);
+                this.sprite.body.enable = true;
+                this.stalPhase = 'repos';
+                this._dessinerStalactite(this.data.x, this.data.yOrigine, false);
+            }));
+        }
+    }
+
+    // ─── Verglas (zone glissante) ───
+    _creerVerglas() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);  // static, overlap
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        const g = this.visual;
+        const x0 = this.data.x - w / 2, yBas = this.data.y + h / 2;
+        g.fillStyle(COULEUR_GLACE_CLAIR, 0.16);
+        g.fillRect(x0, this.data.y - h / 2, w, h);
+        g.fillStyle(COULEUR_GLACE, 0.12);
+        g.fillRect(x0, yBas - 8, w, 8);
+        g.lineStyle(2, COULEUR_GLACE_CLAIR, 0.5);
+        for (let sx = x0 + 14; sx < x0 + w - 6; sx += 46) {
+            g.lineBetween(sx, yBas - 5, sx + 18, yBas - 5);
+        }
+        g.lineStyle(1, COULEUR_GLACE_CLAIR, 0.3);
+        g.lineBetween(x0 + 4, this.data.y - h / 2 + 3, x0 + w - 8, this.data.y - h / 2 + 3);
+    }
+
+    // ─── Faille de Vide (drain de Résonance) ───
+    _creerFailleVide() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        const g = this.visual;
+        const x0 = this.data.x - w / 2, y0 = this.data.y - h / 2;
+        g.fillStyle(COULEUR_VIDE, 0.92);
+        g.fillRect(x0, y0, w, h);
+        g.lineStyle(2, COULEUR_MNESIQUE, 0.5);
+        g.strokeRect(x0, y0, w, h);
+
+        const etoiles = this.scene.add.graphics();
+        etoiles.setDepth(7);
+        for (let i = 0; i < 6; i++) {
+            const px = x0 + 8 + Math.random() * (w - 16);
+            const py = y0 + 6 + Math.random() * (h - 12);
+            etoiles.fillStyle(COULEUR_MNESIQUE_VIF, 0.7);
+            etoiles.fillCircle(px, py, 1.2);
+        }
+        this._extraVisuals = [etoiles];
+        this.scene.tweens.add({
+            targets: etoiles, alpha: { from: 0.3, to: 0.9 },
+            duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+    }
+
+    // ─── Cristal Résonant (chant = révèle les plateformes liées) ───
+    _creerCristalResonant() {
+        const w = this.def.largeur, h = this.def.hauteur;
+        // Rectangle (pas de body : frappé via tenterAttaque qui lit x/width)
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this._dessinerCristalResonant(false);
+        this.scene.tweens.add({
+            targets: this.visual, alpha: { from: 0.75, to: 1 },
+            duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+    }
+
+    _dessinerCristalResonant(actif) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.def.largeur, h = this.def.hauteur;
+        g.fillStyle(COULEUR_MNESIQUE_VIF, actif ? 0.5 : 0.2);
+        g.fillCircle(cx, cy, w * 0.65);
+        g.fillStyle(actif ? COULEUR_MNESIQUE_VIF : COULEUR_MNESIQUE, 1);
+        g.beginPath();
+        g.moveTo(cx, cy - h / 2);
+        g.lineTo(cx + w / 2, cy);
+        g.lineTo(cx, cy + h / 2);
+        g.lineTo(cx - w / 2, cy);
+        g.closePath(); g.fillPath();
+        g.fillStyle(COULEUR_MNESIQUE_VIF, 0.7);
+        g.beginPath();
+        g.moveTo(cx, cy - h / 2);
+        g.lineTo(cx + w / 2, cy);
+        g.lineTo(cx, cy);
+        g.closePath(); g.fillPath();
+        g.fillStyle(0xffffff, actif ? 0.9 : 0.5);
+        g.fillCircle(cx, cy, 3);
+    }
+
+    /** Appelé par GameScene quand le cristal est frappé. */
+    declencherChant() {
+        this._dessinerCristalResonant(true);
+        const ring = this.scene.add.graphics();
+        ring.setDepth(9);
+        this.scene.tweens.addCounter({
+            from: 0, to: 1, duration: 520,
+            onUpdate: (tw) => {
+                const v = tw.getValue();
+                ring.clear();
+                ring.lineStyle(2, COULEUR_MNESIQUE_VIF, 1 - v);
+                ring.strokeCircle(this.data.x, this.data.y, 10 + v * 70);
+            },
+            onComplete: () => ring.destroy()
+        });
+        this.scene.time.delayedCall(700, () => {
+            if (this.visual?.active) this._dessinerCristalResonant(false);
+        });
+    }
+
+    // ─── Plateforme de Résonance (intangible → solide pendant le chant) ───
+    _creerPlateformeResonance() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);  // static
+        this.sprite._obstacle = this;
+        this.sprite.body.enable = false;                     // intangible par défaut
+        this.revele = false;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this._dessinerPlateformeResonance(false);
+    }
+
+    _dessinerPlateformeResonance(revele) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.data.largeur, h = this.data.hauteur;
+        const x0 = cx - w / 2, y0 = cy - h / 2;
+        const a = revele ? 1 : 0.22;
+        g.fillStyle(COULEUR_GLACE_FONCE, a);
+        g.fillRect(x0, y0, w, h);
+        g.fillStyle(COULEUR_GLACE, a);
+        g.fillRect(x0, y0, w, 4);
+        g.lineStyle(1.5, COULEUR_MNESIQUE, revele ? 0.9 : 0.4);
+        g.strokeRect(x0, y0, w, h);
+        g.lineStyle(1, COULEUR_MNESIQUE_VIF, revele ? 0.8 : 0.3);
+        g.lineBetween(x0 + 8, cy, x0 + w - 8, cy);
+    }
+
+    setRevele(revele) {
+        if (this.revele === revele) return;
+        this.revele = revele;
+        if (this.sprite?.body) this.sprite.body.enable = revele;
+        this._dessinerPlateformeResonance(revele);
+    }
+
+    // ─── Souffle de Blizzard (poussée latérale) ───
+    _creerSouffleBlizzard() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(6);
+        this._t0 = this.scene.time.now;
+        this._dessinerBlizzard(this.scene.time.now);
+    }
+
+    _dessinerBlizzard(now) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.data.largeur, h = this.data.hauteur;
+        const x0 = cx - w / 2, y0 = cy - h / 2;
+        const dir = Math.sign(this.data.force) || 1;
+        g.fillStyle(COULEUR_GLACE_CLAIR, 0.06);
+        g.fillRect(x0, y0, w, h);
+        const t = (now - this._t0) / 1000;
+        g.lineStyle(2, COULEUR_GLACE_CLAIR, 0.18);
+        const nb = 7;
+        for (let i = 0; i < nb; i++) {
+            const prog = ((t * 0.35 + i / nb) % 1);
+            const sx = x0 + (dir > 0 ? prog * w : (1 - prog) * w);
+            const sy = y0 + 12 + ((i * 53) % Math.max(24, h - 24));
+            const len = 26 + (i % 3) * 10;
+            g.lineBetween(sx, sy, sx + dir * len, sy);
+        }
     }
 }

@@ -164,7 +164,22 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'halls_blocs_pousseurs','halls_combo_total','halls_lave_jets',
              // ─── Phase 9.8 : 5 signatures medium-cost ───
              'halls_marteaux_pilons','halls_pistons_thermiques',
-             'halls_scies_couloir','halls_forge_meca','halls_arene_chaos'];
+             'halls_scies_couloir','halls_forge_meca','halls_arene_chaos',
+             // ─── Cristaux Glacés (Phase 9.x — migration compact 960×540) ───
+             'cristaux_carrefour',
+             'cristaux_galerie_marbre','cristaux_dallage_givre',
+             'cristaux_pont_cristallin','cristaux_cour_tremplins',
+             'cristaux_puits_temple','cristaux_escalier_olympe',
+             'cristaux_coin_NE','cristaux_coin_NO',
+             'cristaux_coin_SE','cristaux_coin_SO',
+             'cristaux_t_NEO','cristaux_t_SEO',
+             'cristaux_t_NSO','cristaux_t_NSE',
+             'cristaux_impasse_N','cristaux_impasse_S',
+             'cristaux_impasse_E','cristaux_impasse_O',
+             'cristaux_plateaux_flottants','cristaux_ascension_sacree',
+             // ─── Tranche 2 Vague 1 : signatures « Silence & Glace » ───
+             'cristaux_chapelle_silence','cristaux_patinoire',
+             'cristaux_choeur_mnesique','cristaux_faille_du_present'];
 
 let totalBugs = 0;
 for (const id of ids) {

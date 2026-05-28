@@ -528,6 +528,8 @@ export class GameScene extends Phaser.Scene {
         // --- Obstacles (pieux, ressorts, plateformes mobiles, vague 1+2) ---
         // Skip en Miroir : la Cité est un atelier paisible.
         this.obstacles = [];
+        // État du "chant des cristaux" (Cristaux Glacés) : lien → expiration (ms).
+        this._chantActif = {};
         // Group physics dédié pour les obstacles solides cassables (éboulis,
         // mur_fissure). Permet une collision bloquante + on garde une réf pour
         // les briser à l'attaque.
@@ -615,7 +617,20 @@ export class GameScene extends Phaser.Scene {
                     // Zone d'overlap pure : dégâts continus (avec invincibilité)
                     this.physics.add.overlap(this.player, obs.sprite, () =>
                         obs.onContactJoueur(this, this.player));
+                } else if (t === 'stalactite_resonance') {
+                    // Collider bloquant (comme roc) : dégâts en phase 'chute'.
+                    this.physics.add.collider(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'verglas' || t === 'faille_vide' || t === 'souffle_blizzard') {
+                    // Zones d'overlap pures (effet glissant / drain / poussée)
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
+                } else if (t === 'plateforme_resonance') {
+                    // Plateforme intangible par défaut (body.enable=false) ;
+                    // devient solide quand un cristal lié est frappé (setRevele).
+                    this.physics.add.collider(this.player, obs.sprite);
                 }
+                // cristal_resonant : pas de physique (frappé via tenterAttaque).
                 // anti_ancrage : pas de sprite physique, lecture par AncrageSystem
             }
         }
@@ -938,6 +953,13 @@ export class GameScene extends Phaser.Scene {
             body.setVelocityX(0);
         }
 
+        // Souffle de blizzard (Cristaux Glacés) : poussée latérale constante
+        // tant que le joueur est dans une zone de souffle. Lu après le set de
+        // contrôle pour décaler la trajectoire (surtout en plein saut).
+        if (!enDash && (this.player._blizzardJusqu ?? 0) > now) {
+            body.setVelocityX(body.velocity.x + (this.player._blizzardForce ?? 0));
+        }
+
         // Détection atterrissage : transition en l'air → au sol.
         // `_enLair` est mis à true ci-dessous quand le joueur saute OU sort
         // du sol sans sauter (chute du bord d'une plateforme).
@@ -1191,6 +1213,32 @@ export class GameScene extends Phaser.Scene {
                 if (dx < portee / 2 + ow / 2 && dy < halfH + oh / 2) {
                     o.subirDegats(1);
                     aTouche = true;
+                }
+            }
+        }
+
+        // ─── Cristaux Glacés : le bruit de l'attaque réveille la cité ──────
+        // Stalactites de Résonance : toute attaque dans leur rayon de bruit
+        // (autour du JOUEUR, le son rayonne) les décroche.
+        // Cristaux Résonants : frappés directement → chant qui révèle les
+        // plateformes liées.
+        if (this.obstacles) {
+            for (const o of this.obstacles) {
+                if (!o.sprite) continue;
+                if (o.data.type === 'stalactite_resonance' && o.stalPhase === 'repos') {
+                    const rayon = o.data.rayonBruit ?? o.def.rayonBruit;
+                    const dxs = o.sprite.x - this.player.x;
+                    const dys = o.sprite.y - this.player.y;
+                    if (dxs * dxs + dys * dys <= rayon * rayon) o.declencherChuteBruit();
+                } else if (o.data.type === 'cristal_resonant') {
+                    const dx = Math.abs(o.sprite.x - hx);
+                    const dy = Math.abs(o.sprite.y - hy);
+                    const ow = o.sprite.width ?? 34, oh = o.sprite.height ?? 52;
+                    if (dx < portee / 2 + ow / 2 && dy < halfH + oh / 2) {
+                        this._activerChant(o.data.lien);
+                        o.declencherChant();
+                        aTouche = true;
+                    }
                 }
             }
         }
@@ -2500,6 +2548,39 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.fade(220, 0, 0, 0);
         // Tue le joueur via la pipeline normale (massive damage → resonance:vide → Cité)
         this.resonance.prendreDegats(999);
+    }
+
+    /**
+     * Chant des Cristaux (Cristaux Glacés) : un cristal résonant frappé révèle
+     * (solidifie) toutes les plateforme_resonance partageant le même `lien`,
+     * pour `dureeRevelMs`. Re-frapper prolonge la fenêtre.
+     */
+    _activerChant(lien) {
+        if (lien == null || !this.obstacles) return;
+        const now = this.time.now;
+        let duree = 4500;
+        for (const o of this.obstacles) {
+            if (o.data.type === 'cristal_resonant' && o.data.lien === lien) {
+                duree = o.def.dureeRevelMs ?? 4500;
+                break;
+            }
+        }
+        this._chantActif[lien] = now + duree;
+        for (const o of this.obstacles) {
+            if (o.data.type === 'plateforme_resonance' && o.data.lien === lien) {
+                o.setRevele(true);
+            }
+        }
+        this.time.delayedCall(duree, () => {
+            // Annulé si re-déclenché entre-temps (une fenêtre plus tardive existe)
+            if ((this._chantActif?.[lien] ?? 0) > this.time.now) return;
+            if (!this.obstacles) return;
+            for (const o of this.obstacles) {
+                if (o.data.type === 'plateforme_resonance' && o.data.lien === lien) {
+                    o.setRevele(false);
+                }
+            }
+        });
     }
 
     activerBaissePassive(_enMiroir) {

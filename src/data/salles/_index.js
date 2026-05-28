@@ -15,9 +15,10 @@
 //     ne dessine que les portes activées à la génération).
 //
 // ═════════════════════════════════════════════════════════════════════
-// PHASE 9 — Toutes les salles Ruines + Halls sont compactes (960×540).
-// XL legacy supprimé Ruines 9.3d / Halls 9.6. Biomes 3-5 (Cristaux,
-// Voile, Cœur) restent XL legacy jusqu'à leur propre migration.
+// PHASE 9 — Salles Ruines + Halls + Cristaux compactes (960×540).
+// XL legacy supprimé Ruines 9.3d / Halls 9.6 ; Cristaux migré 9.x (pool
+// fondation, mécaniques signature à venir). Biomes Voile + Cœur (étages
+// 7-10) restent XL legacy jusqu'à leur propre migration.
 // ═════════════════════════════════════════════════════════════════════
 
 // ─── Phase 9.2 : 1ère salle test compacte 960×540 ─────────────────────
@@ -110,6 +111,37 @@ import { halls_pistons_thermiques }   from './halls/halls_pistons_thermiques.js'
 import { halls_scies_couloir }        from './halls/halls_scies_couloir.js';
 import { halls_forge_meca }           from './halls/halls_forge_meca.js';
 import { halls_arene_chaos }          from './halls/halls_arene_chaos.js';
+
+// ─── Cristaux Glacés (Phase 9.x — migration compact 960×540) ─────
+// Pool fondation : 20 salles structurelles (toutes configs de portes) +
+// 1 carrefour fallback. Identité marbre/glace, mécaniques existantes
+// reskinées. Mécaniques signature (Olympe) à venir en vagues suivantes.
+import { cristaux_carrefour }         from './cristaux/cristaux_carrefour.js';
+import { cristaux_galerie_marbre }    from './cristaux/cristaux_galerie_marbre.js';
+import { cristaux_dallage_givre }     from './cristaux/cristaux_dallage_givre.js';
+import { cristaux_pont_cristallin }   from './cristaux/cristaux_pont_cristallin.js';
+import { cristaux_cour_tremplins }    from './cristaux/cristaux_cour_tremplins.js';
+import { cristaux_puits_temple }      from './cristaux/cristaux_puits_temple.js';
+import { cristaux_escalier_olympe }   from './cristaux/cristaux_escalier_olympe.js';
+import { cristaux_coin_NE }           from './cristaux/cristaux_coin_NE.js';
+import { cristaux_coin_NO }           from './cristaux/cristaux_coin_NO.js';
+import { cristaux_coin_SE }           from './cristaux/cristaux_coin_SE.js';
+import { cristaux_coin_SO }           from './cristaux/cristaux_coin_SO.js';
+import { cristaux_t_NEO }             from './cristaux/cristaux_t_NEO.js';
+import { cristaux_t_SEO }             from './cristaux/cristaux_t_SEO.js';
+import { cristaux_t_NSO }             from './cristaux/cristaux_t_NSO.js';
+import { cristaux_t_NSE }             from './cristaux/cristaux_t_NSE.js';
+import { cristaux_impasse_N }         from './cristaux/cristaux_impasse_N.js';
+import { cristaux_impasse_S }         from './cristaux/cristaux_impasse_S.js';
+import { cristaux_impasse_E }         from './cristaux/cristaux_impasse_E.js';
+import { cristaux_impasse_O }         from './cristaux/cristaux_impasse_O.js';
+import { cristaux_plateaux_flottants } from './cristaux/cristaux_plateaux_flottants.js';
+import { cristaux_ascension_sacree }  from './cristaux/cristaux_ascension_sacree.js';
+// ─── Cristaux Glacés — Tranche 2 Vague 1 : signatures « Silence & Glace » ─
+import { cristaux_chapelle_silence }  from './cristaux/cristaux_chapelle_silence.js';
+import { cristaux_patinoire }         from './cristaux/cristaux_patinoire.js';
+import { cristaux_choeur_mnesique }   from './cristaux/cristaux_choeur_mnesique.js';
+import { cristaux_faille_du_present } from './cristaux/cristaux_faille_du_present.js';
 
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
 // sont EXCLUES : elles ne sortent que via salleFallback() quand le pool
@@ -208,7 +240,40 @@ const TOUTES_SALLES = [
     halls_pistons_thermiques,  // OE   — 4 pistons latéraux + brasier (unique)
     halls_scies_couloir,       // OE   — 3 scies H+V (unique)
     halls_forge_meca,          // NSEO — combo marteau+piston+scie (unique)
-    halls_arene_chaos          // NSEO — combo v1+v2 méga (unique)
+    halls_arene_chaos,         // NSEO — combo v1+v2 méga (unique)
+
+    // ─── Cristaux Glacés (Phase 9.x — 20 salles fondation) ────────
+    // OE bus principal (4)
+    cristaux_galerie_marbre,   // OE   — combat propre, estrade centrale
+    cristaux_dallage_givre,    // OE   — gouffre + dalles effritées vs passerelle
+    cristaux_pont_cristallin,  // OE   — navette mobile au-dessus du vide
+    cristaux_cour_tremplins,   // OE   — mobilité aérienne ressorts
+    // NS verticaux (2)
+    cristaux_puits_temple,     // NS   — zigzag vertical + coffre
+    cristaux_escalier_olympe,  // NS   — escalier monumental diagonal
+    // Coins (4)
+    cristaux_coin_NE,          // NE   — tour d'ascension droite
+    cristaux_coin_NO,          // NO   — belvédère ascension gauche
+    cristaux_coin_SE,          // SE   — descente + coffre votif
+    cristaux_coin_SO,          // SO   — crypte votive
+    // T (4)
+    cristaux_t_NEO,            // NEO  — forum pyramide centrale
+    cristaux_t_SEO,            // SEO  — carrefour offrandes + coffre
+    cristaux_t_NSO,            // NSO  — passage vertical ouest
+    cristaux_t_NSE,            // NSE  — passage vertical est
+    // Deadends (4)
+    cristaux_impasse_N,        // N    — corniche descente
+    cristaux_impasse_S,        // S    — cella ascension coffre
+    cristaux_impasse_E,        // E    — niche votive
+    cristaux_impasse_O,        // O    — sanctuaire muré
+    // Diversité NSEO (2)
+    cristaux_plateaux_flottants, // NSEO — plateaux flottants gouffre
+    cristaux_ascension_sacree,   // NSEO — grande ascension + ressorts
+    // ─── Tranche 2 Vague 1 : signatures « Silence & Glace » (4) ───
+    cristaux_chapelle_silence,   // OE   — stalactites de résonance (unique)
+    cristaux_patinoire,          // OE   — verglas + stalagmites (unique)
+    cristaux_choeur_mnesique,    // NSEO — chant révèle l'ascension (unique)
+    cristaux_faille_du_present   // OE   — failles de vide + blizzard (unique)
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes
@@ -217,12 +282,14 @@ const TOUTES_SALLES = [
 // salleFallback() (quand le pool ne match aucune config demandée).
 const PAR_ID_FALLBACK = {
     [ruines_carrefour_compact.id]: ruines_carrefour_compact,
-    [halls_carrefour_brasier.id]: halls_carrefour_brasier
+    [halls_carrefour_brasier.id]: halls_carrefour_brasier,
+    [cristaux_carrefour.id]: cristaux_carrefour
 };
 
 const FALLBACK_PAR_BIOME = {
     'ruines_basses': ruines_carrefour_compact,
-    'halls_cendres': halls_carrefour_brasier
+    'halls_cendres': halls_carrefour_brasier,
+    'cristaux_glaces': cristaux_carrefour
 };
 
 export function salleFallback(biomeId) {
@@ -253,11 +320,12 @@ export function sallesCompatibles(biomeId, portesReq, role, dejaUtilisees) {
     return TOUTES_SALLES.filter(s => {
         if (s.biome !== biomeId) return false;
         if (!portesReq.every(d => s.portesPossibles.includes(d))) return false;
-        // Pour Ruines et Halls (tous compacts, pool dense), on ignore le
-        // filtre rolesAutorises pour maximiser la variété même sur deadends.
-        // Pour biomes encore XL legacy (Cristaux, Voile, Cœur), filtre
+        // Pour Ruines, Halls et Cristaux (tous compacts, pool dense), on
+        // ignore le filtre rolesAutorises pour maximiser la variété même
+        // sur deadends. Pour biomes encore XL legacy (Voile, Cœur), filtre
         // normal pour préserver les salles signature des rôles main.
-        const ignoreRole = biomeId === 'ruines_basses' || biomeId === 'halls_cendres';
+        const ignoreRole = biomeId === 'ruines_basses' || biomeId === 'halls_cendres'
+                        || biomeId === 'cristaux_glaces';
         if (role && s.rolesAutorises && !s.rolesAutorises.includes(role) && !ignoreRole) return false;
         // Salles "unique" : max 1 par étage (signature). Si déjà tirée → exclue.
         if (s.unique && dejaUtilisees?.has(s.id)) return false;

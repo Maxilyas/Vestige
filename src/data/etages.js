@@ -65,30 +65,22 @@ export const ETAGES = {
         grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 5. Cristaux Glacés — bascule arènes ouvertes + verticalité ─────
+    // ─── 5. Cristaux Glacés — bascule froid (Phase 9.x mini-Metroidvania) ─
+    // Pool Cristaux compact (20 salles handcrafted 960×540), identité
+    // marbre/glace divine (Olympe). Mécaniques signature (colonnes, foudre,
+    // vents, lasers) à venir en vagues toolkit ultérieures.
     5: {
-        themeNarratif: 'Bascule visuelle vers le froid. Première vraie arène (anneau), mezzanine haute.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'arene',      topographie: 'arene_anneau' },
-            'B-haut': { archetype: 'crypte',     topographie: 'puits_spirale' },
-            'C':      { archetype: 'hall',       topographie: 'mezzanine_haute' },
-            'D':      { archetype: 'pont',       topographie: 'aile_dechiree' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_cristaux_5' }
-        }
+        themeNarratif: 'Bascule visuelle vers le froid. Cité divine sur la glace, verticalité de marbre.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 6. Cristaux Glacés — vertige (gouffres, fragments, cascade) ────
+    // ─── 6. Cristaux Glacés — vertige (Phase 9.x mini-Metroidvania) ──────
+    // Même pool que l'étage 5, graphe plus dense + ennemis tier supérieur.
     6: {
-        themeNarratif: 'Vertige maximal. Gouffre vertical, arène fragmentée, cascade de glace au deadend.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'pont',       topographie: 'gouffre_vertical' },
-            'C':      { archetype: 'arene',      topographie: 'arene_fragmentee' },
-            'D':      { archetype: 'arene',      topographie: 'arene_estrade' },
-            'D-haut': { archetype: 'puits',      topographie: 'cascade_droite' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_cristaux_6' }
-        }
+        themeNarratif: 'Vertige maximal. Gouffres mortels, plateaux flottants, ponts cristallins.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
     // ─── 7. Voile Inversé — désorientation (labyrinthe, aile déchirée) ──
