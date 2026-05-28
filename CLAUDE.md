@@ -143,9 +143,9 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Dernière étape** : Phase 9.x — Voile Inversé Vague 0 (fondation compacte). 20 salles 960×540 + 1 carrefour fallback dans `src/data/salles/voile/` couvrant toutes les configs NESO (≥ plusieurs candidats/config), reskin « cité déchirée » + hasards mix vide (gouffres/`failleVide`) / échos (`fauxSolMiroir`) ; étages 7-8 basculés en spanning tree ; validateur 129/129 (0 inaccessible).
-- **À tester en navigateur** : étages 7-8 — jouabilité du pool Voile. **Caveat visuel** : pas encore de branche `voile_inverse` dans `PlateformeStyle.js` → les paliers rendent en style Ruines par défaut (le parallax Voile est déjà câblé en fond). À faire avant tuning fin.
-- **Prochain chantier** : branche `PlateformeStyle` Voile (identité paliers), puis Vague 1 signatures = **inversion de gravité par salle/zone** (décidé : pas de permanent global ; salles entièrement tête-en-bas + zones/cycles + backlog de 20 idées d'architecture).
+- **Dernière étape** : Phase 9.x — Voile Inversé Vague 1 démarrée. Branche `voile_inverse` dans `PlateformeStyle.js` (identité « cité déchirée » : déchirures cramoisi, suintement magenta) + prototype d'inversion de gravité par ZONE (`gravite_inverse` : colonne qui tire vers le haut, joueur marche au plafond) ; salle signature `voile_chambre_inversee` ; validateur 130/130 (0 inaccessible).
+- **À tester en navigateur** : (1) rendu des paliers Voile étages 7-8 (branche PlateformeStyle) ; (2) **feel de l'inversion** dans `voile_chambre_inversee` — entrée dans la colonne, marche tête en bas, récupération du coffre, sortie latérale propre. Je ne peux pas lancer le navigateur → validation manuelle requise avant de durcir la salle (risque/ennemis).
+- **Prochain chantier** : si le feel est validé → Vague 1 full (salles entièrement tête-en-bas, zones/cycles, backlog 20 idées d'archi). Sinon tuning du prototype.
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.
