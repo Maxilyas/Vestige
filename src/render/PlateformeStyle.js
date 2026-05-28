@@ -12,6 +12,10 @@
 //                          cristallines violet ADD pulsantes lentes + cristaux
 //                          mnésiques actifs/morts (gradient narratif étage 5
 //                          mémoires vives → étage 6 mémoires fossilisées)
+//       voile_inverse    : marbre aubergine corrompu, suintement magenta qui
+//                          PERLE VERS LE HAUT (gravité inversée), déchirures
+//                          cramoisi ADD + éclats de Voile actifs/fossilisés
+//                          (gradient narratif étage 7 fendu → étage 8 disloqué)
 //   - Miroir             : pavés ornés avec chasse-pieds doré, motifs de joints
 
 import { DEPTH } from './PainterlyRenderer.js';
@@ -46,6 +50,10 @@ export function peindreOrnementPlateforme(scene, x, y, largeur, hauteur, monde, 
         }
         if (biomeId === 'cristaux_glaces') {
             peindreOrnementCristauxGlaces(scene, g, xG, yT, yB, largeur, hauteur, palette, estSol);
+            return g;
+        }
+        if (biomeId === 'voile_inverse') {
+            peindreOrnementVoileInverse(scene, g, xG, yT, yB, largeur, hauteur, palette, estSol);
             return g;
         }
 
@@ -603,6 +611,213 @@ function peindreOrnementCristauxGlaces(scene, g, xG, yT, yB, largeur, hauteur, p
             duration: 4000 + Math.random() * 2000,
             ease: 'Sine.InOut',
             yoyo: true,
+            repeat: -1
+        });
+    }
+}
+
+// ============================================================
+// VOILE INVERSÉ — marbre corrompu, suintement ascendant, déchirures cramoisi
+// ============================================================
+//
+// Signature visuelle : la MÊME Olympe que les Cristaux, mais le Reflux a percé
+// le Voile et la gravité par instants s'inverse. La mémoire ne fossilise plus
+// (Cristaux) — elle SAIGNE et s'arrache.
+//   - pas de givre / pas de mousse : SUINTEMENT magenta qui PERLE VERS LE HAUT
+//     (signature inversion — les gouttes montent au lieu de tomber)
+//   - pas de veines cristallines : DÉCHIRURES cramoisi ADD (la corruption
+//     traverse la pierre, plus vif et nerveux que les veines mnésiques)
+//   - pas de cristal mnésique : ÉCLAT DE VOILE actif (fragment cramoisi qui
+//     dérive vers le haut) ou FOSSILISÉ (esquille aubergine morte)
+//   - luminescence : motes corrompues magenta-cramoisi qui montent et s'effacent
+//   - touches d'extrémité : NACRE MALADE vert spectral (métal corrompu)
+//
+// Gradient narratif "le monde se déchire" étage 7 → 8 (INVERSE des Cristaux :
+// ici la corruption s'INTENSIFIE) :
+//   - étage 7 : ~45 % des plateformes ont une déchirure vive (cité fendue)
+//   - étage 8 : ~70 % (cité disloquée, plus de sol stable)
+//
+// Le tempo des pulsations est nerveux (1.5-3 s) : la corruption est vivante et
+// agitée, à l'opposé du battement géologique lent des Cristaux.
+function peindreOrnementVoileInverse(scene, g, xG, yT, yB, largeur, hauteur, palette, estSol) {
+    const etage = scene.registry.get('etage_courant') ?? 7;
+    const ratioDechirure = etage <= 7 ? 0.45 : 0.70;
+
+    // (1) Ombre portée aubergine-noir — la pierre corrompue tire vers l'abîme
+    //     violet-noir en dessous, décolle la plateforme du vide déchiré.
+    for (let i = 0; i < 7; i++) {
+        const a = 0.24 * (1 - i / 7);
+        g.fillStyle(0x0a0414, a);
+        g.fillRect(xG + 1 + i * 0.5, yB + i, largeur - 2 - i, 1);
+    }
+
+    // (2) Micro-variations de teinte — alternance pierre claire / sombre sur le
+    //     marbre aubergine, donne l'effet "peint à main".
+    const nbZones = Math.max(3, Math.floor(largeur / 60));
+    for (let i = 0; i < nbZones; i++) {
+        const t = (i + 0.5) / nbZones;
+        const xZ = xG + t * largeur + (Math.random() - 0.5) * 8;
+        const wZ = largeur / nbZones * (0.6 + Math.random() * 0.4);
+        const variation = Math.random() < 0.5 ? palette.pierreClaire : palette.pierreSombre;
+        const alphaZ = 0.18 + Math.random() * 0.10;
+        g.fillStyle(variation, alphaZ);
+        g.fillRect(xZ - wZ / 2, yT + 2, wZ, hauteur - 3);
+    }
+
+    // (3) Top highlight — nacre malade déposée sur la pierre (signal "praticable"
+    //     + lecture "c'est corrompu").
+    g.fillStyle(palette.plateformeContour, 0.85);
+    g.fillRect(xG, yT, largeur, 1);
+    g.fillStyle(palette.pierreClaire, 0.50);
+    g.fillRect(xG, yT + 1, largeur, 1);
+
+    // (4) Bordure fragmentée — le marbre se disloque : encoches plus franches et
+    //     plus fréquentes que les autres biomes (la pierre s'arrache).
+    g.fillStyle(palette.pierreSombre, 0.7);
+    const nbEncoches = Math.max(2, Math.floor(largeur / 38));
+    for (let i = 0; i < nbEncoches; i++) {
+        if (Math.random() < 0.5) {
+            const xE = xG + ((i + 0.5) / nbEncoches) * largeur;
+            const wE = 3 + Math.random() * 3;
+            g.fillRect(xE - wE / 2, yT - 1, wE, 2 + Math.random() * 1.5);
+        }
+    }
+
+    // (5) DÉCHIRURES — la signature interactive du biome. ADD cramoisi pour que
+    //     la corruption traverse la pierre comme une plaie ouverte. Plus vives
+    //     et nerveuses que les veines mnésiques des Cristaux. Graphics séparé.
+    if (!estSol) {
+        const dechirures = scene.add.graphics();
+        dechirures.setDepth(DEPTH.PLATEFORMES + 1);
+        dechirures.setBlendMode(Phaser.BlendModes.ADD);
+        const nbDechirures = Math.max(1, Math.floor(largeur / 70));
+        const couleurPlaie = palette.racine; // signature voile = racine slot (cramoisi)
+        for (let i = 0; i < nbDechirures; i++) {
+            const xD = xG + ((i + 0.5) / nbDechirures) * largeur + (Math.random() - 0.5) * 6;
+            const yD1 = yT + 2 + Math.random() * (hauteur - 6) * 0.2;
+            const yD2 = yD1 + (hauteur - 4) * (0.4 + Math.random() * 0.4);
+            // Halo flou (la plaie irradie)
+            dechirures.lineStyle(3, couleurPlaie, 0.18);
+            dechirures.beginPath();
+            dechirures.moveTo(xD, yD1);
+            dechirures.lineTo(xD + (Math.random() - 0.5) * 5, yD2);
+            dechirures.strokePath();
+            // Cœur cramoisi net, zigzag léger (déchirure brutale)
+            dechirures.lineStyle(1, couleurPlaie, 0.80);
+            dechirures.beginPath();
+            dechirures.moveTo(xD, yD1);
+            const yMid = (yD1 + yD2) / 2;
+            dechirures.lineTo(xD + (Math.random() - 0.5) * 4, yMid);
+            dechirures.lineTo(xD + (Math.random() - 0.5) * 5, yD2);
+            dechirures.strokePath();
+        }
+        // Respiration nerveuse (la plaie palpite vite, vs lenteur Cristaux)
+        scene.tweens.add({
+            targets: dechirures,
+            alpha: { from: 0.55, to: 1.0 },
+            duration: 1500 + Math.random() * 1500,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    // (6) SUINTEMENT au sommet — croûtes magenta qui PERLENT VERS LE HAUT
+    //     (signature inversion). Remplace mousse/suie/givre. Les perles montent
+    //     au lieu de pendre : trahit la gravité inversée du biome.
+    const suintement = scene.add.graphics();
+    suintement.setDepth(DEPTH.PLATEFORMES + 1);
+    suintement.setBlendMode(Phaser.BlendModes.ADD);
+    const nbPerles = Math.max(2, Math.floor(largeur / 34));
+    for (let i = 0; i < nbPerles; i++) {
+        if (Math.random() < 0.55) {
+            const xP = xG + 4 + (i / nbPerles) * (largeur - 8) + (Math.random() - 0.5) * 6;
+            // Filet qui remonte du top de la plateforme vers le haut
+            const hFilet = 4 + Math.random() * 6;
+            suintement.lineStyle(1, palette.mousse, 0.45);
+            suintement.beginPath();
+            suintement.moveTo(xP, yT);
+            suintement.lineTo(xP + (Math.random() - 0.5) * 2, yT - hFilet);
+            suintement.strokePath();
+            // Perle en bout (la goutte au sommet du filet ascendant)
+            suintement.fillStyle(palette.mousse, 0.65);
+            suintement.fillCircle(xP + (Math.random() - 0.5) * 2, yT - hFilet, 1.3);
+        }
+    }
+
+    // (7) Nacre malade aux deux extrémités — dépôts vert spectral réfléchissants
+    //     (métal corrompu, remplace nacre argentée Cristaux / cuivre Halls).
+    g.fillStyle(palette.accent, 0.55);
+    g.fillEllipse(xG + 5, yT + 1, 12, 3.5);
+    g.fillEllipse(xG + largeur - 5, yT + 1, 12, 3.5);
+    g.fillStyle(0xd8ffe0, 0.40);
+    g.fillCircle(xG + 4, yT, 1.2);
+    g.fillCircle(xG + largeur - 4, yT, 1.2);
+
+    // (8) ÉCLAT DE VOILE ACTIF / FOSSILISÉ — équivalent fleur/braise/cristal,
+    //     bi-ton corruption vive vs esquille morte (gradient narratif 7 → 8).
+    if (Math.random() < 0.35) {
+        const xE = xG + 10 + Math.random() * (largeur - 20);
+        const actif = Math.random() < ratioDechirure;
+        if (actif) {
+            // Éclat vivant — fragment cramoisi ADD qui DÉRIVE VERS LE HAUT
+            const eclat = scene.add.graphics();
+            eclat.setDepth(DEPTH.PLATEFORMES + 1);
+            eclat.setBlendMode(Phaser.BlendModes.ADD);
+            // Halo cramoisi diffus (la déchirure saigne)
+            eclat.fillStyle(palette.racine, 0.50);
+            eclat.fillCircle(xE, yT - 4, 6);
+            // Esquille pointue (fragment arraché du Voile)
+            eclat.fillStyle(0xff90b0, 0.85);
+            eclat.fillTriangle(xE, yT - 8, xE - 1.8, yT - 3, xE + 1.8, yT - 3);
+            eclat.fillTriangle(xE, yT, xE - 1.8, yT - 3, xE + 1.8, yT - 3);
+            eclat.fillStyle(0xffffff, 0.65);
+            eclat.fillCircle(xE, yT - 4, 0.8);
+            // Dérive ascendante + fondu (la gravité inversée emporte le fragment)
+            scene.tweens.add({
+                targets: eclat,
+                y: -8,
+                alpha: { from: 0.85, to: 0.30 },
+                duration: 2600 + Math.random() * 1400,
+                ease: 'Sine.InOut',
+                yoyo: true,
+                repeat: -1
+            });
+        } else {
+            // Fragment fossilisé — esquille aubergine morte (pas d'ADD)
+            g.fillStyle(palette.accent, 0.70);
+            g.fillTriangle(xE, yT - 5, xE - 1.5, yT - 1, xE + 1.5, yT - 1);
+            g.fillTriangle(xE, yT, xE - 1.5, yT - 1, xE + 1.5, yT - 1);
+            g.lineStyle(0.6, palette.pierreSombre, 0.65);
+            g.beginPath();
+            g.moveTo(xE - 1, yT - 4);
+            g.lineTo(xE + 0.8, yT - 1);
+            g.strokePath();
+        }
+    }
+
+    // (9) Motes corrompues — équivalent luminescence des autres biomes, mais
+    //     ADD magenta-cramoisi qui MONTENT et s'effacent (signature inversion).
+    //     Sur les plateformes "vives" uniquement (ratioDechirure).
+    if (Math.random() < ratioDechirure) {
+        const motes = scene.add.graphics();
+        motes.setDepth(DEPTH.PLATEFORMES + 1);
+        motes.setBlendMode(Phaser.BlendModes.ADD);
+        const nbMotes = 1 + (Math.random() < 0.5 ? 1 : 0);
+        for (let i = 0; i < nbMotes; i++) {
+            const xL = xG + 12 + Math.random() * Math.max(8, largeur - 24);
+            motes.fillStyle(palette.racine, 0.28);
+            motes.fillEllipse(xL, yT + 1, 14, 5);
+            motes.fillStyle(0xffc0d8, 0.50);
+            motes.fillCircle(xL, yT, 1.6);
+        }
+        // Ascension lente + fondu (les motes s'élèvent dans la gravité inversée)
+        scene.tweens.add({
+            targets: motes,
+            y: -16,
+            alpha: { from: 0.55, to: 0.0 },
+            duration: 2200 + Math.random() * 1600,
+            ease: 'Sine.Out',
             repeat: -1
         });
     }
