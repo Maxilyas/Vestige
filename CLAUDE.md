@@ -143,9 +143,9 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Dernière étape** : Phase 9.x — Voile Inversé Vague 1 démarrée. Branche `voile_inverse` dans `PlateformeStyle.js` (identité « cité déchirée » : déchirures cramoisi, suintement magenta) + prototype d'inversion de gravité par ZONE (`gravite_inverse` : colonne qui tire vers le haut, joueur marche au plafond) ; salle signature `voile_chambre_inversee` ; validateur 130/130 (0 inaccessible).
-- **À tester en navigateur** : (1) rendu des paliers Voile étages 7-8 (branche PlateformeStyle) ; (2) **feel de l'inversion** dans `voile_chambre_inversee` — entrée dans la colonne, marche tête en bas, récupération du coffre, sortie latérale propre. Je ne peux pas lancer le navigateur → validation manuelle requise avant de durcir la salle (risque/ennemis).
-- **Prochain chantier** : si le feel est validé → Vague 1 full (salles entièrement tête-en-bas, zones/cycles, backlog 20 idées d'archi). Sinon tuning du prototype.
+- **Dernière étape** : Voile Vague 1 (branche `PlateformeStyle` voile + inversion de gravité par zone + `voile_chambre_inversee`) + 2 fix spawn ennemis : (1) spawn « surSol » contraint aux segments de sol SOLIDE (un ennemi gravité ne tombe plus dans un gouffre central au load, ex. `voile_pont_suspendu`) ; (2) collider sol/obstacles ajouté à TOUS les ennemis (les flotteurs ne traversent plus le sol plein en poursuivant). Validateur 130/130.
+- **À tester en navigateur** : (1) feel inversion `voile_chambre_inversee` + paliers Voile 7-8 ; (2) les 2 fix ennemis — golem (`colosse_voile`) ne tombe plus au load dans `voile_pont_suspendu`, flotteurs bloqués par le sol en poursuite.
+- **Prochain chantier** : si feel validé → Vague 1 full (salles tête-en-bas, zones/cycles, backlog 20 idées). Sinon tuning prototype.
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.

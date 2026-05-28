@@ -235,6 +235,43 @@ export function genererSalle({
         // one-way (rendant la montée pénible), on filtre : ennemi sur plateforme
         // flottante NORMALE uniquement, fallback sol si aucune normale dispo.
         const plateformesEnnemiSpawn = plateformesFlottantes.filter(p => !p.oneWay);
+
+        // Segments de SOL SOLIDE (oneWay:false, non structurels) de la bande
+        // basse. Le spawn « surSol » DOIT s'y limiter : sinon un ennemi gravité
+        // (ex. Colosse du Voile) tiré au-dessus d'un sol coupé (gouffre central
+        // de voile_pont_suspendu, voile_grande_dechirure…) tombe à travers et
+        // meurt au chargement. On garde la marge historique 150 px aux bords de
+        // salle, plus 45 px de chaque côté du segment (le corps de l'ennemi ne
+        // doit pas déborder au-dessus du vide).
+        const BAND_SOL = dims.hauteur - HAUTEUR_SOL - 30;
+        const MARGE_SEG = 45, MARGE_BORD = 150;
+        const segmentsSol = plateformes
+            .filter(p =>
+                !p.oneWay &&
+                !(p.tags?.includes('structurel')) &&
+                !(p.tags?.includes('decoratif')) &&
+                (p.y - p.hauteur / 2) >= BAND_SOL
+            )
+            .map(p => ({
+                gauche: Math.max(p.x - p.largeur / 2 + MARGE_SEG, MARGE_BORD),
+                droite: Math.min(p.x + p.largeur / 2 - MARGE_SEG, dims.largeur - MARGE_BORD)
+            }))
+            .filter(s => s.droite > s.gauche);
+        const largeurSolTotale = segmentsSol.reduce((acc, s) => acc + (s.droite - s.gauche), 0);
+        // Tire un x pondéré par la largeur des segments (un long sol reçoit
+        // proportionnellement plus d'ennemis). Fallback historique si aucun
+        // segment exploitable (salle au sol atypique).
+        const xSurSolSolide = () => {
+            if (largeurSolTotale <= 0) return entre(rng, 150, dims.largeur - 150);
+            let t = rng() * largeurSolTotale;
+            for (const s of segmentsSol) {
+                const w = s.droite - s.gauche;
+                if (t < w) return s.gauche + t;
+                t -= w;
+            }
+            return segmentsSol[segmentsSol.length - 1].droite;
+        };
+
         const pool = biome?.ennemisPool ?? [];
         for (let i = 0; i < nbEnnemis; i++) {
             const enemyId = pool.length > 0
@@ -243,7 +280,7 @@ export function genererSalle({
             const surSol = plateformesEnnemiSpawn.length === 0 || rng() < 0.5;
             let x, y;
             if (surSol) {
-                x = entre(rng, 150, dims.largeur - 150);
+                x = xSurSolSolide();
                 y = dims.hauteur - HAUTEUR_SOL - 20;
             } else {
                 const p = plateformesEnnemiSpawn[entreEntier(rng, 0, plateformesEnnemiSpawn.length - 1)];

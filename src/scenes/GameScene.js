@@ -1750,14 +1750,18 @@ export class GameScene extends Phaser.Scene {
                 new Phaser.Geom.Rectangle(0, 0, d.largeur, d.hauteur + 200)
             );
         }
-        if (defFinale.gravite) {
-            this.physics.add.collider(ennemi.sprite, this.platforms);
-            // Les obstacles solides (éboulis, murs fissurés) doivent bloquer
-            // les ennemis aussi — sinon ils traversent et le puzzle "casser
-            // pour passer" n'a aucun sens.
-            if (this.obstaclesSolides) {
-                this.physics.add.collider(ennemi.sprite, this.obstaclesSolides);
-            }
+        // Collision avec la géométrie SOLIDE — y compris pour les ennemis
+        // volants (gravite:false). Sans ça, un volant qui poursuit le joueur
+        // pouvait s'enfoncer dans le sol plein et sombrer hors de la salle
+        // (cas Voile : 9 ennemis sur 10 sont des flotteurs). Les plateformes
+        // one-way restent dans un groupe séparé → les volants gardent leur
+        // liberté de passage par le dessous.
+        this.physics.add.collider(ennemi.sprite, this.platforms);
+        // Les obstacles solides (éboulis, murs fissurés) doivent bloquer les
+        // ennemis aussi — sinon ils traversent et le puzzle "casser pour
+        // passer" n'a aucun sens.
+        if (this.obstaclesSolides) {
+            this.physics.add.collider(ennemi.sprite, this.obstaclesSolides);
         }
         this.physics.add.overlap(this.player, ennemi.sprite, () => this.contactEnnemi(ennemi));
         this.enemies.push(ennemi);
