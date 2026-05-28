@@ -182,7 +182,16 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'cristaux_choeur_mnesique','cristaux_faille_du_present',
              // ─── Tranche 2 Vague 2 : signatures « Le Miroir » ───
              'cristaux_galerie_miroirs','cristaux_pas_incertains',
-             'cristaux_barrieres_phebus','cristaux_salle_des_reflets'];
+             'cristaux_barrieres_phebus','cristaux_salle_des_reflets',
+             // ─── Voile Inversé (Phase 9.x — migration compact 960×540) ───
+             'voile_carrefour',
+             'voile_galerie_dechiree','voile_dalles_oubli',
+             'voile_pont_suspendu','voile_cour_fragments',
+             'voile_puits_brise','voile_descente_voilee',
+             'voile_coin_NE','voile_coin_NO','voile_coin_SE','voile_coin_SO',
+             'voile_t_NEO','voile_t_SEO','voile_t_NSO','voile_t_NSE',
+             'voile_impasse_N','voile_impasse_S','voile_impasse_E','voile_impasse_O',
+             'voile_fragments_flottants','voile_grande_dechirure'];
 
 let totalBugs = 0;
 for (const id of ids) {

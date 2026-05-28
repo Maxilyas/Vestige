@@ -96,7 +96,7 @@ npx live-server .
 **À faire (priorité haut → bas) :**
 - ⬜ **Tuning navigateur Cristaux Vagues 1+2** (voir « État actuel » → À tester)
 - ⬜ **Cristaux Vague 3** — atmosphère/lore (monolithes `vestige_lore`) + densification visuelle parallax
-- ⬜ **Migration compact Voile Inversé** (réutilise la géographie Cristaux corrompue) puis **Cœur du Reflux**
+- 🟡 **Voile Inversé** — fondation compacte faite (20 salles + fallback, étages 7-8 spanning tree). Reste : branche `PlateformeStyle` voile (visuel paliers) + signatures **inversion de gravité par salle/zone** (Vague 1+), puis **Cœur du Reflux**
 - ⬜ **Sanctuaires boss** étages 6 / 7 / 8 / 10
 - ⬜ **Phase 9.9 Halls** — pièces scriptées (vagues de fonte, cheminées qui s'abattent)
 - ⬜ **5c.3** — Polish HUD cooldown Geste (overlay tournant + label)
@@ -107,7 +107,7 @@ npx live-server .
 
 ### Génération de monde
 - **Graphe d'étage** : salles en arbre `A → B → C → D → BOSS` + 0-2 dead-ends verticaux (coffre garanti). Structure pinnée par `data/etages.js`. Pool ennemis + rareté seedés mais stables (sous-RNG par salle). Carte `M` cumulative entre runs via localStorage.
-- **Salles compactes 960×540** (= canvas, caméra figée) : pools handcrafted biome par biome dans `src/data/salles/`, assemblés par spanning tree sur grille 6×5. Ruines + Halls + Cristaux migrés ; Voile/Cœur encore sur l'ancien système topographies.
+- **Salles compactes 960×540** (= canvas, caméra figée) : pools handcrafted biome par biome dans `src/data/salles/`, assemblés par spanning tree sur grille 6×5. Ruines + Halls + Cristaux + Voile migrés ; Cœur (étages 9-10) encore sur l'ancien système topographies.
 - **Topographies** : 29 dans `data/topographies.js` — utilisées en pin éditorial pour les étages non encore migrés (Voile/Cœur).
 - **5 biomes par paires d'étages** : Ruines basses / Halls Cendrés / Cristaux Glacés / Voile Inversé / Cœur du Reflux. Chacun : palette + pool de 6 ennemis + densité progressive.
 - **Obstacles** : pieux, ressorts, plateformes mobiles + mécaniques signature par biome. Désactivés en Miroir et salle d'entrée Présent.
@@ -143,9 +143,9 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Dernière étape** : Phase 9.x — Cristaux Glacés Vague 2 « Le Miroir » (3 mécaniques engine : `plateforme_miroir` clignote solide↔intangible, `faux_sol_miroir` intangible avec indice ondulation, `laser_prisme` faisceau cyclique = gel ; 4 salles signature ; validateur 108/108).
-- **À tester en navigateur** : Cristaux Vagues 1+2 (étages 5-6) — lisibilité + tuning des mécaniques (clignotement plateforme_miroir, indice ondulation faux_sol_miroir, gel laser_prisme, chant des cristaux, verglas, stalactite_resonance, blizzard, faille_vide). **Caveat visuel** : le faux sol est dessiné par Obstacle.js vs vrais sols par PlateformeStyle — vérifier qu'ils se ressemblent assez pour que l'illusion marche.
-- **Prochain chantier** : voir Roadmap « À faire » (tuning Cristaux d'abord, puis Vague 3 ou migration Voile).
+- **Dernière étape** : Phase 9.x — Voile Inversé Vague 0 (fondation compacte). 20 salles 960×540 + 1 carrefour fallback dans `src/data/salles/voile/` couvrant toutes les configs NESO (≥ plusieurs candidats/config), reskin « cité déchirée » + hasards mix vide (gouffres/`failleVide`) / échos (`fauxSolMiroir`) ; étages 7-8 basculés en spanning tree ; validateur 129/129 (0 inaccessible).
+- **À tester en navigateur** : étages 7-8 — jouabilité du pool Voile. **Caveat visuel** : pas encore de branche `voile_inverse` dans `PlateformeStyle.js` → les paliers rendent en style Ruines par défaut (le parallax Voile est déjà câblé en fond). À faire avant tuning fin.
+- **Prochain chantier** : branche `PlateformeStyle` Voile (identité paliers), puis Vague 1 signatures = **inversion de gravité par salle/zone** (décidé : pas de permanent global ; salles entièrement tête-en-bas + zones/cycles + backlog de 20 idées d'architecture).
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.

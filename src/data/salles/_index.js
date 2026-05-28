@@ -148,6 +148,33 @@ import { cristaux_pas_incertains }    from './cristaux/cristaux_pas_incertains.j
 import { cristaux_barrieres_phebus }  from './cristaux/cristaux_barrieres_phebus.js';
 import { cristaux_salle_des_reflets } from './cristaux/cristaux_salle_des_reflets.js';
 
+// ─── Voile Inversé (Phase 9.x — migration compact 960×540) ───────
+// Pool fondation : 20 salles structurelles (toutes configs de portes) +
+// 1 carrefour fallback. Identité « cité déchirée » (Olympe corrompue,
+// magenta/aubergine), mécaniques existantes reskinées + mix vide/échos.
+// Mécaniques signature (inversion de gravité) à venir en vagues suivantes.
+import { voile_galerie_dechiree }     from './voile/voile_galerie_dechiree.js';
+import { voile_dalles_oubli }         from './voile/voile_dalles_oubli.js';
+import { voile_pont_suspendu }        from './voile/voile_pont_suspendu.js';
+import { voile_cour_fragments }       from './voile/voile_cour_fragments.js';
+import { voile_puits_brise }          from './voile/voile_puits_brise.js';
+import { voile_descente_voilee }      from './voile/voile_descente_voilee.js';
+import { voile_coin_NE }              from './voile/voile_coin_NE.js';
+import { voile_coin_NO }              from './voile/voile_coin_NO.js';
+import { voile_coin_SE }              from './voile/voile_coin_SE.js';
+import { voile_coin_SO }              from './voile/voile_coin_SO.js';
+import { voile_t_NEO }                from './voile/voile_t_NEO.js';
+import { voile_t_SEO }                from './voile/voile_t_SEO.js';
+import { voile_t_NSO }                from './voile/voile_t_NSO.js';
+import { voile_t_NSE }                from './voile/voile_t_NSE.js';
+import { voile_impasse_N }            from './voile/voile_impasse_N.js';
+import { voile_impasse_S }            from './voile/voile_impasse_S.js';
+import { voile_impasse_E }            from './voile/voile_impasse_E.js';
+import { voile_impasse_O }            from './voile/voile_impasse_O.js';
+import { voile_fragments_flottants }  from './voile/voile_fragments_flottants.js';
+import { voile_grande_dechirure }     from './voile/voile_grande_dechirure.js';
+import { voile_carrefour }            from './voile/voile_carrefour.js';
+
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
 // sont EXCLUES : elles ne sortent que via salleFallback() quand le pool
 // est trop pauvre pour matcher la combinaison de portes demandée. Sans
@@ -283,7 +310,35 @@ const TOUTES_SALLES = [
     cristaux_galerie_miroirs,    // OE   — faux sols miroirs (unique)
     cristaux_pas_incertains,     // OE   — plateformes-miroirs oscillantes (unique)
     cristaux_barrieres_phebus,   // OE   — barrières laser cycliques (unique)
-    cristaux_salle_des_reflets   // NSEO — combo Miroir + ascension (unique)
+    cristaux_salle_des_reflets,  // NSEO — combo Miroir + ascension (unique)
+
+    // ─── Voile Inversé (Phase 9.x — 20 salles fondation) ──────────
+    // OE bus principal (4)
+    voile_galerie_dechiree,    // OE   — combat propre, estrade brisée
+    voile_dalles_oubli,        // OE   — gouffre + faux sol-écho (mix vide/écho)
+    voile_pont_suspendu,       // OE   — navette mobile au-dessus du vide
+    voile_cour_fragments,      // OE   — ressorts + faille de Présent (vide)
+    // NS verticaux (2)
+    voile_puits_brise,         // NS   — zigzag vertical + coffre
+    voile_descente_voilee,     // NS   — escalier monumental diagonal
+    // Coins (4)
+    voile_coin_NE,             // NE   — aile arrachée ascension droite
+    voile_coin_NO,             // NO   — belvédère penché ascension gauche
+    voile_coin_SE,             // SE   — faille oblique + coffre votif
+    voile_coin_SO,             // SO   — crypte renversée + coffre votif
+    // T (4)
+    voile_t_NEO,               // NEO  — forum fendu pyramide centrale
+    voile_t_SEO,               // SEO  — carrefour dissous + coffre
+    voile_t_NSO,               // NSO  — passage ouest déchiré
+    voile_t_NSE,               // NSE  — passage est déchiré
+    // Deadends (4)
+    voile_impasse_N,           // N    — corniche du vide descente
+    voile_impasse_S,           // S    — cella inversée ascension coffre
+    voile_impasse_E,           // E    — niche fixée
+    voile_impasse_O,           // O    — sanctuaire muré
+    // Diversité NSEO (2)
+    voile_fragments_flottants, // NSEO — fragments flottants + faux-échos
+    voile_grande_dechirure     // NSEO — grande ascension + ressorts
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes
@@ -293,13 +348,15 @@ const TOUTES_SALLES = [
 const PAR_ID_FALLBACK = {
     [ruines_carrefour_compact.id]: ruines_carrefour_compact,
     [halls_carrefour_brasier.id]: halls_carrefour_brasier,
-    [cristaux_carrefour.id]: cristaux_carrefour
+    [cristaux_carrefour.id]: cristaux_carrefour,
+    [voile_carrefour.id]: voile_carrefour
 };
 
 const FALLBACK_PAR_BIOME = {
     'ruines_basses': ruines_carrefour_compact,
     'halls_cendres': halls_carrefour_brasier,
-    'cristaux_glaces': cristaux_carrefour
+    'cristaux_glaces': cristaux_carrefour,
+    'voile_inverse': voile_carrefour
 };
 
 export function salleFallback(biomeId) {
@@ -335,7 +392,7 @@ export function sallesCompatibles(biomeId, portesReq, role, dejaUtilisees) {
         // sur deadends. Pour biomes encore XL legacy (Voile, Cœur), filtre
         // normal pour préserver les salles signature des rôles main.
         const ignoreRole = biomeId === 'ruines_basses' || biomeId === 'halls_cendres'
-                        || biomeId === 'cristaux_glaces';
+                        || biomeId === 'cristaux_glaces' || biomeId === 'voile_inverse';
         if (role && s.rolesAutorises && !s.rolesAutorises.includes(role) && !ignoreRole) return false;
         // Salles "unique" : max 1 par étage (signature). Si déjà tirée → exclue.
         if (s.unique && dejaUtilisees?.has(s.id)) return false;

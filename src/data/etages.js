@@ -83,30 +83,23 @@ export const ETAGES = {
         grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 7. Voile Inversé — désorientation (labyrinthe, aile déchirée) ──
+    // ─── 7. Voile Inversé — désorientation (Phase 9.x mini-Metroidvania) ─
+    // Pool Voile compact (20 salles handcrafted 960×540), identité « cité
+    // déchirée » (Olympe corrompue, magenta/aubergine) + hasards mix vide
+    // (gouffres, failles) / échos (faux sols miroirs). Mécaniques signature
+    // (inversion de gravité par salle/zone) à venir en vagues toolkit.
     7: {
-        themeNarratif: 'Le monde se déchire. Labyrinthe de murs, aile brisée, donjon désorientant.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'hall',       topographie: 'labyrinthe_murs' },
-            'B-haut': { archetype: 'puits',      topographie: 'puits_spirale' },
-            'C':      { archetype: 'pont',       topographie: 'aile_dechiree' },
-            'D':      { archetype: 'crypte',     topographie: 'donjon_cellules' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_voile_7' }
-        }
+        themeNarratif: 'Le monde se déchire. Cité fragmentée, gouffres de Présent, faux sols-échos.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
-    // ─── 8. Voile Inversé — rupture (ponts impossibles) ─────────────────
+    // ─── 8. Voile Inversé — rupture (Phase 9.x mini-Metroidvania) ───────
+    // Même pool que l'étage 7, graphe plus dense + ennemis tier supérieur.
     8: {
-        themeNarratif: 'Plus de sol stable. Pont étroit, gouffre vertical, estrade isolée.',
-        salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'pont',       topographie: 'pont_etroit' },
-            'C':      { archetype: 'pont',       topographie: 'gouffre_vertical' },
-            'D':      { archetype: 'arene',      topographie: 'arene_estrade' },
-            'D-haut': { archetype: 'crypte',     topographie: 'puits_descente' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_voile_8' }
-        }
+        themeNarratif: 'Plus de sol stable. Réseau dense, fragments flottants, ponts suspendus au-dessus du vide.',
+        spanningTree: true,
+        grille: { cols: 6, rows: 5 }
     },
 
     // ─── 9. Cœur du Reflux — oppression (pieux, montée éprouvante) ──────
