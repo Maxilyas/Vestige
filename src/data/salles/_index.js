@@ -179,6 +179,8 @@ import { voile_autel_renverse }       from './voile/voile_autel_renverse.js';
 import { voile_pendule_oscillant }    from './voile/voile_pendule_oscillant.js';
 import { voile_gouffre_pendulaire }   from './voile/voile_gouffre_pendulaire.js';
 import { voile_aiguilles_renversees } from './voile/voile_aiguilles_renversees.js';
+import { voile_parabole_en_s }        from './voile/voile_parabole_en_s.js';
+import { voile_nef_renversee }        from './voile/voile_nef_renversee.js';
 import { voile_carrefour }            from './voile/voile_carrefour.js';
 
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
@@ -345,13 +347,15 @@ const TOUTES_SALLES = [
     // Diversité NSEO (2)
     voile_fragments_flottants, // NSEO — fragments flottants + faux-échos
     voile_grande_dechirure,    // NSEO — grande ascension + ressorts
-    // Signature Vague 1 (6) — gravité inversée (3 colonnes + 3 pendules)
+    // Signature Vague 1 (8) — gravité inversée
     voile_chambre_inversee,    // OE   — SIGNATURE : colonne d'inversion (proto forgiving)
     voile_gouffre_renverse,    // OE   — SIGNATURE : gouffre létal + navette OU colonne-coffre
     voile_autel_renverse,      // OE   — SIGNATURE : champ de pieux + colonne → autel-coffre
     voile_pendule_oscillant,   // OE   — SIGNATURE : pendule cyclique (pieux sol/plafond décalés)
     voile_gouffre_pendulaire,  // OE   — SIGNATURE : pendule au-dessus d'un gouffre létal
-    voile_aiguilles_renversees // OE   — SIGNATURE : pendule asymétrique (plafond hérissé)
+    voile_aiguilles_renversees,// OE   — SIGNATURE : pendule asymétrique (plafond hérissé)
+    voile_parabole_en_s,       // OE   — SIGNATURE : saut de précision + switch au vertex (S)
+    voile_nef_renversee        // NSEO — RÉCURRENCE : nef climbable + colonne d'inversion (toutes configs)
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes
