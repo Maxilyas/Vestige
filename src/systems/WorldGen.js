@@ -325,6 +325,7 @@ export function genererSalle({
         obstacles,
         portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur, interieur }
         zones,                  // zones interactives biome (ancrage Ruines, gouffres Cristaux...)
+        penduleInversion: result.penduleInversion ?? null,  // Voile : gravité joueur qui bascule sur timer
         vortex,
         spawnDefault,
         coffre,

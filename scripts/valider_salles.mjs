@@ -194,7 +194,8 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'voile_impasse_N','voile_impasse_S','voile_impasse_E','voile_impasse_O',
              'voile_fragments_flottants','voile_grande_dechirure',
              'voile_chambre_inversee','voile_gouffre_renverse',
-             'voile_autel_renverse'];
+             'voile_autel_renverse','voile_pendule_oscillant',
+             'voile_gouffre_pendulaire','voile_aiguilles_renversees'];
 
 let totalBugs = 0;
 for (const id of ids) {

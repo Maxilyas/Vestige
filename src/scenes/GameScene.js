@@ -469,6 +469,11 @@ export class GameScene extends Phaser.Scene {
             : this._zonesSalle.filter(z => z?.type === 'gravite_inverse');
         this._poserZonesGraviteInverse(this._zonesGraviteInverse);
 
+        // --- Pendule d'inversion cyclique (signature Voile) ---
+        // Toute la salle bascule la gravité du JOUEUR haut↔bas sur un timer
+        // télégraphié (cf. _tickPendule). Désactivé en Miroir (atelier paisible).
+        this._initPendule(enMiroir ? null : salle.penduleInversion);
+
         // --- Caméra : 2 modes selon Phase 9 ─
         //   • Salle compacte (dimsCanvas) : caméra FIGÉE sur 0,0 → 960×540.
         //     La salle = l'écran. Pas de scroll, pas de follow, pas de zoom-out
@@ -926,26 +931,33 @@ export class GameScene extends Phaser.Scene {
         const controleInverse = (this.player._controleInverseJusqu ?? 0) > now;
         const iGauche = controleInverse ? i.droite : i.gauche;
         const iDroite = controleInverse ? i.gauche : i.droite;
-        // Gravité — deux sources d'inversion possibles, résolues en une fois :
+        // Gravité — trois sources d'inversion possibles, résolues en une fois :
         //   • ZONE d'inversion Voile (signature biome) : net vers le HAUT
         //     (-2·gWorld), le joueur tombe au plafond tant qu'il est dans la zone.
+        //   • PENDULE cyclique Voile : toute la salle bascule la gravité du
+        //     joueur haut↔bas sur un timer télégraphié (cf. _tickPendule).
         //   • Effet ennemi inverseur_gravite (legacy) : net = 0 (flottement).
-        // La zone prime sur l'effet ennemi. On écrit body.gravity.y une seule fois.
+        // Zone/pendule priment sur l'effet ennemi. body.gravity.y écrit une fois.
         const gWorld = this.physics.world.gravity.y;
         const px = this.player.x, py = this.player.y;
         const dansZoneInverse = this._zonesGraviteInverse?.some(z =>
             px >= z.x - z.largeur / 2 && px <= z.x + z.largeur / 2 &&
             py >= z.y - z.hauteur / 2 && py <= z.y + z.hauteur / 2
         ) ?? false;
+        // Tick du pendule (rafraîchit l'état + le télégraphe), puis repli dans
+        // l'inversion globale. La gravité ascendante du pendule est identique à
+        // celle d'une zone (net -gWorld via body.gravity.y = -2·gWorld).
+        this._tickPendule();
         const floatEnnemi = (this.player._graviteInverseJusqu ?? 0) > now;
-        const gBodyVoulu = dansZoneInverse ? -2 * gWorld
-                         : floatEnnemi     ? -gWorld
+        const inversionGravite = dansZoneInverse || this._penduleInverse;
+        const gBodyVoulu = inversionGravite ? -2 * gWorld
+                         : floatEnnemi      ? -gWorld
                          : 0;
         if (body.gravity.y !== gBodyVoulu) body.gravity.y = gBodyVoulu;
 
         // Quand la gravité tire vers le HAUT, le « sol » est le plafond : on
         // inverse la détection d'appui ET le sens du saut (cf. plus bas).
-        const graviteVersLeHaut = dansZoneInverse;
+        const graviteVersLeHaut = inversionGravite;
         const auSol = graviteVersLeHaut
             ? (body.blocked.up || body.touching.up)
             : (body.blocked.down || body.touching.down);
@@ -2702,6 +2714,92 @@ export class GameScene extends Phaser.Scene {
                     delay: i * 300
                 });
             }
+        }
+    }
+
+    // ============================================================
+    // PENDULE D'INVERSION CYCLIQUE (signature Voile)
+    // ============================================================
+    /**
+     * Initialise le pendule depuis la config salle `penduleInversion`
+     * (ou null = pas de pendule dans cette salle). La gravité du joueur
+     * bascule haut↔bas chaque `periode` ms, avec un télégraphe visuel les
+     * `telegraphMs` ms précédant chaque flip.
+     */
+    _initPendule(config) {
+        // Reset (scene.restart réutilise l'instance).
+        this._pendule = null;
+        this._penduleTelegraphe = false;
+        this._penduleFlashJusqu = 0;
+        if (this._penduleOverlay) { this._penduleOverlay.destroy(); this._penduleOverlay = null; }
+        if (!config) { this._penduleInverse = false; return; }
+
+        this._pendule = {
+            periode: config.periode ?? 3500,        // durée d'une demi-phase (ms)
+            telegraphMs: config.telegraphMs ?? 900,
+            departInverse: config.depart === 'haut', // 'bas' (défaut) = gravité normale au départ
+            t0: this.time.now
+        };
+        // État initial cohérent → aucun flip parasite à l'ouverture de la salle.
+        this._penduleInverse = this._pendule.departInverse;
+        // Overlay télégraphe + flash, fixé à la caméra (salle compacte = écran).
+        this._penduleOverlay = this.add.graphics()
+            .setScrollFactor(0).setDepth(DEPTH.EFFETS + 5);
+    }
+
+    /**
+     * Met à jour l'état du pendule (appelé chaque frame depuis update). Calcule
+     * l'orientation courante de façon déterministe (basée sur le temps écoulé),
+     * détecte le flip, et pilote le télégraphe + le flash.
+     */
+    _tickPendule() {
+        const p = this._pendule;
+        if (!p) { this._penduleInverse = false; return; }
+        const now = this.time.now;
+        const dansLaPhase = (now - p.t0) % p.periode;
+        const phase = Math.floor((now - p.t0) / p.periode);
+        const restant = p.periode - dansLaPhase;        // ms avant le prochain flip
+        // Phase paire = état de départ, impaire = inversé.
+        const inverse = (phase % 2 === 1) ? !p.departInverse : p.departInverse;
+        if (inverse !== this._penduleInverse) {
+            this._penduleInverse = inverse;
+            this._onPenduleFlip();
+        }
+        this._penduleTelegraphe = restant <= p.telegraphMs;
+        this._dessinerPendule(inverse, restant, p.telegraphMs);
+    }
+
+    /** Au moment du flip : son de catapulte + flash + micro-shake. */
+    _onPenduleFlip() {
+        this.audio?.jouerSfx('jump');
+        this._penduleFlashJusqu = this.time.now + 220;
+        this.cameras.main.shake(120, 0.004);
+    }
+
+    /**
+     * Dessine le télégraphe (bande de bord magenta vers la destination du
+     * prochain flip, intensité montante) + le flash plein écran au flip.
+     */
+    _dessinerPendule(inverse, restant, telegraphMs) {
+        const g = this._penduleOverlay;
+        if (!g) return;
+        g.clear();
+        // Télégraphe : prévient du PROCHAIN sens (opposé du sens courant).
+        if (this._penduleTelegraphe) {
+            const t = 1 - restant / telegraphMs;            // 0 → 1 sur la fenêtre
+            const pulse = 0.55 + 0.45 * Math.sin(this.time.now / 80);
+            const alpha = (0.12 + 0.40 * t) * pulse;
+            const versLeHaut = !inverse;                    // état post-flip
+            const hBand = 60 * (0.4 + 0.6 * t);
+            g.fillStyle(0xff5078, Math.max(0, alpha));
+            if (versLeHaut) g.fillRect(0, 0, GAME_WIDTH, hBand);
+            else            g.fillRect(0, GAME_HEIGHT - hBand, GAME_WIDTH, hBand);
+        }
+        // Flash bref plein écran au moment du flip.
+        if ((this._penduleFlashJusqu ?? 0) > this.time.now) {
+            const reste = (this._penduleFlashJusqu - this.time.now) / 220;
+            g.fillStyle(0xff5078, 0.30 * reste);
+            g.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         }
     }
 
