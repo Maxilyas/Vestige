@@ -96,7 +96,7 @@ npx live-server .
 **À faire (priorité haut → bas) :**
 - ⬜ **Tuning navigateur Cristaux Vagues 1+2** (voir « État actuel » → À tester)
 - ⬜ **Cristaux Vague 3** — atmosphère/lore (monolithes `vestige_lore`) + densification visuelle parallax
-- 🟡 **Voile Inversé** — fondation + `PlateformeStyle` voile faits. Vague 1 : **8 salles d'inversion** = 3 colonnes `gravite_inverse` + 3 pendules `penduleInversion` + `voile_parabole_en_s` (saut précision, switch au vertex) + `voile_nef_renversee` (**NSEO → récurrence toutes-configs**, identité biome). Inversion **joueur seul**. Reste : + de variété multi-config (NS/coins/T pendule), métronome vertical, pendule+navette, dédale multi-zones ; **Blocus Croisé** + **Balance Gravitationnelle** = nouvelles mécaniques (blocs gravity-responsive / poulie-contrepoids). Puis salle **tête-en-bas** complète, puis **Cœur du Reflux**
+- 🟡 **Voile Inversé** — fondation + `PlateformeStyle` voile faits. Vague 1 : **8 salles d'inversion** = 3 colonnes `gravite_inverse` + 3 pendules `penduleInversion` + `voile_parabole_en_s` + `voile_nef_renversee` (NSEO récurrence). Vague 2 : **2 mécaniques de gravité NEUVES faites** = `bloc_gravite` (Blocus Croisé : 2 blocs gravity-responsive qui se croisent au flip) + `balance` + `contrepoids` (Balance Gravitationnelle : poulie-contrepoids réactive à la gravité joueur) + salles démo `voile_blocus_croise` / `voile_balance_gravitationnelle`. Inversion **joueur seul**. Reste : variété multi-config pendule (NS/coins/T), métronome vertical, pendule+navette, dédale multi-zones. Puis salle **tête-en-bas** complète, puis **Cœur du Reflux**
 - ⬜ **Sanctuaires boss** étages 6 / 7 / 8 / 10
 - ⬜ **Phase 9.9 Halls** — pièces scriptées (vagues de fonte, cheminées qui s'abattent)
 - ⬜ **5c.3** — Polish HUD cooldown Geste (overlay tournant + label)
@@ -143,9 +143,9 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Dernière étape** : Voile Vague 1 — `voile_parabole_en_s` (saut de précision : switch pendule au vertex → trajectoire en S, côté arrivée tagué pour le BFS) + `voile_nef_renversee` (**NSEO → matche TOUTES les configs** = directive récurrence/identité du biome ; nef climbable validateur-safe + colonne d'inversion latérale). Total : 8 salles d'inversion. Validateur 137/137.
-- **À tester en navigateur** : feel de la Parabole (timing du switch vs apogée du saut — période 2,8 s à ajuster) ; vérifier que la Nef sort bien dans des configs variées.
-- **Prochain chantier** : + de variété multi-config (NS/coins/T pendule), métronome vertical, pendule+navette, dédale multi-zones. PUIS nouvelles mécaniques **Blocus Croisé** (blocs gravity-responsive, ~2 plateformeMobile synchro) + **Balance Gravitationnelle** (poulie-contrepoids réactive à la gravité joueur). Puis salle tête-en-bas, puis Cœur du Reflux.
+- **Dernière étape** : Voile Vague 2 — **2 mécaniques de gravité NEUVES** (moteur). `bloc_gravite` (Blocus Croisé : bloc solide ridable piloté par `_penduleInverse` XOR polarité, 2 blocs opposés se croisent à mi-hauteur = pont éphémère) + `balance` (poulie couplée θ piloté par charge × signe gravité joueur) + `contrepoids` (pierre poussable). def `obstacles.js` + helpers `_format.js` + entité `Obstacle.js` + wiring `GameScene.js` (+ `_inversionGravite` exposé) + tremplins virtuels validateur. Salles démo `voile_blocus_croise` / `voile_balance_gravitationnelle`. Validateur 139/139, boot OK, entités exercées sans erreur + visuels confirmés (eval harness).
+- **À tester en navigateur (gameplay réel étage 7)** : FEEL des 2 salles — timing du croisement des blocs (period 2,6 s) ; chute-sur-plateau-qui-remonte de la Balance (amplitude 120 / vitesse θ 1,5 / period 3 s) ; vérifier le portage du rider vertical (Phaser arcade) sur blocs/plateaux.
+- **Prochain chantier** : reste Vague 2 = variété multi-config pendule (NS/coins/T), métronome vertical, pendule+navette, dédale multi-zones — **décidé : mix puzzle-requis / transit-récurrence, batch de 6 salles**. Puis salle tête-en-bas complète, puis Cœur du Reflux.
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.

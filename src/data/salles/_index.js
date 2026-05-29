@@ -181,6 +181,9 @@ import { voile_gouffre_pendulaire }   from './voile/voile_gouffre_pendulaire.js'
 import { voile_aiguilles_renversees } from './voile/voile_aiguilles_renversees.js';
 import { voile_parabole_en_s }        from './voile/voile_parabole_en_s.js';
 import { voile_nef_renversee }        from './voile/voile_nef_renversee.js';
+// ─── Voile Vague 2 : mécaniques de gravité neuves (Blocus / Balance) ──
+import { voile_blocus_croise }        from './voile/voile_blocus_croise.js';
+import { voile_balance_gravitationnelle } from './voile/voile_balance_gravitationnelle.js';
 import { voile_carrefour }            from './voile/voile_carrefour.js';
 
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
@@ -355,7 +358,10 @@ const TOUTES_SALLES = [
     voile_gouffre_pendulaire,  // OE   — SIGNATURE : pendule au-dessus d'un gouffre létal
     voile_aiguilles_renversees,// OE   — SIGNATURE : pendule asymétrique (plafond hérissé)
     voile_parabole_en_s,       // OE   — SIGNATURE : saut de précision + switch au vertex (S)
-    voile_nef_renversee        // NSEO — RÉCURRENCE : nef climbable + colonne d'inversion (toutes configs)
+    voile_nef_renversee,       // NSEO — RÉCURRENCE : nef climbable + colonne d'inversion (toutes configs)
+    // Signature Vague 2 (2) — mécaniques de gravité neuves
+    voile_blocus_croise,       // OE   — SIGNATURE : 2 blocs gravité-réactifs se croisent (pont éphémère)
+    voile_balance_gravitationnelle // OE — SIGNATURE : poulie + contrepoids réactive à la gravité joueur
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes

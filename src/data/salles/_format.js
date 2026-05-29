@@ -846,3 +846,89 @@ export function laserPrisme(xCentre, yCentre, longueur, opts = {}) {
     };
 }
 
+// ─── Helpers obstacles Vague 8 (Voile Inversé — mécaniques de gravité) ───
+
+/**
+ * Bloc à gravité (« Blocus Croisé ») : bloc solide ridable dont la chute suit
+ * la gravité de la SALLE (pendule). Polarité `inverse` :
+ *   • inverse=false → repose au SOL en phase normale, monte au PLAFOND au flip.
+ *   • inverse=true  → repose au PLAFOND en phase normale, tombe au SOL au flip.
+ * Deux blocs de polarité opposée placés côte à côte se CROISENT à mi-hauteur
+ * au flip → marchepied éphémère pour franchir une fente de mur.
+ *
+ * Pensé pour une salle à `penduleInversion` (sinon le bloc reste figé).
+ *
+ * @param {number} x          centre x (les deux blocs d'une paire = x adjacents)
+ * @param {number} yTopBas    top du bloc à sa position de repos BASSE (sol)
+ * @param {number} yTopHaut   top du bloc à sa position de repos HAUTE (plafond)
+ * @param {object} [opts]     { taille? = 54, inverse? = false, vitesse? = 320 }
+ */
+export function blocGravite(x, yTopBas, yTopHaut, opts = {}) {
+    const taille = opts.taille ?? 54;
+    const inverse = opts.inverse ?? false;
+    return {
+        type: 'bloc_gravite',
+        x,
+        // position initiale = repos de la phase normale selon la polarité
+        y: (inverse ? yTopHaut : yTopBas) + taille / 2,
+        largeur: taille,
+        hauteur: taille,
+        yTopBas,
+        yTopHaut,
+        inverse,
+        vitesse: opts.vitesse ?? 320
+    };
+}
+
+/**
+ * Contrepoids (« Balance Gravitationnelle ») : pierre dynamique POUSSABLE par le
+ * joueur, thème Voile. Posée sur un plateau de balance, elle ajoute son `poids`
+ * à la charge de ce côté (le joueur la déplace pour faire pencher la balance).
+ * Tombe toujours vers le BAS (n'est PAS affectée par l'inversion — seul le poids
+ * du joueur est gravité-réactif, cf. balanceGravite).
+ *
+ * @param {number} x         centre x initial
+ * @param {number} yTopSol   top du sol/plateau sur lequel elle repose
+ * @param {object} [opts]    { taille? = 44, poids? = 1.6 }
+ */
+export function contrepoids(x, yTopSol, opts = {}) {
+    const taille = opts.taille ?? 44;
+    return {
+        type: 'contrepoids',
+        x,
+        y: yTopSol - taille / 2,
+        largeur: taille,
+        hauteur: taille,
+        poids: opts.poids ?? 1.6
+    };
+}
+
+/**
+ * Balance Gravitationnelle : deux plateaux ridables reliés par une poulie
+ * (`yG = yRepos + θ·A`, `yD = yRepos − θ·A`). Le couple = (chargeG − chargeD)
+ * × signe de la gravité du joueur → le POIDS du joueur penche la balance, et un
+ * flip d'inversion (pendule / zone) INVERSE le sens. Charge = joueur (1) +
+ * contrepoids posés sur le plateau.
+ *
+ * Convention validateur-safe : faire connecter les portes par le SOL (la balance
+ * mène à une récompense en hauteur, pas une traversée load-bearing).
+ *
+ * @param {number} xG        centre x du plateau gauche
+ * @param {number} xD        centre x du plateau droit
+ * @param {number} yRepos    y centre des deux plateaux à l'équilibre (θ=0)
+ * @param {object} [opts]    { largeur? = 120, amplitude? = 100, vitesse? = 2.4 }
+ *                           amplitude : déplacement vertical max d'un plateau
+ *                           vitesse   : vitesse de convergence de θ (unités/s)
+ */
+export function balanceGravite(xG, xD, yRepos, opts = {}) {
+    return {
+        type: 'balance',
+        x: (xG + xD) / 2,
+        y: yRepos,
+        xG, xD, yRepos,
+        largeur: opts.largeur ?? 120,
+        amplitude: opts.amplitude ?? 100,
+        vitesse: opts.vitesse ?? 2.4
+    };
+}
+

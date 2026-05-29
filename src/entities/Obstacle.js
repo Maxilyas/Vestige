@@ -52,6 +52,13 @@ const COULEUR_MNESIQUE     = 0xb898e8;   // violet mnésique (cristal résonant)
 const COULEUR_MNESIQUE_VIF = 0xe0c0ff;
 const COULEUR_VIDE         = 0x0a0612;   // « Présent pur » (faille de vide)
 
+// Palette Voile Inversé (Vague 8 — bloc_gravite / contrepoids / balance)
+const COULEUR_VOILE_PIERRE = 0x3a2548;   // marbre aubergine corrompu
+const COULEUR_VOILE_FONCE  = 0x1a0f24;   // ombre abîme violet-noir
+const COULEUR_VOILE_CLAIR  = 0x5a4068;   // arête éclairée
+const COULEUR_VOILE_MAGENTA = 0xff5078;  // suintement / runes d'inversion (= overlay pendule)
+const COULEUR_VOILE_NACRE  = 0x70c0a0;   // nacre malade vert spectral (accent métal)
+
 export class Obstacle {
     /**
      * @param {Phaser.Scene} scene
@@ -105,6 +112,10 @@ export class Obstacle {
         else if (data.type === 'plateforme_miroir') this._creerPlateformeMiroir();
         else if (data.type === 'faux_sol_miroir')   this._creerFauxSolMiroir();
         else if (data.type === 'laser_prisme')      this._creerLaserPrisme();
+        // ─── Vague 8 (Voile Inversé — mécaniques de gravité) ───
+        else if (data.type === 'bloc_gravite')      this._creerBlocGravite();
+        else if (data.type === 'contrepoids')       this._creerContrepoids();
+        else if (data.type === 'balance')           this._creerBalance();
     }
 
     _creerPieu() {
@@ -285,6 +296,15 @@ export class Obstacle {
         }
         else if (this.data.type === 'laser_prisme') {
             if (this.sprite?.active) this._updateLaserPrisme(this.scene.time.now);
+        }
+        else if (this.data.type === 'bloc_gravite') {
+            if (this.sprite?.active) this._updateBlocGravite();
+        }
+        else if (this.data.type === 'contrepoids') {
+            if (this.visual?.active) this._dessinerContrepoids();
+        }
+        else if (this.data.type === 'balance') {
+            if (this.spriteG?.active) this._updateBalance();
         }
     }
 
@@ -1687,6 +1707,268 @@ export class Obstacle {
             // Trait noir au centre
             g.lineStyle(1, 0x000000, 0.4);
             g.strokeRect(cx - w / 2 + 4, cy - h / 2 + 4, w - 8, h - 8);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 8 — Voile Inversé (mécaniques de gravité)
+    // ════════════════════════════════════════════════════════════════
+
+    // ─── Blocus Croisé : bloc solide ridable piloté par le pendule ───
+    _creerBlocGravite() {
+        const taille = this.data.largeur ?? this.def.tailleDefault;
+        this.blocInverse = this.data.inverse ?? false;
+        this.blocVitesse = this.data.vitesse ?? this.def.vitesseDefault;
+        this.yCentreBas  = this.data.yTopBas  + taille / 2;
+        this.yCentreHaut = this.data.yTopHaut + taille / 2;
+        const yInit = this.blocInverse ? this.yCentreHaut : this.yCentreBas;
+
+        // Dynamic body immovable (pattern plateforme_mobile) : solide tous côtés,
+        // porte le joueur quand il monte/descend.
+        this.sprite = this.scene.add.rectangle(this.data.x, yInit, taille, taille, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite);
+        const body = this.sprite.body;
+        body.allowGravity = false;
+        body.immovable = true;
+        body.moves = true;
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this._dessinerBlocGravite();
+    }
+
+    _updateBlocGravite() {
+        // Suit la gravité de la SALLE (pendule) XOR la polarité du bloc.
+        const flip = this.scene._penduleInverse === true;
+        const versHaut = flip !== this.blocInverse;       // XOR
+        const cible = versHaut ? this.yCentreHaut : this.yCentreBas;
+        const body = this.sprite.body;
+        const dt = (this.scene.game.loop.delta ?? 16) / 1000;
+        const pas = this.blocVitesse * dt;
+        const dy = cible - this.sprite.y;
+        if (Math.abs(dy) <= pas + 0.5) {
+            this.sprite.y = cible;
+            body.setVelocity(0, 0);
+        } else {
+            body.setVelocity(0, Math.sign(dy) * this.blocVitesse);
+        }
+        this._dessinerBlocGravite();
+    }
+
+    _dessinerBlocGravite() {
+        const g = this.visual;
+        if (!g) return;
+        const w = this.data.largeur, h = this.data.hauteur;
+        const cx = this.sprite.x, cy = this.sprite.y;
+        const flip = this.scene._penduleInverse === true;
+        const versHaut = flip !== this.blocInverse;       // sens de chute courant
+        const now = this.scene.time.now;
+        g.clear();
+
+        // Ombre portée vers le bas (abîme aubergine).
+        g.fillStyle(COULEUR_VOILE_FONCE, 0.5);
+        g.fillRect(cx - w / 2 + 3, cy - h / 2 + 3, w, h);
+        // Corps marbre aubergine.
+        g.fillStyle(COULEUR_VOILE_PIERRE, 1);
+        g.fillRect(cx - w / 2, cy - h / 2, w, h);
+        // Arête éclairée (biseau haut-gauche).
+        g.fillStyle(COULEUR_VOILE_CLAIR, 0.9);
+        g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, w - 4, 2);
+        g.fillRect(cx - w / 2 + 2, cy - h / 2 + 2, 2, h - 4);
+        g.lineStyle(2, COULEUR_VOILE_FONCE, 0.8);
+        g.strokeRect(cx - w / 2, cy - h / 2, w, h);
+
+        // Cœur d'inversion : chevron magenta pointant dans le sens de chute,
+        // pulse pour signaler la polarité.
+        const pulse = 0.55 + 0.45 * Math.sin(now / 140);
+        g.fillStyle(COULEUR_VOILE_MAGENTA, 0.55 + 0.35 * pulse);
+        const dir = versHaut ? -1 : 1;            // -1 = pointe vers le haut
+        const ax = cx, ay = cy + dir * 6;
+        const sp = 11;
+        g.beginPath();
+        g.moveTo(ax, ay + dir * sp);
+        g.lineTo(ax - sp, ay - dir * sp);
+        g.lineTo(ax + sp, ay - dir * sp);
+        g.closePath();
+        g.fillPath();
+        // Halo du cœur.
+        g.fillStyle(COULEUR_VOILE_MAGENTA, 0.18 * pulse);
+        g.fillCircle(cx, cy, w * 0.42);
+    }
+
+    // ─── Contrepoids : pierre poussable thème Voile ───
+    _creerContrepoids() {
+        const taille = this.data.largeur ?? this.def.tailleDefault;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, taille, taille, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite);     // dynamic body
+        const body = this.sprite.body;
+        body.allowGravity = true;
+        body.setDragX(this.def.friction);
+        body.setMaxVelocity(this.def.vitessePushMax, 1000);
+        body.setCollideWorldBounds(false);
+        this.sprite._obstacle = this;
+        // Colliders créés par GameScene (platforms, joueur, obstaclesSolides,
+        // plateaux de balance).
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(9);
+        this._dessinerContrepoids();
+    }
+
+    _dessinerContrepoids() {
+        const g = this.visual;
+        if (!g) return;
+        const w = this.data.largeur, h = this.data.hauteur;
+        const cx = this.sprite ? this.sprite.x : this.data.x;
+        const cy = this.sprite ? this.sprite.y : this.data.y;
+        const now = this.scene.time.now;
+        g.clear();
+        // Ombre.
+        g.fillStyle(COULEUR_VOILE_FONCE, 0.55);
+        g.fillRect(cx - w / 2 + 2, cy - h / 2 + 3, w, h);
+        // Corps : pierre taillée aubergine, plus dense que les blocs.
+        g.fillStyle(0x2a1a36, 1);
+        g.fillRect(cx - w / 2, cy - h / 2, w, h);
+        g.fillStyle(COULEUR_VOILE_PIERRE, 0.8);
+        g.fillRect(cx - w / 2 + 4, cy - h / 2 + 4, w - 8, h - 8);
+        // Rune de poids (cercle barré) magenta — signe « masse ».
+        const pulse = 0.6 + 0.4 * Math.sin(now / 200);
+        g.lineStyle(2, COULEUR_VOILE_MAGENTA, 0.7 * pulse);
+        g.strokeCircle(cx, cy, w * 0.26);
+        g.lineBetween(cx - w * 0.26, cy, cx + w * 0.26, cy);
+        // Arête éclairée.
+        g.fillStyle(COULEUR_VOILE_CLAIR, 0.7);
+        g.fillRect(cx - w / 2 + 3, cy - h / 2 + 3, w - 6, 2);
+        g.lineStyle(2, COULEUR_VOILE_FONCE, 0.9);
+        g.strokeRect(cx - w / 2, cy - h / 2, w, h);
+    }
+
+    // ─── Balance Gravitationnelle : 2 plateaux couplés par poulie ───
+    _creerBalance() {
+        const w = this.data.largeur;
+        const h = this.def.hauteurPlateau;
+        this.balAmplitude = this.data.amplitude ?? this.def.amplitudeDefault;
+        this.balVitesse = this.data.vitesse ?? this.def.vitesseDefault;
+        this.balYRepos = this.data.yRepos;
+        this.balTheta = 0;
+
+        const mk = (x) => {
+            const s = this.scene.add.rectangle(x, this.balYRepos, w, h, 0xffffff, 0);
+            s.setAlpha(0);
+            this.scene.physics.add.existing(s);
+            const b = s.body;
+            b.allowGravity = false;
+            b.immovable = true;
+            b.moves = true;
+            // One-way : on n'atterrit que par le dessus (le plateau qui monte ne
+            // bloque pas la tête, pas de head-bonk).
+            b.checkCollision.down = false;
+            b.checkCollision.left = false;
+            b.checkCollision.right = false;
+            s._obstacle = this;
+            return s;
+        };
+        this.spriteG = mk(this.data.xG);
+        this.spriteD = mk(this.data.xD);
+        this.sprite = this.spriteG;                 // réf générique (collier/skip)
+        this.spritesBalance = [this.spriteG, this.spriteD];
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this._dessinerBalance();
+    }
+
+    _updateBalance() {
+        const dt = (this.scene.game.loop.delta ?? 16) / 1000;
+        // Signe de la gravité du joueur (pendule OU zone). +1 normal, -1 inversé.
+        const signe = this.scene._inversionGravite ? -1 : 1;
+        const chargeG = this._chargeSurPlateau(this.spriteG);
+        const chargeD = this._chargeSurPlateau(this.spriteD);
+        // net>0 → gauche plus lourd → en gravité normale gauche descend (θ>0).
+        const net = (chargeG - chargeD) * signe;
+        const thetaCible = Phaser.Math.Clamp(net, -1, 1);
+        this.balTheta = Phaser.Math.Linear(
+            this.balTheta, thetaCible, Math.min(1, this.balVitesse * dt)
+        );
+        const yG = this.balYRepos + this.balTheta * this.balAmplitude;
+        const yD = this.balYRepos - this.balTheta * this.balAmplitude;
+        this._piloterPlateau(this.spriteG, yG, dt);
+        this._piloterPlateau(this.spriteD, yD, dt);
+        this._dessinerBalance();
+    }
+
+    // Déplace un plateau vers yCible par VÉLOCITÉ (porte les riders), sans
+    // dépasser (clamp). dt = delta frame en secondes.
+    _piloterPlateau(s, yCible, dt) {
+        const dy = yCible - s.y;
+        const v = Phaser.Math.Clamp(dy / dt, -700, 700);
+        if (Math.abs(dy) < 0.5) { s.y = yCible; s.body.setVelocity(0, 0); }
+        else s.body.setVelocity(0, v);
+    }
+
+    // Somme des charges posées sur un plateau : joueur (poidsJoueur) + chaque
+    // contrepoids (poids). Détection par AABB « bas de l'objet ≈ top du plateau ».
+    _chargeSurPlateau(s) {
+        let c = 0;
+        const p = this.scene.player;
+        if (p && this._reposeSur(p, s)) c += this.def.poidsJoueur;
+        if (this.scene.obstacles) {
+            for (const o of this.scene.obstacles) {
+                if (o.data.type !== 'contrepoids' || !o.sprite) continue;
+                if (this._reposeSur(o.sprite, s)) c += (o.data.poids ?? 1);
+            }
+        }
+        return c;
+    }
+
+    _reposeSur(obj, plateau) {
+        const halfW = (plateau.width + obj.width) / 2;
+        if (Math.abs(obj.x - plateau.x) > halfW) return false;
+        const objBottom = obj.y + obj.height / 2;
+        const platTop = plateau.y - plateau.height / 2;
+        return objBottom >= platTop - 16 && objBottom <= platTop + 14;
+    }
+
+    _dessinerBalance() {
+        const g = this.visual;
+        if (!g) return;
+        const w = this.data.largeur, h = this.def.hauteurPlateau;
+        const now = this.scene.time.now;
+        g.clear();
+
+        const pivotX = this.data.x;
+        const pivotY = this.balYRepos - this.balAmplitude - 26;   // poulie au-dessus
+        const gx = this.spriteG.x, gy = this.spriteG.y;
+        const dx = this.spriteD.x, dy = this.spriteD.y;
+
+        // Câbles de poulie : pivot → chaque plateau.
+        g.lineStyle(2, COULEUR_VOILE_NACRE, 0.6);
+        g.lineBetween(pivotX, pivotY, gx, gy - h / 2);
+        g.lineBetween(pivotX, pivotY, dx, dy - h / 2);
+        // Poulie centrale.
+        g.fillStyle(COULEUR_VOILE_FONCE, 1);
+        g.fillCircle(pivotX, pivotY, 9);
+        g.lineStyle(2, COULEUR_VOILE_MAGENTA, 0.5 + 0.3 * Math.sin(now / 220));
+        g.strokeCircle(pivotX, pivotY, 9);
+
+        // Plateaux.
+        for (const s of [this.spriteG, this.spriteD]) {
+            const cx = s.x, cy = s.y;
+            g.fillStyle(COULEUR_VOILE_FONCE, 0.5);
+            g.fillRect(cx - w / 2 + 2, cy - h / 2 + 3, w, h);
+            g.fillStyle(COULEUR_VOILE_PIERRE, 1);
+            g.fillRect(cx - w / 2, cy - h / 2, w, h);
+            g.fillStyle(COULEUR_VOILE_CLAIR, 0.8);
+            g.fillRect(cx - w / 2 + 2, cy - h / 2 + 1, w - 4, 2);
+            g.lineStyle(2, COULEUR_VOILE_FONCE, 0.8);
+            g.strokeRect(cx - w / 2, cy - h / 2, w, h);
+            // Anneaux de suspension aux extrémités.
+            g.fillStyle(COULEUR_VOILE_NACRE, 0.7);
+            g.fillCircle(cx - w / 2 + 4, cy - h / 2, 2.5);
+            g.fillCircle(cx + w / 2 - 4, cy - h / 2, 2.5);
         }
     }
 

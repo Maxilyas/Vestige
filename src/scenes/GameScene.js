@@ -650,12 +650,43 @@ export class GameScene extends Phaser.Scene {
                     // Faisceau cyclique : overlap actif seulement en phase 'tir'
                     this.physics.add.overlap(this.player, obs.sprite, () =>
                         obs.onContactJoueur(this, this.player));
+                } else if (t === 'bloc_gravite') {
+                    // Bloc solide ridable piloté par le pendule : collider plein
+                    // (le joueur se tient dessus et est porté quand il monte/descend).
+                    this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'contrepoids') {
+                    // Pierre poussable : repose sur les sols, poussée latéralement.
+                    this.physics.add.collider(obs.sprite, this.platforms);
+                    if (this.obstaclesSolides) {
+                        this.physics.add.collider(obs.sprite, this.obstaclesSolides);
+                    }
+                    this.physics.add.collider(this.player, obs.sprite);
+                } else if (t === 'balance') {
+                    // Deux plateaux ridables : collider plein avec le joueur.
+                    for (const pl of obs.spritesBalance) {
+                        this.physics.add.collider(this.player, pl);
+                    }
                 }
                 // faux_sol_miroir : intangible (pas de body), aucune physique.
                 // cristal_resonant : pas de physique (frappé via tenterAttaque).
                 // anti_ancrage : pas de sprite physique, lecture par AncrageSystem
             }
         }
+        // Contrepoids ↔ plateaux de balance : créés après la boucle car l'ordre
+        // des deux types dans le pool n'est pas garanti (les sprites doivent
+        // tous exister). Permet à un contrepoids poussé de reposer sur un plateau.
+        const _balances = this.obstacles.filter(o => o.data.type === 'balance');
+        if (_balances.length) {
+            const _contrepoids = this.obstacles.filter(o => o.data.type === 'contrepoids');
+            for (const b of _balances) {
+                for (const c of _contrepoids) {
+                    for (const pl of b.spritesBalance) {
+                        this.physics.add.collider(c.sprite, pl);
+                    }
+                }
+            }
+        }
+
         // Anti-ancrage : on injecte la liste dans le système
         this.ancrage?.setObstaclesAntiAncrage?.(
             this.obstacles.filter(o => o.data.type === 'anti_ancrage')
@@ -950,6 +981,9 @@ export class GameScene extends Phaser.Scene {
         this._tickPendule();
         const floatEnnemi = (this.player._graviteInverseJusqu ?? 0) > now;
         const inversionGravite = dansZoneInverse || this._penduleInverse;
+        // Exposé pour les obstacles gravité-réactifs (balance) : signe de la
+        // gravité du joueur. bloc_gravite lit `_penduleInverse` (gravité salle).
+        this._inversionGravite = inversionGravite;
         const gBodyVoulu = inversionGravite ? -2 * gWorld
                          : floatEnnemi      ? -gWorld
                          : 0;

@@ -85,6 +85,44 @@ function valider(salle) {
         mobileGroups.set(groupId, positions);
     });
 
+    // Blocs à gravité (« Blocus Croisé ») : tremplins virtuels aux 3 niveaux
+    // qu'ils traversent (repos bas, mi-hauteur de croisement, repos haut).
+    const blocsGravite = (salle.obstacles ?? []).filter(o => o.type === 'bloc_gravite');
+    blocsGravite.forEach((b, idx) => {
+        const t = b.largeur ?? 54;
+        const yBas = b.yTopBas + t / 2;
+        const yHaut = b.yTopHaut + t / 2;
+        const yMid = (yBas + yHaut) / 2;
+        const groupId = `blocgrav_${idx}`;
+        const base = { largeur: t, hauteur: t, oneWay: true, _virtuel: true, _mobileGroup: groupId };
+        const positions = [
+            { ...base, x: b.x, y: yBas },
+            { ...base, x: b.x, y: yMid },
+            { ...base, x: b.x, y: yHaut }
+        ];
+        plateformes.push(...positions);
+        mobileGroups.set(groupId, positions);
+    });
+
+    // Balances : chaque plateau oscille entre yRepos±amplitude. On modélise les
+    // deux plateaux (gauche/droite) à leurs 3 niveaux dans UN groupe partagé :
+    // le joueur peut manipuler la balance pour atteindre n'importe quelle hauteur.
+    const balances = (salle.obstacles ?? []).filter(o => o.type === 'balance');
+    balances.forEach((bal, idx) => {
+        const w = bal.largeur ?? 120;
+        const amp = bal.amplitude ?? 100;
+        const groupId = `balance_${idx}`;
+        const base = { largeur: w, hauteur: 16, oneWay: true, _virtuel: true, _mobileGroup: groupId };
+        const positions = [];
+        for (const cx of [bal.xG, bal.xD]) {
+            positions.push({ ...base, x: cx, y: bal.yRepos - amp });
+            positions.push({ ...base, x: cx, y: bal.yRepos });
+            positions.push({ ...base, x: cx, y: bal.yRepos + amp });
+        }
+        plateformes.push(...positions);
+        mobileGroups.set(groupId, positions);
+    });
+
     if (plateformes.length === 0) return [];
 
     // Sol = la plus large plateforme (souvent yTop le plus bas aussi)
@@ -196,7 +234,9 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'voile_chambre_inversee','voile_gouffre_renverse',
              'voile_autel_renverse','voile_pendule_oscillant',
              'voile_gouffre_pendulaire','voile_aiguilles_renversees',
-             'voile_parabole_en_s','voile_nef_renversee'];
+             'voile_parabole_en_s','voile_nef_renversee',
+             // ─── Voile Vague 2 : mécaniques de gravité neuves ───
+             'voile_blocus_croise','voile_balance_gravitationnelle'];
 
 let totalBugs = 0;
 for (const id of ids) {

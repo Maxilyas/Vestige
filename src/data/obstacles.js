@@ -338,6 +338,39 @@ export const TYPES_OBSTACLES = {
         invincibiliteApresHit: 700
     },
 
+    // ─── Vague 8 — Voile Inversé (mécaniques de gravité) ─────────────
+    bloc_gravite: {
+        id: 'bloc_gravite',
+        // « Blocus Croisé » : bloc solide ridable dont la chute suit la gravité
+        // de la salle (pendule) XOR sa polarité `inverse`. Voyage entre repos
+        // bas (sol) et repos haut (plafond) à `vitesse` px/s au flip. Deux blocs
+        // de polarité opposée se croisent à mi-hauteur = marchepied éphémère.
+        // data : { x, y, largeur, hauteur, yTopBas, yTopHaut, inverse, vitesse }
+        tailleDefault: 54,
+        vitesseDefault: 320
+    },
+    contrepoids: {
+        id: 'contrepoids',
+        // Pierre dynamique poussable (pattern bloc_charbon sans le feu), thème
+        // Voile. Posée sur un plateau de balance, ajoute son `poids` à ce côté.
+        // data : { x, y, largeur, hauteur, poids }
+        tailleDefault: 44,
+        friction: 280,                  // décélération px/s² horizontale
+        vitessePushMax: 80
+    },
+    balance: {
+        id: 'balance',
+        // « Balance Gravitationnelle » : 2 plateaux ridables couplés par poulie.
+        // θ piloté par (chargeG − chargeD) × signe de la gravité du joueur.
+        // Charge = joueur (poidsJoueur) + contrepoids posés. Le flip d'inversion
+        // change le signe → inverse le penchant.
+        // data : { x, y, xG, xD, yRepos, largeur, amplitude, vitesse }
+        hauteurPlateau: 16,
+        amplitudeDefault: 100,
+        vitesseDefault: 2.4,            // convergence de θ (unités/s)
+        poidsJoueur: 1.0
+    },
+
     mur_secret: {
         id: 'mur_secret',
         // Mur cassable VISUELLEMENT IDENTIQUE à une plateforme/sol normale du
