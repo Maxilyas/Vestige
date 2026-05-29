@@ -10,6 +10,7 @@
 
 import { VORTEX_DIMS, HAUTEUR_SOL_EXPORT as HAUTEUR_SOL } from '../data/archetypes.js';
 import { biomePourEtage } from '../data/biomes.js';
+import { ENEMIES } from '../data/enemies/index.js';
 import { tirerRarete, probasPourEtage } from './RaritySystem.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 
@@ -277,15 +278,24 @@ export function genererSalle({
             const enemyId = pool.length > 0
                 ? pool[Math.floor(rng() * pool.length)]
                 : null;
+            // Offset entre la surface (sol/plateforme) et le CENTRE de l'ennemi.
+            // Ennemi à gravité → on pose ses PIEDS juste au-dessus de la surface
+            // (centre = surface − demi-hauteur − petit jeu). Sinon un grand corps
+            // (Colosse du Voile, hauteur 52) spawn encastré sous le sol : quand la
+            // pénétration dépasse l'overlapBias (~4 px), Phaser saute la séparation
+            // (il croit à un tunneling) et l'ennemi tombe à travers. Les flotteurs
+            // (gravite:false) gardent le hover fixe historique de 20 px.
+            const def = enemyId ? ENEMIES[enemyId] : null;
+            const offsetSurface = def?.gravite ? def.hauteur / 2 + 2 : 20;
             const surSol = plateformesEnnemiSpawn.length === 0 || rng() < 0.5;
             let x, y;
             if (surSol) {
                 x = xSurSolSolide();
-                y = dims.hauteur - HAUTEUR_SOL - 20;
+                y = dims.hauteur - HAUTEUR_SOL - offsetSurface;
             } else {
                 const p = plateformesEnnemiSpawn[entreEntier(rng, 0, plateformesEnnemiSpawn.length - 1)];
                 x = p.x;
-                y = p.y - p.hauteur / 2 - 20;
+                y = p.y - p.hauteur / 2 - offsetSurface;
             }
             const tier = tirerRarete(rngRarete, probasRarete);
             ennemis.push({ x, y, idx: i, enemyId, tier });
