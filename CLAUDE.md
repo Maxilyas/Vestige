@@ -96,7 +96,7 @@ npx live-server .
 **À faire (priorité haut → bas) :**
 - ⬜ **Tuning navigateur Cristaux Vagues 1+2** (voir « État actuel » → À tester)
 - ⬜ **Cristaux Vague 3** — atmosphère/lore (monolithes `vestige_lore`) + densification visuelle parallax
-- 🟡 **Voile Inversé** — fondation compacte faite (20 salles + fallback, étages 7-8 spanning tree). Reste : branche `PlateformeStyle` voile (visuel paliers) + signatures **inversion de gravité par salle/zone** (Vague 1+), puis **Cœur du Reflux**
+- 🟡 **Voile Inversé** — fondation + `PlateformeStyle` voile (visuel paliers) faits. Vague 1 colonnes-signature : 3 salles d'inversion (`voile_chambre_inversee` proto + `voile_gouffre_renverse` + `voile_autel_renverse`), inversion **joueur seul** (ennemis non inversés). Reste : 3e saveur (inversion **cyclique/pendule** OU salle **tête-en-bas** complète), puis **Cœur du Reflux**
 - ⬜ **Sanctuaires boss** étages 6 / 7 / 8 / 10
 - ⬜ **Phase 9.9 Halls** — pièces scriptées (vagues de fonte, cheminées qui s'abattent)
 - ⬜ **5c.3** — Polish HUD cooldown Geste (overlay tournant + label)
@@ -143,9 +143,9 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Dernière étape** : Voile Vague 1 (branche `PlateformeStyle` voile + inversion de gravité par zone + `voile_chambre_inversee`) + 2 fix spawn ennemis : (1) spawn « surSol » contraint aux segments de sol SOLIDE (un ennemi gravité ne tombe plus dans un gouffre central au load, ex. `voile_pont_suspendu`) ; (2) collider sol/obstacles ajouté à TOUS les ennemis (les flotteurs ne traversent plus le sol plein en poursuivant). Validateur 130/130.
-- **À tester en navigateur** : (1) feel inversion `voile_chambre_inversee` + paliers Voile 7-8 ; (2) les 2 fix ennemis — golem (`colosse_voile`) ne tombe plus au load dans `voile_pont_suspendu`, flotteurs bloqués par le sol en poursuite.
-- **Prochain chantier** : si feel validé → Vague 1 full (salles tête-en-bas, zones/cycles, backlog 20 idées). Sinon tuning prototype.
+- **Dernière étape** : Voile Vague 1 — 2 salles signature d'inversion (`voile_gouffre_renverse` gouffre létal + navette OU colonne-coffre ; `voile_autel_renverse` champ de pieux + colonne → autel-coffre) + helper `graviteInverse()` (proto refactoré) + fix spawn Colosse (offset conscient de la hauteur, anti-encastrement). Inversion **joueur seul**. Validateur 132/132.
+- **À tester en navigateur** : feel des 2 nouvelles salles d'inversion (entrée colonne depuis le sol, marche tête-en-bas, sortie latérale/retombée, prise du coffre) + combat flotteurs pendant la traversée. Confirmer aussi que le fix Colosse tient.
+- **Prochain chantier** : si feel validé → 3e saveur (inversion **cyclique/pendule** OU salle **tête-en-bas** complète, cf. backlog) ; sinon tuning géométrie des colonnes.
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.

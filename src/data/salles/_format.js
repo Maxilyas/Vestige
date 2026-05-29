@@ -299,6 +299,37 @@ export function antiAncrage(x, yTop, largeur, hauteur) {
 }
 
 /**
+ * Zone de GRAVITÉ INVERSÉE — signature Voile Inversé. Dans le rectangle, la
+ * gravité du JOUEUR tire vers le HAUT (les ennemis ne sont PAS affectés) : il
+ * « tombe » au plafond, marche tête en bas sous une corniche, et retombe vers
+ * le sol en sortant latéralement de la zone. Lue chaque frame par GameScene.
+ *
+ * Convention de placement (cf. proto voile_chambre_inversee) :
+ *   • La corniche-plafond walkable doit être SOLIDE + taguée 'gravite_inverse'
+ *     (le validateur BFS gravité-normale l'ignore : atteignable seulement par
+ *     l'inversion).
+ *   • Le bas de la zone doit rester AU-DESSUS du joueur debout au sol (centre
+ *     ~ ySol−30) pour ne pas l'aspirer en marchant ; mais sous l'apogée d'un
+ *     saut depuis le sol (centre ~ ySol−66) pour qu'un saut l'attrape.
+ *   • Le coffre-récompense se place au niveau du joueur tête en bas
+ *     (≈ corniche.bottom + PLAYER_H/2).
+ *
+ * @param {number} x        centre x de la colonne
+ * @param {number} yTop     top y de la zone
+ * @param {number} largeur
+ * @param {number} hauteur
+ */
+export function graviteInverse(x, yTop, largeur, hauteur) {
+    return {
+        type: 'gravite_inverse',
+        x,
+        y: yTop + hauteur / 2,
+        largeur,
+        hauteur
+    };
+}
+
+/**
  * Plateforme MOBILE oscillante (one-way virtuelle : le joueur la traverse
  * par le dessous/côtés, n'atterrit que par le dessus). Le mouvement est
  * sinusoïdal autour du centre (x, y), amplitude = portée max d'un côté.

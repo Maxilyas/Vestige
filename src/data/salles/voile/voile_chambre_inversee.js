@@ -17,7 +17,7 @@
 
 import {
     HAUTEUR_SOL, sol, plateforme, plafondCathedrale,
-    porteO, porteE
+    porteO, porteE, graviteInverse
 } from '../_format.js';
 
 const W = 960;
@@ -55,10 +55,7 @@ export const voile_chambre_inversee = {
         // franchir le seuil bas de la colonne, l'inversion fait le reste).
         //   y ∈ [140, 440] → ne touche PAS le joueur posé au sol (centre ~470),
         //   englobe le dessous de la corniche (centre joueur ~196) sans trou.
-        const zones = [{
-            type: 'gravite_inverse',
-            x: 480, y: 290, largeur: 240, hauteur: 300
-        }];
+        const zones = [graviteInverse(480, 140, 240, 300)];
 
         // Coffre suspendu sous la corniche, au niveau du joueur tête en bas.
         const coffreForce = { x: 480, y: 196 };
