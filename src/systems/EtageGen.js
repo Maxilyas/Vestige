@@ -231,8 +231,12 @@ export function genererEtage(numero, seedRun) {
         // useSalle/topographie directement). Sinon on lit depuis pinEtage.salles.
         const pin = pinEtage?.noeuds?.[n.id] ?? configSalle(numero, n.id);
 
-        if (n.role === 'entree') {
-            // Entrée = Cité Marchande en Miroir. Forçage non négociable.
+        if (n.role === 'entree' && !(pin?.useSalle && sallePar(pin.useSalle))) {
+            // Entrée SANS salle dédiée → sanctuaire/arène plat (compat historique :
+            // la Cité Miroir s'y déploie, 3 PNJ au sol). Si l'étage pinne une
+            // salle d'entrée explicite (ex. Cœur du Reflux : Seuil top-down), on
+            // la respecte — la Cité Miroir est alors SUBSTITUÉE au render-time
+            // par GameScene (géométrie side-scroll dédiée). Cf. GameScene.create().
             archetype = ARCHETYPES.sanctuaire;
             topographie = TOPOGRAPHIES.arene_ouverte;
         } else if (pin?.useSalle && sallePar(pin.useSalle)) {

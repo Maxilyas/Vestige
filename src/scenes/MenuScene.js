@@ -377,6 +377,15 @@ export class MenuScene extends Phaser.Scene {
         try { localStorage.setItem(CLE_RUN_ACTIF, 'true'); }
         catch (_e) { /* privacy → no-op */ }
 
+        // DEBUG (dev) — `?etage=N` démarre la run directement à l'étage N (1..10).
+        // Outil de test (cf. test biome par biome). Sans paramètre : étage 1.
+        try {
+            const dbg = parseInt(new URLSearchParams(window.location.search).get('etage'), 10);
+            if (Number.isInteger(dbg) && dbg >= 1 && dbg <= 10) {
+                this.registry.set('etage_courant', dbg);
+            }
+        } catch (_e) { /* no-op */ }
+
         this.cameras.main.fadeOut(500, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.scene.start('GameScene');

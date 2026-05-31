@@ -156,6 +156,67 @@ function valider(salle) {
     return plateformes.filter(p => !visited.has(p) && !p._virtuel);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// VALIDATION VUE DE DESSUS (Cœur du Reflux — Phase 9.13)
+// ════════════════════════════════════════════════════════════════════
+// Le modèle de saut ne s'applique pas : le joueur se déplace librement en 2D
+// sur un plan (pas de gravité). On valide la CONNECTIVITÉ par flood-fill sur
+// une grille, murs = obstacles. On vérifie que toutes les portes + le coffre
+// sont joignables depuis le spawn (en tolérant la demi-largeur du joueur).
+const W_CANVAS = 960, H_CANVAS = 540;
+
+function validerTopDown(result) {
+    const cell = 16;
+    const margin = 12;   // ~ demi-largeur joueur : rejette les passages trop étroits
+    const cols = Math.ceil(W_CANVAS / cell), rows = Math.ceil(H_CANVAS / cell);
+    // Murs solides (non oneWay, non décoratifs). Les tableaux/obstacles
+    // (courants, zones, mur de cortège ouvrable) ne bloquent PAS la connectivité.
+    const murs = (result.plateformes ?? []).filter(p => !p.oneWay && !p.tags?.includes('decoratif'));
+
+    const blocked = (px, py) => {
+        if (px < margin || px > W_CANVAS - margin || py < margin || py > H_CANVAS - margin) return true;
+        for (const m of murs) {
+            if (px >= m.x - m.largeur / 2 - margin && px <= m.x + m.largeur / 2 + margin &&
+                py >= m.y - m.hauteur / 2 - margin && py <= m.y + m.hauteur / 2 + margin) return true;
+        }
+        return false;
+    };
+    const key = (cx, cy) => cx + ',' + cy;
+    const cellOf = (x, y) => [Math.floor(x / cell), Math.floor(y / cell)];
+    const centerOf = (cx, cy) => [cx * cell + cell / 2, cy * cell + cell / 2];
+
+    const spawn = result.spawnDefault ?? { x: W_CANVAS / 2, y: H_CANVAS / 2 };
+    const [sx, sy] = cellOf(spawn.x, spawn.y);
+    const visited = new Set([key(sx, sy)]);
+    const q = [[sx, sy]];
+    while (q.length) {
+        const [cx, cy] = q.shift();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || visited.has(key(nx, ny))) continue;
+            const [wx, wy] = centerOf(nx, ny);
+            if (blocked(wx, wy)) continue;
+            visited.add(key(nx, ny));
+            q.push([nx, ny]);
+        }
+    }
+    const reachable = (x, y) => {
+        const [cx, cy] = cellOf(x, y);
+        for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+            if (visited.has(key(cx + ox, cy + oy))) return true;
+        }
+        return false;
+    };
+
+    const ko = [];
+    if (blocked(spawn.x, spawn.y)) ko.push(`spawn (${Math.round(spawn.x)},${Math.round(spawn.y)}) dans un mur`);
+    for (const [dir, p] of Object.entries(result.portes ?? {})) {
+        if (!reachable(p.x, p.y)) ko.push(`porte ${dir} injoignable`);
+    }
+    if (result.coffre && !reachable(result.coffre.x, result.coffre.y)) ko.push('coffre injoignable');
+    return ko;
+}
+
 // Importe le catalogue et valide chaque salle
 const mod = await import('../src/data/salles/_index.js');
 const { sallesCompatibles } = mod;
@@ -236,7 +297,11 @@ const ids = [// ─── Ruines basses — Phase 9 compact (960×540) ───
              'voile_gouffre_pendulaire','voile_aiguilles_renversees',
              'voile_parabole_en_s','voile_nef_renversee',
              // ─── Voile Vague 2 : mécaniques de gravité neuves ───
-             'voile_blocus_croise','voile_balance_gravitationnelle'];
+             'voile_blocus_croise','voile_balance_gravitationnelle',
+             // ─── Cœur du Reflux (VUE DE DESSUS — Phase 9.10-9.13) ───
+             'coeur_seuil','coeur_courants_croises','coeur_epreuves',
+             'coeur_cortege','coeur_echo','coeur_mille_regards',
+             'coeur_antichambre','coeur_arene_doyen','coeur_chambre'];
 
 let totalBugs = 0;
 for (const id of ids) {
@@ -244,6 +309,20 @@ for (const id of ids) {
     if (!salle) { console.log(`[?] ${id} introuvable`); continue; }
     const portesActives = salle.portesPossibles ?? ['O','E'];
     const result = salle.generer({ portesActives });
+
+    // VUE DE DESSUS (Cœur) : validation par connectivité, pas par saut.
+    if (salle.vue === 'topDown') {
+        const ko = validerTopDown(result);
+        if (ko.length === 0) {
+            console.log(`[OK] ${id.padEnd(28)} — top-down, ${result.plateformes.length} murs`);
+        } else {
+            totalBugs += ko.length;
+            console.log(`[KO] ${id.padEnd(28)} — top-down, points injoignables :`);
+            for (const k of ko) console.log(`       → ${k}`);
+        }
+        continue;
+    }
+
     const inaccess = valider(result);
     if (inaccess.length === 0) {
         console.log(`[OK] ${id.padEnd(28)} — ${result.plateformes.length} plateformes`);

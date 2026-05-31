@@ -1,17 +1,14 @@
-// 3 patterns de boss — Colosse, Tisseur, Hydre.
+// Patterns de boss. 3 archétypes side-scroll (Colosse / Tisseur / Hydre) +
+// 2 boss VUE DE DESSUS du Cœur du Reflux (Le Doyen / Le Cœur), importés depuis
+// BossCoeurReflux.js (cf. BOSS_CONCEPTS.md §22-23).
 //
-// Chaque pattern expose `init(boss)` et `update(boss, player)`. Les boss
-// utilisent en interne les comportements de leurs archétypes (Veilleur /
-// Tireur) mais avec une logique d'attaque spéciale par-dessus :
-//   - Colosse : SMASH AOE périodique (telegraph 800ms → impact zone + gravats)
-//   - Tisseur : SALVE de N projectiles téléguidés (accent : pas un seul tir,
-//                une rafale en éventail vers le joueur)
-//   - Hydre   : composite. Phase 1 = mode Tisseur. Phase 2 (≤ seuilPhase2) =
-//               mode Colosse. Phase 3 (≤ seuilPhase3, optionnelle) = enrage,
-//               les deux en alternance plus rapide.
-//
-// Les attaques émettent des événements scène (`boss:smash`, `boss:tir`) que
-// GameScene capte pour appliquer les dégâts et les effets visuels.
+// Chaque pattern expose `init(boss)` et `update(boss, player)`. Les attaques
+// émettent des événements scène (`boss:smash`, `boss:tir`, `boss:phase`) que
+// GameScene capte pour appliquer dégâts et effets.
+
+import {
+    initDoyen, updateDoyen, initCoeur, updateCoeur
+} from './BossCoeurReflux.js';
 
 // ============================================================
 // COLOSSE — smash AOE périodique
@@ -136,5 +133,7 @@ export function updateHydre(boss, player) {
 export const PATTERNS_BOSS = {
     colosse: { init: initColosse, update: updateColosse },
     tisseur: { init: initTisseur, update: updateTisseur },
-    hydre:   { init: initHydre,   update: updateHydre }
+    hydre:   { init: initHydre,   update: updateHydre },
+    doyen:   { init: initDoyen,   update: updateDoyen },  // VUE DE DESSUS (é9)
+    coeur:   { init: initCoeur,   update: updateCoeur }   // VUE DE DESSUS (é10) → FinScene
 };

@@ -306,9 +306,17 @@ export function genererSalle({
     // par défaut. Tomber sous le canvas = mort + retour Cité Miroir. Permet aux
     // designs d'avoir des fosses dangereuses sans coincer le joueur. La salle
     // peut explicitement opt-out via `topographie.gouffreMort = false`.
-    const gouffreMort = topographie.gouffreMort
-        ?? result.gouffreMort
-        ?? !!topographie.dimsCanvas;
+    // Phase 9.10 — Perspective de la salle. 'side' (défaut) = plateformer
+    // side-scroll classique ; 'topDown' = vue de dessus (Cœur du Reflux). En
+    // top-down il n'y a pas de gravité ni de gouffre : le sol EST le plan, on
+    // force donc gouffreMort à false (sinon la chute sous-canvas est impossible
+    // mais le drapeau resterait incohérent).
+    const vue = topographie.vue ?? 'side';
+    const gouffreMort = vue === 'topDown'
+        ? false
+        : (topographie.gouffreMort
+            ?? result.gouffreMort
+            ?? !!topographie.dimsCanvas);
 
     return {
         id: salleId,
@@ -320,11 +328,14 @@ export function genererSalle({
         // Les salles legacy (XL, dims variables) gardent le scroll caméra ;
         // les salles compactes (960×540) ont caméra figée sur 0,0.
         dimsCanvas: !!topographie.dimsCanvas,
+        vue,                    // 'side' | 'topDown' (Cœur du Reflux)
         gouffreMort,            // tomber sous canvas = mort + retour Cité
         plateformes,
         obstacles,
         portes,                 // { N?, S?, E?, O? } chaque porte = { direction, x, y, largeur, hauteur, interieur }
         zones,                  // zones interactives biome (ancrage Ruines, gouffres Cristaux...)
+        tableaux: result.tableaux ?? [],      // Cœur : tableaux figés animables (Phase 9.12)
+        echoGhost: result.echoGhost ?? null,  // Cœur : config écho-ghost de la salle (Phase 9.12)
         penduleInversion: result.penduleInversion ?? null,  // Voile : gravité joueur qui bascule sur timer
         vortex,
         spawnDefault,

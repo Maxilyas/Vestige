@@ -57,9 +57,16 @@ export class InputSystem {
             gauche: false,
             droite: false,
             descendre: false,
+            // Phase 9.10 — déplacement vertical en vue de dessus (Cœur du Reflux).
+            // Continus : ↑/Z = haut, ↓/S = bas. Ignorés hors top-down.
+            haut: false,
+            bas: false,
             zoomOutTenu: false,  // continu — true tant que la touche N est pressée
             // Edge (true uniquement la frame du déclenchement)
             sauter: false,
+            // Phase 9.10 — dash en vue de dessus (remplace le saut). Même touche
+            // que le saut (Espace) : impulse → impulse. Ignoré hors top-down.
+            dash: false,
             interagir: false,
             ouvrirInventaire: false,
             ouvrirCarte: false,
@@ -87,10 +94,20 @@ export class InputSystem {
         i.descendre = this.cursors.down.isDown || this.touches.descendre.isDown;
         i.zoomOutTenu = this.touches.zoomOut.isDown;
 
-        i.sauter =
-            Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-            Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-            Phaser.Input.Keyboard.JustDown(this.touches.saut);
+        // Vertical top-down (continu) — ↑/Z = haut, ↓/S = bas. La touche Z porte
+        // aussi `sort` (edge, JustDown), sans conflit : top-down ignore `sort`,
+        // side-scroll ignore `haut`. Le bas réutilise `descendre`.
+        i.haut = this.cursors.up.isDown || this.touches.sort.isDown;
+        i.bas = i.descendre;
+
+        // Edge des touches de saut/dash — JustDown ne doit être lu QU'UNE fois par
+        // Key (il consomme le flag). On calcule chaque edge une seule fois ici.
+        const upJust = Phaser.Input.Keyboard.JustDown(this.cursors.up);
+        const spaceJust = Phaser.Input.Keyboard.JustDown(this.cursors.space);
+        const sautKeyJust = Phaser.Input.Keyboard.JustDown(this.touches.saut);
+        i.sauter = upJust || spaceJust || sautKeyJust;
+        // Dash = Espace (la touche de saut). Même impulsion, autre mode.
+        i.dash = spaceJust || sautKeyJust;
 
         i.interagir = Phaser.Input.Keyboard.JustDown(this.touches.interagir);
         i.ouvrirInventaire = Phaser.Input.Keyboard.JustDown(this.touches.inventaire);

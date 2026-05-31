@@ -186,6 +186,19 @@ import { voile_blocus_croise }        from './voile/voile_blocus_croise.js';
 import { voile_balance_gravitationnelle } from './voile/voile_balance_gravitationnelle.js';
 import { voile_carrefour }            from './voile/voile_carrefour.js';
 
+// ─── Cœur du Reflux (Phase 9.10 — fondation VUE DE DESSUS, étages 9-10) ──
+// Pinné éditorial (cf. COEUR.md) : résolu via useSalle dans etages.js, pas
+// par le spanning tree. Salles `vue: 'topDown'`.
+import { coeur_seuil }                from './coeur/coeur_seuil.js';
+import { coeur_courants_croises }     from './coeur/coeur_courants_croises.js';
+import { coeur_epreuves }             from './coeur/coeur_epreuves.js';
+import { coeur_cortege }              from './coeur/coeur_cortege.js';
+import { coeur_echo }                 from './coeur/coeur_echo.js';
+import { coeur_arene_doyen }          from './coeur/coeur_arene_doyen.js';
+import { coeur_chambre }              from './coeur/coeur_chambre.js';
+import { coeur_mille_regards }        from './coeur/coeur_mille_regards.js';
+import { coeur_antichambre }          from './coeur/coeur_antichambre.js';
+
 // Pool de tirage normal. Les salles fallback (carrefour universel par biome)
 // sont EXCLUES : elles ne sortent que via salleFallback() quand le pool
 // est trop pauvre pour matcher la combinaison de portes demandée. Sans
@@ -361,7 +374,18 @@ const TOUTES_SALLES = [
     voile_nef_renversee,       // NSEO — RÉCURRENCE : nef climbable + colonne d'inversion (toutes configs)
     // Signature Vague 2 (2) — mécaniques de gravité neuves
     voile_blocus_croise,       // OE   — SIGNATURE : 2 blocs gravité-réactifs se croisent (pont éphémère)
-    voile_balance_gravitationnelle // OE — SIGNATURE : poulie + contrepoids réactive à la gravité joueur
+    voile_balance_gravitationnelle, // OE — SIGNATURE : poulie + contrepoids réactive à la gravité joueur
+
+    // ─── Cœur du Reflux (Phase 9.10-9.11 — VUE DE DESSUS) ─────────────
+    coeur_seuil,               // NSEO — fondation : mouvement 8-dir + dash
+    coeur_courants_croises,    // OE   — obstacles : courant_reflux + zone_oubli
+    coeur_epreuves,            // OE   — obstacles : laser + onde + pieu + regard
+    coeur_cortege,             // OE   — tableau figé animable (Le Cortège)
+    coeur_echo,                // OE   — écho-ghosts (L'Écho Persistant)
+    coeur_arene_doyen,         // OE   — arène boss étage 9 (Le Doyen)
+    coeur_chambre,             // OE   — arène boss étage 10 (Le Cœur)
+    coeur_mille_regards,       // OE   — signature : cercle de regards + coffre central
+    coeur_antichambre          // OE   — pré-boss calme (remplace l'arène fragmentée 2D)
 ];
 
 // Salles "fallback universel" par biome — supportent NSEO et matchent toutes

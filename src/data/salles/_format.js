@@ -932,3 +932,134 @@ export function balanceGravite(xG, xD, yRepos, opts = {}) {
     };
 }
 
+// ─── Helpers obstacles Cœur du Reflux (Phase 9.11 — VUE DE DESSUS) ───
+
+/**
+ * Zone d'OUBLI — nappe grise où le Vestige perd ses moyens : attaque, geste,
+ * sorts et dash sont éteints tant qu'il est dedans. Aucun dégât. On la traverse
+ * passivement, en évitant tout (lasers lents, regards). Coords en yTop.
+ *
+ * @param {number} x        centre x
+ * @param {number} yTop     top y de la zone
+ * @param {number} largeur
+ * @param {number} hauteur
+ */
+export function zoneOubli(x, yTop, largeur, hauteur) {
+    return {
+        type: 'zone_oubli',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur
+    };
+}
+
+/**
+ * Courant de REFLUX — rivière violette qui pousse le joueur dans une direction
+ * (non létale). Synergie : transit rapide si on suit le flux, lent si on lutte.
+ *
+ * @param {number} x        centre x
+ * @param {number} yTop     top y de la zone
+ * @param {number} largeur
+ * @param {number} hauteur
+ * @param {object} [opts]   { dir? = {x,y} (vecteur unité, déf droite), force? = 140 }
+ */
+export function courantReflux(x, yTop, largeur, hauteur, opts = {}) {
+    const dir = opts.dir ?? { x: 1, y: 0 };
+    // normalise le vecteur direction (sécurité)
+    const mag = Math.hypot(dir.x, dir.y) || 1;
+    return {
+        type: 'courant_reflux',
+        x,
+        y: yTop + hauteur / 2,
+        largeur, hauteur,
+        dirX: dir.x / mag,
+        dirY: dir.y / mag,
+        force: opts.force ?? 140
+    };
+}
+
+/**
+ * Laser de SURVEILLANCE — faisceau qui balaie depuis un pivot. Hit manuel.
+ * Coords en centre (x, y = pivot). Par défaut : rotation continue. Fournir
+ * `arc` (rad) pour une oscillation au lieu d'un tour complet.
+ *
+ * @param {number} x        x du pivot
+ * @param {number} y        y du pivot
+ * @param {object} [opts]   { longueur?, angleDeb? (rad), vitesse? (rad/s), arc? (rad), epaisseur?, degats? }
+ */
+export function laserSurveillance(x, y, opts = {}) {
+    return {
+        type: 'laser_surveillance',
+        x, y,
+        longueur: opts.longueur ?? 360,
+        angleDeb: opts.angleDeb ?? 0,
+        vitesse: opts.vitesse ?? 0.9,
+        arc: opts.arc ?? 0,
+        epaisseur: opts.epaisseur ?? 12,
+        degats: opts.degats
+    };
+}
+
+/**
+ * Onde RADIALE — ondes de choc concentriques depuis un centre. Hit manuel.
+ *
+ * @param {number} x        centre x
+ * @param {number} y        centre y
+ * @param {object} [opts]   { periodeMs?, vitesse? (px/s), epaisseur?, rayonMax?, degats? }
+ */
+export function ondeRadiale(x, y, opts = {}) {
+    return {
+        type: 'onde_radiale',
+        x, y,
+        periodeMs: opts.periodeMs ?? 2600,
+        vitesse: opts.vitesse ?? 240,
+        epaisseur: opts.epaisseur ?? 26,
+        rayonMax: opts.rayonMax ?? 360,
+        degats: opts.degats
+    };
+}
+
+/**
+ * Pieu MNÉMONIQUE — pieux qui surgissent du sol cycliquement (warning → up →
+ * down). Dégât en phase 'up'. Coords en centre (x, y). Décaler `offsetMs` entre
+ * plusieurs pour créer une vague séquencée.
+ *
+ * @param {number} x        centre x
+ * @param {number} y        centre y
+ * @param {object} [opts]   { largeur?, hauteur?, cycleMs?, offsetMs?, dureeUpMs?, degats? }
+ */
+export function pieuMnemonique(x, y, opts = {}) {
+    return {
+        type: 'pieu_mnemonique',
+        x, y,
+        largeur: opts.largeur ?? 70,
+        hauteur: opts.hauteur ?? 70,
+        cycleMs: opts.cycleMs ?? 2400,
+        offsetMs: opts.offsetMs ?? 0,
+        dureeUpMs: opts.dureeUpMs ?? 900,
+        degats: opts.degats
+    };
+}
+
+/**
+ * Regard FIGÉ — statue qui tire un projectile lent (parry-able) vers le joueur
+ * quand il entre dans son cône de vision. Coords = position de la statue.
+ *
+ * @param {number} x        statue x
+ * @param {number} y        statue y
+ * @param {object} [opts]   { angle? (rad, direction du regard), demiCone? (rad),
+ *                            portee?, cooldownMs?, vitesseProj?, degatsProj? }
+ */
+export function regardFige(x, y, opts = {}) {
+    return {
+        type: 'regard_fige',
+        x, y,
+        angle: opts.angle ?? 0,
+        demiCone: opts.demiCone ?? 0.5,
+        portee: opts.portee ?? 420,
+        cooldownMs: opts.cooldownMs ?? 1600,
+        vitesseProj: opts.vitesseProj,
+        degatsProj: opts.degatsProj
+    };
+}
+

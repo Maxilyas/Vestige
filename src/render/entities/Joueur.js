@@ -29,6 +29,7 @@ export class JoueurVisuel {
         this.direction = 1;
         this.dernierAuSol = true;
         this._signeY = 1;   // -1 = tête en bas (gravité inversée), cf. setInverse
+        this._topDown = false;  // Phase 9.10 — vue de dessus (Cœur du Reflux)
 
         // --- Conteneur principal ---
         this.container = scene.add.container(0, 0);
@@ -118,6 +119,36 @@ export class JoueurVisuel {
     // Appelé chaque frame depuis GameScene avec la position du Rectangle physique
     setPosition(x, y) {
         this.container.setPosition(x, y);
+    }
+
+    /**
+     * Phase 9.10 — Bascule le visuel en VUE DE DESSUS (Cœur du Reflux). La
+     * silhouette devient un ovale (épaules + tête vues du dessus), le cœur
+     * lumineux reste centré, et l'orientation suit le déplacement (rotation du
+     * container, cf. setEtatTopDown). On gèle l'animation idle/saut side-scroll.
+     */
+    setTopDown(actif) {
+        this._topDown = !!actif;
+        if (this._topDown) {
+            if (this.tweenIdle?.isPlaying()) this.tweenIdle.pause();
+            this.container.scaleX = 1;
+            this.container.scaleY = 1;
+            this.silhouette.clear();
+            this.silhouette.fillStyle(COULEUR_CORPS, 1);
+            this._redessinerForme();   // redessine en mode top-down
+        }
+    }
+
+    /**
+     * Phase 9.10 — Met à jour l'orientation top-down selon le vecteur vitesse.
+     * La forme « pointe » vers le haut au repos (rotation 0) ; on la tourne vers
+     * la direction du mouvement. Immobile → on conserve la dernière orientation.
+     */
+    setEtatTopDown({ vx, vy }) {
+        if (Math.abs(vx) > 5 || Math.abs(vy) > 5) {
+            // +90° car la silhouette est dessinée tête vers le haut (−Y).
+            this.container.rotation = Math.atan2(vy, vx) + Math.PI / 2;
+        }
     }
 
     setDirection(dir) {
@@ -222,6 +253,13 @@ export class JoueurVisuel {
 
     _redessinerForme() {
         const g = this.silhouette;
+        if (this._topDown) {
+            // Vue de dessus : épaules (ellipse large) + tête (cercle), pointe
+            // vers le haut. La rotation du container l'oriente au déplacement.
+            g.fillEllipse(0, 3, 24, 16);    // épaules / torse
+            g.fillCircle(0, -4, 6.5);        // tête
+            return;
+        }
         g.fillCircle(0, -14, 6);
         g.fillRect(-2, -10, 4, 3);
         g.beginPath();

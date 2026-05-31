@@ -6,6 +6,8 @@ Jeu vidéo 2D plateformer fantasy médiéval en JavaScript + Phaser.js, jouable 
 **Documentation de référence :**
 - [GDD.md](GDD.md) — mécaniques de jeu actuelles + scope MVP
 - [LORE.md](LORE.md) — cosmologie, civilisation, Résonance, Vestiges, Reflux, Doctrine
+- [COEUR.md](COEUR.md) — conception du biome 9-10 (Cœur du Reflux, vue de dessus) : vision, salles, boss, plan 9.10→9.15
+- [BOSS_CONCEPTS.md](BOSS_CONCEPTS.md) — banque de 20 concepts de boss (réutilisable, tous biomes) + designs refondus é9 (Procès) / é10 (Polymorphe)
 - `git log` — historique complet et détaillé des phases (ne pas dupliquer ici)
 
 ## Concept core
@@ -91,12 +93,13 @@ npx live-server .
 - ✅ Phase 7 — Audio procédural Tone.js (5 patches crossfade adaptatif, volume/mute persistés)
 - ✅ Phase 5' — Identité visuelle par paire d'étages (5 biomes)
 - ✅ Phase 8 → 8.3 — Refonte génération Ruines : spanning tree, mécanique d'ancrage, mur secret, gouffres mortels
-- ✅ Phase 9.1 → 9.x — Refonte salles compactes 960×540 : Ruines, Halls (+ toolkits v1/v2), Cristaux (fondation + Vagues 1-2) migrés ; système narratif `vestige_lore`
+- ✅ Phase 9.1 → 9.x — Refonte salles compactes 960×540 : Ruines, Halls (+ toolkits v1/v2), Cristaux (fondation + Vagues 1-2), Voile (fondation + inversion gravité Vagues 1-2, salles testées) migrés ; système narratif `vestige_lore`
 
 **À faire (priorité haut → bas) :**
+- 🟡 **Cœur du Reflux (biome 9-10)** — vision dans [COEUR.md](COEUR.md). **Vue de dessus** jouable de bout en bout : moteur 8-dir+dash, décor top-down, 6 obstacles, tableaux figés + écho-ghosts, entrée découplée (Seuil top-down / Cité Miroir side-scroll), **boss Le Doyen (é9)** + **boss Le Cœur (é10) → FinScene**. **Le jeu 10 étages est finissable en top-down.** Reste (polish) : cinématique bascule 8→9, vraies salles catalogue §6, salles é10 C/D, phase Écho du Cœur, audio. Détail COEUR.md §10.
 - ⬜ **Tuning navigateur Cristaux Vagues 1+2** (voir « État actuel » → À tester)
 - ⬜ **Cristaux Vague 3** — atmosphère/lore (monolithes `vestige_lore`) + densification visuelle parallax
-- 🟡 **Voile Inversé** — fondation + `PlateformeStyle` voile faits. Vague 1 : **8 salles d'inversion** = 3 colonnes `gravite_inverse` + 3 pendules `penduleInversion` + `voile_parabole_en_s` + `voile_nef_renversee` (NSEO récurrence). Vague 2 : **2 mécaniques de gravité NEUVES faites** = `bloc_gravite` (Blocus Croisé : 2 blocs gravity-responsive qui se croisent au flip) + `balance` + `contrepoids` (Balance Gravitationnelle : poulie-contrepoids réactive à la gravité joueur) + salles démo `voile_blocus_croise` / `voile_balance_gravitationnelle`. Inversion **joueur seul**. Reste : variété multi-config pendule (NS/coins/T), métronome vertical, pendule+navette, dédale multi-zones. Puis salle **tête-en-bas** complète, puis **Cœur du Reflux**
+- ⬜ **Voile tête-en-bas** — salle d'inversion complète tête-en-bas (reliquat Vague 2, optionnel ; le reste du Voile est ✅ testé)
 - ⬜ **Sanctuaires boss** étages 6 / 7 / 8 / 10
 - ⬜ **Phase 9.9 Halls** — pièces scriptées (vagues de fonte, cheminées qui s'abattent)
 - ⬜ **5c.3** — Polish HUD cooldown Geste (overlay tournant + label)
@@ -143,9 +146,12 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Dernière étape** : Voile Vague 2 — **2 mécaniques de gravité NEUVES** (moteur). `bloc_gravite` (Blocus Croisé : bloc solide ridable piloté par `_penduleInverse` XOR polarité, 2 blocs opposés se croisent à mi-hauteur = pont éphémère) + `balance` (poulie couplée θ piloté par charge × signe gravité joueur) + `contrepoids` (pierre poussable). def `obstacles.js` + helpers `_format.js` + entité `Obstacle.js` + wiring `GameScene.js` (+ `_inversionGravite` exposé) + tremplins virtuels validateur. Salles démo `voile_blocus_croise` / `voile_balance_gravitationnelle`. Validateur 139/139, boot OK, entités exercées sans erreur + visuels confirmés (eval harness).
-- **À tester en navigateur (gameplay réel étage 7)** : FEEL des 2 salles — timing du croisement des blocs (period 2,6 s) ; chute-sur-plateau-qui-remonte de la Balance (amplitude 120 / vitesse θ 1,5 / period 3 s) ; vérifier le portage du rider vertical (Phaser arcade) sur blocs/plateaux.
-- **Prochain chantier** : reste Vague 2 = variété multi-config pendule (NS/coins/T), métronome vertical, pendule+navette, dédale multi-zones — **décidé : mix puzzle-requis / transit-récurrence, batch de 6 salles**. Puis salle tête-en-bas complète, puis Cœur du Reflux.
+- **Cœur du Reflux (biome 9-10) jouable bout-en-bout, VUE DE DESSUS** : fondation 8-dir+dash, décor top-down, 6 obstacles, `TableauSystem`+`EchoGhostSystem`, découplage entrée/Cité, validateur top-down (flood-fill), attaque **radiale 360°**, murs anti-tunnel. Étage 9 = Seuil→Courants→Épreuves→Cortège→Doyen ; étage 10 = Seuil→MilleRegards→Écho→Antichambre→Cœur. **Finissable** (Cœur mort → FinScene).
+- **Dernière étape — 2 BOSS REFONDUS (esprit WoW, verbes opposés)**, dans `BossCoeurReflux.js` (+ helpers `BossHelpers.js`), patterns `doyen`/`coeur` :
+  - **Le Doyen é9 « Procès » (MACRO/danse/soft-rage)** : boss MOBILE entre 4 tribunes ; ramasser des **Preuves** (DoT « Outrage » tant qu'on porte) → déposer sur la **Balance** → fenêtre de vuln ; Orbe de Verdict à parer ; **faucheux rétro-temporel** (retrace tes pas) ; secret phase **« La Cour se retire »** (géant central + ondes par quadrant + parade en courant). hp 130.
+  - **Le Cœur é10 « Polymorphe » (MICRO/exécution/miroir)** : P1 sceaux + **DPS-check des siphons** (sceaux verrouillés tant qu'un siphon vit) ; P2 **relier les 4 battements** ; P3 **gavage à contre-aspiration** (porter une Vérité = ancre, la jeter dans la gueule) ; secret phase **« Procès de tes Choix »** (miroir de TON style le + utilisé via `_usageStats` + montée du Reflux qui rétrécit + sceaux de pourtour) → vraie mort → FinScene. hp 150.
+  - Tout validé navigateur (mobilité, preuves/dépôt, siphons/lock, battements, aspiration, secret phases, style miroir='dash', mort→FinScene, 0 erreur). Designs : `BOSS_CONCEPTS.md` (20 concepts + §22-23).
+- **Reste** : (1) **gros polish + densité/difficulté des SALLES** (demandé, pas fait) ; (2) feel-test des 2 boss (équilibrage : hp 130/150, DoT, vitesse aspiration, durées fenêtres) ; (3) salles catalogue §6 restantes ; (4) audio Tone.js ; (5) polish boss (visuels segments/échos, vrais clones via CloneIllusion).
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.

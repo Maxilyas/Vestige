@@ -382,5 +382,74 @@ export const TYPES_OBSTACLES = {
         largeurDefault: 60, hauteurDefault: 40,
         hpDefault: 4,
         invincibiliteApresHit: 200
+    },
+
+    // ─── Cœur du Reflux (Phase 9.11 — obstacles VUE DE DESSUS) ──────────
+    zone_oubli: {
+        id: 'zone_oubli',
+        // Nappe grise où le Vestige « n'est plus rien » : tant qu'il est dedans,
+        // attaque / geste / sorts / dash sont éteints. Aucun dégât — la menace
+        // vient de ce qu'on traverse sans pouvoir réagir (cf. lasers lents).
+        // data : { x, y (centre), largeur, hauteur }
+        dureeEffetMs: 120          // fenêtre rafraîchie à chaque frame d'overlap
+    },
+    courant_reflux: {
+        id: 'courant_reflux',
+        // Rivière violette qui POUSSE le joueur dans une direction (non létale).
+        // On peut s'en servir (transit rapide) ou lutter contre (lent). Direction
+        // lisible par les traits de flux qui défilent.
+        // data : { x, y (centre), largeur, hauteur, dirX, dirY, force }
+        forceDefault: 140,
+        dureeEffetMs: 120
+    },
+    laser_surveillance: {
+        id: 'laser_surveillance',
+        // Faisceau qui balaie (pivot rotatif, ou oscillant si `arc`). Hit MANUEL
+        // (un AABB arcade ne tourne pas) : la géométrie joueur/faisceau est testée
+        // dans update(). Lecture facile (lent), esquive par dash.
+        // data : { x, y (pivot), longueur, angleDeb, vitesse (rad/s), arc?, epaisseur, degats? }
+        longueurDefault: 360,
+        vitesseDefault: 0.9,            // rad/s
+        epaisseurDefault: 12,
+        degatsDefault: 5,
+        invincibiliteApresHit: 700
+    },
+    onde_radiale: {
+        id: 'onde_radiale',
+        // Onde de choc concentrique depuis un centre, périodique. Hit MANUEL
+        // (anneau à un rayon donné). Se coller au mur quand l'onde passe, courir
+        // au centre pendant la pause. Cœur pulsant = télégraphe.
+        // data : { x, y (centre), periodeMs, vitesse (px/s), epaisseur, rayonMax, degats? }
+        periodeMsDefault: 2600,
+        vitesseDefault: 240,            // px/s d'expansion
+        epaisseurDefault: 26,
+        rayonMaxDefault: 360,
+        degatsDefault: 6,
+        invincibiliteApresHit: 700
+    },
+    pieu_mnemonique: {
+        id: 'pieu_mnemonique',
+        // Pieux qui surgissent du sol cycliquement (down → warning → up). Dégât
+        // seulement en phase 'up' (body.enable togglé). Avertissement clignotant
+        // avant le surgissement.
+        // data : { x, y (centre), largeur, hauteur, cycleMs, offsetMs, dureeUpMs, degats? }
+        largeurDefault: 70, hauteurDefault: 70,
+        cycleMsDefault: 2400,
+        dureeUpMsDefault: 900,
+        avertMsDefault: 600,
+        degatsDefault: 6,
+        invincibiliteApresHit: 700
+    },
+    regard_fige: {
+        id: 'regard_fige',
+        // Statue avec cône de vision : tire un projectile lent (parry-able) vers
+        // le joueur quand il entre dans le cône (cooldown). Trivial à éviter hors
+        // du cône, dramatique en zone d'oubli.
+        // data : { x, y (statue), angle, demiCone, portee, cooldownMs, vitesseProj, degatsProj }
+        demiConeDefault: 0.5,           // rad (demi-angle du cône)
+        porteeDefault: 420,
+        cooldownMsDefault: 1600,
+        vitesseProjDefault: 150,
+        degatsProjDefault: 6
     }
 };

@@ -44,6 +44,24 @@ export const LORE_TEXTES = {
             'Le pendule indiquait l\'heure aux gardes, et l\'heure aux dieux.',
             'Le pendule oscille encore. Il n\'y a plus personne pour le lire.'
         ]
+    },
+
+    // ─── Cœur du Reflux (étages 9-10, vue de dessus) ───
+    coeur_seuil: {
+        titre: 'Au Seuil — Première Inscription',
+        lignes: [
+            'Ici cesse la chute. Ici commence le regard.',
+            'Tu n\'avances plus contre le poids du monde — tu marches sur sa mémoire.',
+            'Ne baisse pas les yeux : ce qui est en dessous te regarde déjà.'
+        ]
+    },
+    coeur_antichambre: {
+        titre: 'Antichambre — Dernier Souffle',
+        lignes: [
+            'Au-delà de cette porte, le Cœur bat encore.',
+            'Il a tout retenu : chaque nom, chaque chute, chaque toi.',
+            'Entre. Il t\'attendait depuis le premier Reflux.'
+        ]
     }
 };
 

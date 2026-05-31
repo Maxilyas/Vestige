@@ -104,14 +104,15 @@ export const ETAGES = {
 
     // ─── 9. Cœur du Reflux — oppression (pieux, montée éprouvante) ──────
     9: {
-        themeNarratif: 'Le sol blesse. Pieux affleurants, dalles cryptiques, montée vers l\'arène.',
+        themeNarratif: 'Le Témoin regarde. Vue de dessus : on marche sur la mémoire.',
+        // Phase 9.13 — étage 9 entièrement VUE DE DESSUS, pinné linéaire.
+        // A = Le Seuil (entrée ; en Miroir, GameScene substitue la Cité side-scroll).
         salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'crypte',     topographie: 'salle_pieux_sol' },
-            'B-haut': { archetype: 'puits',      topographie: 'cheminee_etroite' },
-            'C':      { archetype: 'crypte',     topographie: 'crypte_dalles' },
-            'D':      { archetype: 'arene',      topographie: 'arene_montee' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_reflux_9' }
+            'A':      { archetype: 'sanctuaire', useSalle: 'coeur_seuil' },
+            'B':      { archetype: 'crypte',     useSalle: 'coeur_courants_croises' },
+            'C':      { archetype: 'crypte',     useSalle: 'coeur_epreuves' },
+            'D':      { archetype: 'arene',      useSalle: 'coeur_cortege' },
+            'BOSS':   { archetype: 'arene',      useSalle: 'coeur_arene_doyen' }
         }
     },
 
@@ -119,12 +120,14 @@ export const ETAGES = {
     10: {
         themeNarratif: 'Le Souverain du Reflux attend. Palais à étages, tour de marches, arène fragmentée.',
         salles: {
-            'A':      { archetype: 'sanctuaire', topographie: 'arene_ouverte' },
-            'B':      { archetype: 'hall',       topographie: 'palais_etages' },
-            'C':      { archetype: 'hall',       topographie: 'tour_marches' },
-            'D':      { archetype: 'arene',      topographie: 'arene_fragmentee' },
-            'D-haut': { archetype: 'puits',      topographie: 'puits_descente' },
-            'BOSS':   { archetype: 'arene',      topographie: 'arene_boss_reflux_10' }
+            // Phase 9.13 — entrée VUE DE DESSUS (Cité substituée en Miroir).
+            'A':      { archetype: 'sanctuaire', useSalle: 'coeur_seuil' },
+            // Phase 9.13/9.12 — salles top-down : Mille Regards (B) + écho-ghosts (C).
+            'B':      { archetype: 'hall',       useSalle: 'coeur_mille_regards' },
+            'C':      { archetype: 'hall',       useSalle: 'coeur_echo' },
+            // Phase 9.x — pré-boss top-down (remplace l'arène fragmentée 2D).
+            'D':      { archetype: 'arene',      useSalle: 'coeur_antichambre' },
+            'BOSS':   { archetype: 'arene',      useSalle: 'coeur_chambre' }
         }
     }
 };

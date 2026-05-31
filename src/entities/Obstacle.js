@@ -116,6 +116,13 @@ export class Obstacle {
         else if (data.type === 'bloc_gravite')      this._creerBlocGravite();
         else if (data.type === 'contrepoids')       this._creerContrepoids();
         else if (data.type === 'balance')           this._creerBalance();
+        // ─── Cœur du Reflux (Vague 9 — obstacles VUE DE DESSUS) ───
+        else if (data.type === 'zone_oubli')        this._creerZoneOubli();
+        else if (data.type === 'courant_reflux')    this._creerCourantReflux();
+        else if (data.type === 'laser_surveillance') this._creerLaserSurveillance();
+        else if (data.type === 'onde_radiale')      this._creerOndeRadiale();
+        else if (data.type === 'pieu_mnemonique')   this._creerPieuMnemonique();
+        else if (data.type === 'regard_fige')       this._creerRegardFige();
     }
 
     _creerPieu() {
@@ -306,6 +313,22 @@ export class Obstacle {
         else if (this.data.type === 'balance') {
             if (this.spriteG?.active) this._updateBalance();
         }
+        else if (this.data.type === 'courant_reflux') {
+            if (this.visual?.active) this._dessinerCourant(this.scene.time.now);
+        }
+        else if (this.data.type === 'laser_surveillance') {
+            if (this.visual?.active) this._updateLaserSurveillance(this.scene.time.now);
+        }
+        else if (this.data.type === 'onde_radiale') {
+            if (this.visual?.active) this._updateOndeRadiale(this.scene.time.now);
+        }
+        else if (this.data.type === 'pieu_mnemonique') {
+            if (this.sprite?.active) this._updatePieuMnemonique(this.scene.time.now);
+        }
+        else if (this.data.type === 'regard_fige') {
+            if (this.visual?.active) this._updateRegardFige(this.scene.time.now);
+        }
+        // zone_oubli : visuel statique animé par tween, rien à faire par frame.
     }
 
     /**
@@ -423,6 +446,27 @@ export class Obstacle {
             // Pousse latéralement (lu par le code de mouvement). Aucun dégât.
             player._blizzardForce = this.data.force;
             player._blizzardJusqu = now + 120;
+        }
+        else if (this.data.type === 'zone_oubli') {
+            // Éteint attaque/geste/sorts/dash tant que l'overlap dure (lu par
+            // GameScene). Fenêtre rafraîchie chaque frame de contact.
+            player._zoneOubliJusqu = now + (this.def.dureeEffetMs ?? 120);
+        }
+        else if (this.data.type === 'courant_reflux') {
+            // Pousse le joueur dans la direction du courant (lu par _mouvementTopDown).
+            player._courantX = this.data.dirX * this.data.force;
+            player._courantY = this.data.dirY * this.data.force;
+            player._courantJusqu = now + (this.def.dureeEffetMs ?? 120);
+        }
+        else if (this.data.type === 'pieu_mnemonique') {
+            // Dégâts seulement en phase 'up' (overlap actif via body.enable).
+            if (this._phase !== 'up') return;
+            if (now - (this._dernierHit ?? 0) < (this.def.invincibiliteApresHit ?? 700)) return;
+            this._dernierHit = now;
+            scene.resonance.prendreDegats(this.data.degats ?? this.def.degatsDefault ?? 6);
+            scene.invincibleJusqu = now + (this.def.invincibiliteApresHit ?? 700);
+            scene.flashJoueur?.(0xff4040);
+            scene.cameras.main.shake(110, 0.005);
         }
         // cristal_resonant : pas de contact physique (frappé via tenterAttaque).
         // plateforme_resonance : collision gérée par collider conditionnel (GameScene).
@@ -2744,6 +2788,283 @@ export class Obstacle {
             const len = 26 + (i % 3) * 10;
             g.lineBetween(sx, sy, sx + dir * len, sy);
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // VAGUE 9 — Cœur du Reflux (obstacles VUE DE DESSUS, Phase 9.11)
+    // ════════════════════════════════════════════════════════════════
+
+    // ─── Zone d'oubli : nappe grise désaturée (éteint les capacités) ───
+    _creerZoneOubli() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        // Corps d'overlap invisible (static).
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        // Visuel : nappe grise + hachures ternes = « ici tu n'es plus rien ».
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        const x0 = this.data.x - w / 2, y0 = this.data.y - h / 2;
+        this.visual.fillStyle(0x6a6870, 0.16);
+        this.visual.fillRect(x0, y0, w, h);
+        this.visual.lineStyle(2, 0x8a8890, 0.4);
+        this.visual.strokeRect(x0, y0, w, h);
+        this.visual.lineStyle(1, 0x55535c, 0.30);
+        for (let gx = x0 + 16; gx < x0 + w; gx += 22) {
+            this.visual.lineBetween(gx, y0, gx - 18, y0 + h);
+        }
+        // Léger pouls de désaturation (lecture vivante mais sourde).
+        this.scene.tweens.add({
+            targets: this.visual,
+            alpha: { from: 0.65, to: 1 },
+            duration: 1500, ease: 'Sine.InOut', yoyo: true, repeat: -1
+        });
+    }
+
+    // ─── Courant de Reflux : rivière violette qui pousse le joueur ───
+    _creerCourantReflux() {
+        const w = this.data.largeur, h = this.data.hauteur;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite._obstacle = this;
+
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(7);
+        this._t0 = this.scene.time.now;
+        this._dessinerCourant(this._t0);
+    }
+
+    _dessinerCourant(now) {
+        const g = this.visual; g.clear();
+        const cx = this.data.x, cy = this.data.y, w = this.data.largeur, h = this.data.hauteur;
+        const x0 = cx - w / 2, y0 = cy - h / 2;
+        const dx = this.data.dirX, dy = this.data.dirY;
+
+        // Nappe violette + cadre (lecture « zone de courant »).
+        g.fillStyle(0xc060d8, 0.10);
+        g.fillRect(x0, y0, w, h);
+        g.lineStyle(1, 0xff5078, 0.22);
+        g.strokeRect(x0, y0, w, h);
+
+        // Traits de flux qui défilent DANS la direction du courant (lecture du sens).
+        const t = (now - this._t0) / 1000;
+        g.lineStyle(2, 0xf0a8e8, 0.5);
+        const nb = 12, len = 28, course = 46;
+        for (let i = 0; i < nb; i++) {
+            const prog = ((t * 0.45 + i / nb) % 1);
+            const baseX = x0 + ((i * 71) % Math.max(1, w));
+            const baseY = y0 + ((i * 53) % Math.max(1, h));
+            const sx = baseX + dx * prog * course;
+            const sy = baseY + dy * prog * course;
+            g.lineBetween(sx, sy, sx + dx * len, sy + dy * len);
+        }
+    }
+
+    // ─── Helper de dégât pour les hazards à hit MANUEL (laser, onde) ───
+    _toucherJoueurManuel(now) {
+        const s = this.scene;
+        if (now < (s.invincibleJusqu ?? 0)) return;
+        s.resonance.prendreDegats(this.data.degats ?? this.def.degatsDefault ?? 5);
+        s.invincibleJusqu = now + (this.def.invincibiliteApresHit ?? 700);
+        s.flashJoueur?.(0xff4040);
+        s.cameras?.main?.shake?.(110, 0.005);
+    }
+
+    // ─── Laser de surveillance : faisceau qui balaie (pivot rotatif) ───
+    _creerLaserSurveillance() {
+        // Sprite-ancre invisible (sans collision) : juste pour exister dans la
+        // liste obstacles (le hit est MANUEL — un AABB ne tourne pas). update()
+        // dessine le faisceau et teste la géométrie joueur/faisceau.
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, 4, 4, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.sprite._obstacle = this;
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(9);
+        this._t0 = this.scene.time.now;
+        this._updateLaserSurveillance(this._t0);
+    }
+
+    _updateLaserSurveillance(now) {
+        const d = this.data, def = this.def;
+        const vitesse = d.vitesse ?? def.vitesseDefault;       // rad/s
+        const longueur = d.longueur ?? def.longueurDefault;
+        const epais = d.epaisseur ?? def.epaisseurDefault;
+        const t = (now - this._t0) / 1000;
+        // Rotation continue, ou oscillation dans un arc si `arc` est fourni.
+        const angle = (d.arc && d.arc > 0)
+            ? (d.angleDeb ?? 0) + Math.sin(t * vitesse) * d.arc
+            : (d.angleDeb ?? 0) + t * vitesse;
+
+        const g = this.visual; g.clear();
+        const px = d.x, py = d.y;
+        const ex = px + Math.cos(angle) * longueur, ey = py + Math.sin(angle) * longueur;
+        g.lineStyle(epais, 0xff2030, 0.20);  g.lineBetween(px, py, ex, ey);    // halo
+        g.lineStyle(epais * 0.4, 0xff7060, 0.55); g.lineBetween(px, py, ex, ey); // cœur
+        g.fillStyle(0xff3030, 0.7); g.fillCircle(px, py, 9);                    // émetteur
+
+        // Hit test : projection du joueur sur l'axe du faisceau.
+        const pl = this.scene.player; if (!pl) return;
+        const rx = pl.x - px, ry = pl.y - py;
+        const along = rx * Math.cos(angle) + ry * Math.sin(angle);
+        if (along < 0 || along > longueur) return;
+        const perp = Math.abs(-rx * Math.sin(angle) + ry * Math.cos(angle));
+        if (perp <= epais / 2 + 16) this._toucherJoueurManuel(now);
+    }
+
+    // ─── Onde radiale : ondes de choc concentriques depuis un centre ───
+    _creerOndeRadiale() {
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, 4, 4, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.sprite._obstacle = this;
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(9);
+        this._t0 = this.scene.time.now;
+        this._updateOndeRadiale(this._t0);
+    }
+
+    _updateOndeRadiale(now) {
+        const d = this.data, def = this.def;
+        const periode = d.periodeMs ?? def.periodeMsDefault;
+        const vitesse = d.vitesse ?? def.vitesseDefault;
+        const epais = d.epaisseur ?? def.epaisseurDefault;
+        const rayonMax = d.rayonMax ?? def.rayonMaxDefault;
+        const age = ((now - this._t0) % periode);
+        const rayon = (age / 1000) * vitesse;
+
+        const g = this.visual; g.clear();
+        // Cœur pulsant au centre (télégraphe avant le départ de l'onde).
+        const pulse = 0.5 + 0.5 * Math.sin(now / 300);
+        g.fillStyle(0xff2030, 0.10 + 0.12 * pulse); g.fillCircle(d.x, d.y, 15);
+
+        if (rayon <= rayonMax) {
+            g.lineStyle(epais, 0xff2030, 0.16);       g.strokeCircle(d.x, d.y, rayon);
+            g.lineStyle(epais * 0.4, 0xff8060, 0.45); g.strokeCircle(d.x, d.y, rayon);
+            const pl = this.scene.player;
+            if (pl) {
+                const dist = Math.hypot(pl.x - d.x, pl.y - d.y);
+                if (Math.abs(dist - rayon) <= epais / 2 + 14) this._toucherJoueurManuel(now);
+            }
+        }
+    }
+
+    // ─── Pieu mnémonique : pieux qui surgissent du sol (warning→up→down) ───
+    _creerPieuMnemonique() {
+        const w = this.data.largeur ?? this.def.largeurDefault;
+        const h = this.data.hauteur ?? this.def.hauteurDefault;
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, w, h, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.scene.physics.add.existing(this.sprite, true);
+        this.sprite.body.enable = false;            // inactif hors phase 'up'
+        this.sprite._obstacle = this;
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(8);
+        this._t0 = this.scene.time.now;
+        this._dernierHit = 0;
+        this._phase = 'down';
+        this._updatePieuMnemonique(this._t0);
+    }
+
+    _updatePieuMnemonique(now) {
+        const d = this.data, def = this.def;
+        const cycle = d.cycleMs ?? def.cycleMsDefault;
+        const off = d.offsetMs ?? 0;
+        const dureeUp = d.dureeUpMs ?? def.dureeUpMsDefault;
+        const avert = def.avertMsDefault ?? 600;
+        const t = ((((now - this._t0 + off) % cycle) + cycle) % cycle);
+        let phase;
+        if (t < cycle - dureeUp - avert) phase = 'down';
+        else if (t < cycle - dureeUp)    phase = 'warning';
+        else                              phase = 'up';
+        this._phase = phase;
+        if (this.sprite.body) this.sprite.body.enable = (phase === 'up');
+
+        const g = this.visual; g.clear();
+        const w = d.largeur ?? def.largeurDefault, h = d.hauteur ?? def.hauteurDefault;
+        const x0 = d.x - w / 2, y0 = d.y - h / 2;
+        if (phase === 'warning') {
+            // Marques de surgissement imminent (lecture « recule »).
+            const k = 0.5 + 0.5 * Math.sin(now / 90);
+            g.fillStyle(0xff2030, 0.06 + 0.10 * k); g.fillRect(x0, y0, w, h);
+            g.lineStyle(1, 0xff6060, 0.4 + 0.4 * k); g.strokeRect(x0, y0, w, h);
+        } else if (phase === 'up') {
+            g.fillStyle(0x4a0a14, 0.85); g.fillRect(x0, y0, w, h);
+            g.fillStyle(0xff3838, 1);
+            const n = 3;
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    const cx = x0 + (i + 0.5) * (w / n), cy = y0 + (j + 0.5) * (h / n);
+                    g.fillTriangle(cx - 6, cy + 8, cx + 6, cy + 8, cx, cy - 9);
+                }
+            }
+        }
+    }
+
+    // ─── Regard figé : statue qui tire dans son cône de vision ───
+    _creerRegardFige() {
+        this.sprite = this.scene.add.rectangle(this.data.x, this.data.y, 32, 32, 0xffffff, 0);
+        this.sprite.setAlpha(0);
+        this.sprite._obstacle = this;
+        this.visual = this.scene.add.graphics();
+        this.visual.setDepth(9);
+        this._t0 = this.scene.time.now;
+        this._dernierTir = 0;
+        this._dessinerRegard(this._t0, false);
+    }
+
+    _updateRegardFige(now) {
+        const d = this.data, def = this.def;
+        const portee = d.portee ?? def.porteeDefault;
+        const demiCone = d.demiCone ?? def.demiConeDefault;
+        const angle = d.angle ?? 0;
+        const pl = this.scene.player;
+        let cible = false;
+        if (pl) {
+            const dx = pl.x - d.x, dy = pl.y - d.y;
+            if (Math.hypot(dx, dy) <= portee) {
+                const diff = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(dy, dx) - angle));
+                if (diff <= demiCone) cible = true;
+            }
+        }
+        this._dessinerRegard(now, cible);
+
+        if (cible && now - (this._dernierTir ?? 0) >= (d.cooldownMs ?? def.cooldownMsDefault)) {
+            this._dernierTir = now;
+            // Projectile parry-able via le pipeline existant (event enemy:tir).
+            this.scene.events.emit('enemy:tir', this, {
+                x: d.x, y: d.y, cibleX: pl.x, cibleY: pl.y,
+                vitesse: d.vitesseProj ?? def.vitesseProjDefault,
+                degats: d.degatsProj ?? def.degatsProjDefault,
+                couleur: 0xff3030, halo: 0xff6060
+            });
+        }
+    }
+
+    _dessinerRegard(now, actif) {
+        const g = this.visual; g.clear();
+        const d = this.data, def = this.def;
+        const portee = d.portee ?? def.porteeDefault;
+        const demiCone = d.demiCone ?? def.demiConeDefault;
+        const angle = d.angle ?? 0;
+        // Cône de vision (rempli faible alpha ; rouge vif si une cible est repérée).
+        const a1 = angle - demiCone, a2 = angle + demiCone;
+        g.fillStyle(actif ? 0xff3030 : 0x8a3040, actif ? 0.14 : 0.06);
+        g.beginPath();
+        g.moveTo(d.x, d.y);
+        const steps = 10;
+        for (let i = 0; i <= steps; i++) {
+            const a = a1 + (a2 - a1) * (i / steps);
+            g.lineTo(d.x + Math.cos(a) * portee, d.y + Math.sin(a) * portee);
+        }
+        g.closePath(); g.fillPath();
+        // Statue (socle vu de dessus) + œil orienté.
+        g.fillStyle(0x3a121e, 1);   g.fillCircle(d.x, d.y, 16);
+        g.lineStyle(2, 0x7a2030, 1); g.strokeCircle(d.x, d.y, 16);
+        const ex = d.x + Math.cos(angle) * 7, ey = d.y + Math.sin(angle) * 7;
+        g.fillStyle(actif ? 0xff3030 : 0xff8060, 1); g.fillCircle(ex, ey, actif ? 6 : 4);
+        if (actif) { g.fillStyle(0xff3030, 0.25); g.fillCircle(d.x, d.y, 23); }  // halo de charge
     }
 
     // ════════════════════════════════════════════════════════════════

@@ -6,7 +6,7 @@
 //   - Miroir   = atelier paisible sous timer (aucun ennemi pour MVP)
 
 import { GAME_WIDTH, GAME_HEIGHT, PLAYER, WORLD } from '../config.js';
-import { creerRng, niveauDangerEtage } from '../systems/WorldGen.js';
+import { creerRng, niveauDangerEtage, genererSalle } from '../systems/WorldGen.js';
 import {
     genererEtage, etageVersRegistry, etageDepuisRegistry, marquerVisite
 } from '../systems/EtageGen.js';
@@ -39,9 +39,12 @@ import { Obstacle } from '../entities/Obstacle.js';
 import { EconomySystem } from '../systems/EconomySystem.js';
 import { AncrageSystem } from '../systems/AncrageSystem.js';
 import { NarrativeSystem } from '../systems/NarrativeSystem.js';
+import { TableauSystem } from '../systems/TableauSystem.js';
+import { EchoGhostSystem } from '../systems/EchoGhostSystem.js';
 import { marquerSceau, EVT_SCEAU_OBTENU } from '../systems/SceauxSystem.js';
 import { executerGeste } from '../systems/GesteSystem.js';
 import { lancerCinematiqueFin } from '../systems/CinematiqueFusion.js';
+import { lancerCinematiqueBascule } from '../systems/CinematiqueBascule.js';
 import { FRAGMENTS } from '../data/fragments.js';
 import { getAudioSystem } from '../systems/AudioSystem.js';
 import {
@@ -52,6 +55,7 @@ import { paletteBiomePourId } from '../data/biomes.js';
 import { peindreDecor } from '../render/DecorRegistry.js';
 import { poserCiel, poserEtoilesOuPoussiere } from '../render/Parallaxe.js';
 import { composerParallaxBiome } from '../render/biomes/index.js';
+import { composerCoeurTopDown } from '../render/biomes/CoeurTopDown.js';
 import { poserHaloJoueur, poserBrumeSol, poserRayonsLumiere } from '../render/AnimationsAmbiance.js';
 import { peindreOrnementPlateforme } from '../render/PlateformeStyle.js';
 import { JoueurVisuel } from '../render/entities/Joueur.js';
@@ -216,7 +220,26 @@ export class GameScene extends Phaser.Scene {
             salleId = etage.salleEntreeId;
             this.registry.set(CLE_SALLE_COURANTE, salleId);
         }
-        const salle = etage.salles.get(salleId);
+        let salle = etage.salles.get(salleId);
+
+        // Cœur du Reflux — DÉCOUPLAGE entrée/Cité. L'entrée de l'étage est en VUE
+        // DE DESSUS (perspective du Témoin) en Présent, mais la salle A sert
+        // AUSSI de Cité Marchande en Miroir, qui doit rester side-scroll (atelier
+        // paisible, PNJ au sol). Quand l'entrée est top-down, on substitue donc
+        // en Miroir une géométrie de sanctuaire side-scroll dédiée, générée à la
+        // volée (déterministe). La bascule/retour ne dépendent que de salleId —
+        // substituer la géométrie est sûr.
+        if (this.monde.getMonde() === 'miroir' && salle?.vue === 'topDown') {
+            salle = genererSalle({
+                seedEtage: etage.seed,
+                etageNumero,
+                salleId,
+                archetype: ARCHETYPES.sanctuaire,
+                topographie: TOPOGRAPHIES.arene_ouverte,
+                portesActives: [],
+                estEntree: true
+            });
+        }
 
         // Marque la salle comme visitée + persiste
         marquerVisite(etage, salleId);
@@ -323,37 +346,43 @@ export class GameScene extends Phaser.Scene {
         // tomber sous le sol (gouffres ouverts dans la géométrie) → mort instantanée.
         // Réservé Présent : en Miroir, jamais de chute mortelle (hub paisible).
         this._dimsSalle = salle.dims;
-        this._gouffreMort = !enMiroir && salle.gouffreMort === true;
+        // Phase 9.10 — VUE DE DESSUS (Cœur du Reflux). Activée uniquement en
+        // Présent : la salle d'entrée en Miroir reste la Cité side-scroll. En
+        // top-down : gravité nulle, déplacement 8 directions, dash au lieu du
+        // saut, pas de gouffre mortel (le sol est le plan).
+        this._topDownMode = !enMiroir && salle.vue === 'topDown';
+        this._gouffreMort = !this._topDownMode && !enMiroir && salle.gouffreMort === true;
         this._mortGouffreEnCours = false;
 
-        // --- COUCHES PARALLAX (du plus loin au plus proche) ---
-        // Couche 1 (x0)    : ciel/abîme avec dégradé vertical, fixe à l'écran
-        poserCiel(this, mondeCourant);
-        // Étoiles ou poussière d'or sur le ciel (parallax x0.15)
-        poserEtoilesOuPoussiere(this, salle.dims, mondeCourant);
-
+        // --- COUCHES PARALLAX / DÉCOR (du plus loin au plus proche) ---
         // Le rng du décor est seedé pour rester reproductible
         const rngDecor = creerRng((seedRun ^ 0x517CC1B7 ^ this._hashStr(salleId)) >>> 0);
-
-        // Couches lointaines parallax — biome-spécifique en Présent (montagnes
-        // brumeuses x0.15 + ruines spécifiques x0.3 + forêt morte x0.5 pour
-        // les Ruines basses ; fallback générique sinon). En Miroir → silhouettes
-        // urbaines génériques (Cité).
-        composerParallaxBiome(this, salle.dims, mondeCourant, rngDecor, salle.biomeId);
-
-        // Couche 3 (x0.7) : silhouettes proches + structures principales (DecorRegistry)
         // La salle d'entrée en Miroir est une CITÉ MARCHANDE — on enrichit le décor.
         const estCiteMarchande = enMiroir && salle.estEntree;
-        peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes, {
-            estCiteMarchande,
-            biomeId: salle.biomeId
-        });
 
-        // Particules d'ambiance par monde (poussière Présent, étincelles Miroir)
-        poserParticulesAmbiance(this, salle.dims, mondeCourant);
-
-        // Rayons de lumière obliques (Miroir uniquement)
-        poserRayonsLumiere(this, salle.dims, mondeCourant);
+        if (this._topDownMode) {
+            // VUE DE DESSUS (Cœur du Reflux) : plus de ciel ni d'horizon — le
+            // décor est le SOL vu d'en haut (dallage fissuré, veines du Reflux,
+            // mares de lumière, poussière de souvenir).
+            composerCoeurTopDown(this, salle.dims, rngDecor);
+        } else {
+            // Couche 1 (x0) : ciel/abîme avec dégradé vertical, fixe à l'écran
+            poserCiel(this, mondeCourant);
+            // Étoiles ou poussière d'or sur le ciel (parallax x0.15)
+            poserEtoilesOuPoussiere(this, salle.dims, mondeCourant);
+            // Couches lointaines parallax — biome-spécifique en Présent ; en
+            // Miroir → silhouettes urbaines génériques (Cité).
+            composerParallaxBiome(this, salle.dims, mondeCourant, rngDecor, salle.biomeId);
+            // Couche 3 (x0.7) : silhouettes proches + structures (DecorRegistry)
+            peindreDecor(this, salle.archetype, salle.dims, mondeCourant, rngDecor, salle.plateformes, {
+                estCiteMarchande,
+                biomeId: salle.biomeId
+            });
+            // Particules d'ambiance par monde (poussière Présent, étincelles Miroir)
+            poserParticulesAmbiance(this, salle.dims, mondeCourant);
+            // Rayons de lumière obliques (Miroir uniquement)
+            poserRayonsLumiere(this, salle.dims, mondeCourant);
+        }
 
         // --- Plateformes (avec ornement par-dessus) ---
         // On identifie le sol principal (plus large plateforme) pour lui donner
@@ -371,8 +400,8 @@ export class GameScene extends Phaser.Scene {
             this.creerPlateforme(p.x, p.y, p.largeur, p.hauteur, couleur, p.oneWay, estSol);
         }
 
-        // Brume au sol (Présent uniquement, après les plateformes pour être devant)
-        poserBrumeSol(this, salle.dims, mondeCourant);
+        // Brume au sol (Présent side-scroll uniquement — incohérente vue de dessus)
+        if (!this._topDownMode) poserBrumeSol(this, salle.dims, mondeCourant);
 
         // --- PNJs : tous les artisans dans la cité marchande (salle A en Miroir) ---
         // Doctrine : Présent = chasse, Miroir = atelier. Concentrer les 3 artisans
@@ -432,6 +461,8 @@ export class GameScene extends Phaser.Scene {
         // Visuel séparé : silhouette + cœur lumineux (suit la position du Rectangle)
         this.playerVisual = new JoueurVisuel(this);
         this.playerVisual.setPosition(this.player.x, this.player.y);
+        // Phase 9.10 — silhouette vue de dessus dans le Cœur du Reflux.
+        if (this._topDownMode) this.playerVisual.setTopDown(true);
 
         // Halo lumineux qui suit le joueur en Miroir (le Vestige porte sa propre
         // lumière dans le passé)
@@ -459,6 +490,17 @@ export class GameScene extends Phaser.Scene {
         this._zonesSalle = salle.zones ?? [];
         this.narrative.initSalle(this._zonesSalle);
         this._poserMonolithesLore(this._zonesSalle);
+
+        // --- Cœur du Reflux (Phase 9.12) : tableaux figés + écho-ghosts ---
+        // VUE DE DESSUS uniquement (jamais en Miroir/side-scroll). Le joueur
+        // existe déjà (créé plus haut) → les colliders du mur peuvent s'attacher.
+        this.tableaux = null;
+        this.echoGhost = null;
+        if (this._topDownMode) {
+            this.tableaux = new TableauSystem(this);
+            this.tableaux.initSalle(salle.tableaux ?? []);
+            if (salle.echoGhost) this.echoGhost = new EchoGhostSystem(this, salle.echoGhost);
+        }
 
         // --- Zones de gravité inversée (signature Voile Inversé, prototype) ---
         // Une colonne où la gravité du joueur tire vers le HAUT : il monte au
@@ -666,6 +708,15 @@ export class GameScene extends Phaser.Scene {
                     for (const pl of obs.spritesBalance) {
                         this.physics.add.collider(this.player, pl);
                     }
+                } else if (t === 'zone_oubli' || t === 'courant_reflux'
+                           || t === 'pieu_mnemonique') {
+                    // Zones VUE DE DESSUS (Cœur) : overlap pur. L'effet (éteindre
+                    // attaque/dash, pousser, ou empaler en phase 'up') est posé
+                    // par onContactJoueur, lu dans update()/_mouvementTopDown.
+                    // (laser_surveillance / onde_radiale / regard_fige n'ont pas
+                    //  de wiring : hit manuel ou projectile, gérés dans update().)
+                    this.physics.add.overlap(this.player, obs.sprite, () =>
+                        obs.onContactJoueur(this, this.player));
                 }
                 // faux_sol_miroir : intangible (pas de body), aucune physique.
                 // cristal_resonant : pas de physique (frappé via tenterAttaque).
@@ -713,8 +764,12 @@ export class GameScene extends Phaser.Scene {
             !this.enemySystem.estMort('normal', this.cleSalleEtage, 'boss')) {
             const defBoss = definitionBoss(etageNumero, ENEMIES);
             if (defBoss) {
-                const xBoss = salle.dims.largeur * 0.6;
-                const yBoss = salle.dims.hauteur - HAUTEUR_SOL - defBoss.hauteur / 2;
+                // En VUE DE DESSUS, le boss trône au CENTRE de l'arène (danmaku
+                // radial) ; en side-scroll il repose au sol comme avant.
+                const xBoss = salle.dims.largeur * (this._topDownMode ? 0.5 : 0.6);
+                const yBoss = this._topDownMode
+                    ? salle.dims.hauteur * 0.42
+                    : salle.dims.hauteur - HAUTEUR_SOL - defBoss.hauteur / 2;
                 this.boss = new Boss(this, defBoss, xBoss, yBoss);
                 this.boss.sprite.setDepth(DEPTH.ENTITES);
                 if (defBoss.gravite) {
@@ -748,6 +803,15 @@ export class GameScene extends Phaser.Scene {
         // attente (drop manqué pour inventaire plein), on tente la récupération.
         if (!enMiroir && salle.estBoss) {
             this.time.delayedCall(200, () => this._tenterRecupererVestigePending?.());
+        }
+
+        // Phase 9.14 — Cinématique de BASCULE : à la 1ère entrée dans le Cœur
+        // (étage 9, Présent, salle d'entrée top-down), le monde passe en vue de
+        // dessus. Une fois par run (flag registry, reset à la nouvelle partie).
+        if (this._topDownMode && this.etageNumero === 9 && salle.estEntree
+            && !this.registry.get('coeur_bascule_vue')) {
+            this.registry.set('coeur_bascule_vue', true);
+            lancerCinematiqueBascule(this);
         }
 
         // --- HUD textuel (fixe à l'écran avec setScrollFactor(0)) ---
@@ -921,6 +985,13 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        // Bascule 8→9 (vue de dessus) : input suspendu le temps du tilt.
+        if (this._cinematiqueBasculeEnCours) {
+            if (this.player?.body) this.player.body.setVelocity(0, 0);
+            if (this.playerVisual && this.player) this.playerVisual.setPosition(this.player.x, this.player.y);
+            return;
+        }
+
         this.inputSystem.update();
         const i = this.inputSystem.intentions;
 
@@ -962,6 +1033,15 @@ export class GameScene extends Phaser.Scene {
         const controleInverse = (this.player._controleInverseJusqu ?? 0) > now;
         const iGauche = controleInverse ? i.droite : i.gauche;
         const iDroite = controleInverse ? i.gauche : i.droite;
+        // Phase 9.10 — VUE DE DESSUS (Cœur du Reflux) : mouvement 8 directions
+        // + dash, gravité nulle, pas de saut/drop-through. Court-circuite tout
+        // le bloc side-scroll ci-dessous. `auSol`/`graviteVersLeHaut` sont
+        // promus ici pour rester accessibles au bloc visuel (commun aux 2 modes).
+        let auSol = false;
+        let graviteVersLeHaut = false;
+        if (this._topDownMode) {
+            this._mouvementTopDown(i, body, speed, now, immobilise, iGauche, iDroite);
+        } else {
         // Gravité — trois sources d'inversion possibles, résolues en une fois :
         //   • ZONE d'inversion Voile (signature biome) : net vers le HAUT
         //     (-2·gWorld), le joueur tombe au plafond tant qu'il est dans la zone.
@@ -991,8 +1071,8 @@ export class GameScene extends Phaser.Scene {
 
         // Quand la gravité tire vers le HAUT, le « sol » est le plafond : on
         // inverse la détection d'appui ET le sens du saut (cf. plus bas).
-        const graviteVersLeHaut = inversionGravite;
-        const auSol = graviteVersLeHaut
+        graviteVersLeHaut = inversionGravite;
+        auSol = graviteVersLeHaut
             ? (body.blocked.up || body.touching.up)
             : (body.blocked.down || body.touching.down);
 
@@ -1077,17 +1157,22 @@ export class GameScene extends Phaser.Scene {
         if (i.descendreEdge && auSol) {
             this.dropThroughJusqu = this.time.now + 200;
         }
+        }   // ── fin du bloc mouvement side-scroll (else de _topDownMode) ──
 
         // --- Combat ---
-        if (i.attaquer) this.tenterAttaque();
+        // Zone d'oubli (Cœur) : attaque, geste et sorts sont éteints tant qu'on
+        // est dedans (« tu n'es plus rien »). La parade reste autorisée.
+        const enZoneOubli = (this.player._zoneOubliJusqu ?? 0) > now;
+        if (i.attaquer && !enZoneOubli) this.tenterAttaque();
         if (i.parry) this.tenterParry();
-        if (i.geste) this._tenterGeste?.();
+        if (i.geste && !enZoneOubli) this._tenterGeste?.();
         // i.sort : hook réservé, pas d'effet en étape 7
 
         // Phase 6 — Sorts 1/2/3 (tête/corps/accessoire)
-        if (i.sort1) tenterSort(this, 0);
-        if (i.sort2) tenterSort(this, 1);
-        if (i.sort3) tenterSort(this, 2);
+        if ((i.sort1 || i.sort2 || i.sort3) && !enZoneOubli) (this._usageStats ??= { attaque: 0, dash: 0, sort: 0 }).sort++;
+        if (i.sort1 && !enZoneOubli) tenterSort(this, 0);
+        if (i.sort2 && !enZoneOubli) tenterSort(this, 1);
+        if (i.sort3 && !enZoneOubli) tenterSort(this, 2);
 
         // --- Interactions / inventaire / carte ---
         if (i.interagir) this.essayerInteragir();
@@ -1113,6 +1198,10 @@ export class GameScene extends Phaser.Scene {
 
         // --- Update des obstacles (plateformes mobiles oscillent) ---
         for (const o of this.obstacles) o.update();
+
+        // --- Cœur du Reflux : tableaux figés + écho-ghosts (Phase 9.12) ---
+        this.tableaux?.update(this.player, this.time.now);
+        this.echoGhost?.update(this.player, this.time.now);
 
         // --- Gouffres mortels (salle.gouffreMort = true) ---
         // Si le joueur est tombé sous le bottom de la salle (gouffre du sol non
@@ -1142,15 +1231,23 @@ export class GameScene extends Phaser.Scene {
         // --- Update du visuel joueur ---
         if (this.playerVisual) {
             this.playerVisual.setPosition(this.player.x, this.player.y);
-            this.playerVisual.setDirection(this.lastDirection);
-            // Le Vestige bascule tête en bas quand il marche au plafond (zone
-            // de gravité inversée). Posé avant setEtat pour qu'il en tienne compte.
-            this.playerVisual.setInverse(graviteVersLeHaut);
-            this.playerVisual.setEtat({
-                auSol,
-                vx: this.player.body.velocity.x,
-                vy: this.player.body.velocity.y
-            });
+            if (this._topDownMode) {
+                // Vue de dessus : la silhouette s'oriente vers le déplacement.
+                this.playerVisual.setEtatTopDown({
+                    vx: this.player.body.velocity.x,
+                    vy: this.player.body.velocity.y
+                });
+            } else {
+                this.playerVisual.setDirection(this.lastDirection);
+                // Le Vestige bascule tête en bas quand il marche au plafond (zone
+                // de gravité inversée). Posé avant setEtat pour qu'il en tienne compte.
+                this.playerVisual.setInverse(graviteVersLeHaut);
+                this.playerVisual.setEtat({
+                    auSol,
+                    vx: this.player.body.velocity.x,
+                    vy: this.player.body.velocity.y
+                });
+            }
         }
 
         // --- Phase 6 — Garde tick + Aura visuelle ---
@@ -1163,6 +1260,79 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ============================================================
+    // MOUVEMENT VUE DE DESSUS (Cœur du Reflux — Phase 9.10)
+    // ============================================================
+    /**
+     * Déplacement 8 directions + dash, sans gravité. Appelé depuis update() à la
+     * place du bloc side-scroll quand `_topDownMode` est actif.
+     *
+     * - Gravité annulée : on compense la gravité du monde sur le corps
+     *   (body.gravity.y = -gWorld → accélération nette nulle).
+     * - 8-dir : vitesse posée directement depuis les intentions, normalisée en
+     *   diagonale pour ne pas aller plus vite.
+     * - Dash : burst i-framé dans la direction courante (ou la dernière). Même
+     *   touche que le saut. Pendant le dash, la vélocité injectée est préservée.
+     */
+    _mouvementTopDown(i, body, speed, now, immobilise, iGauche, iDroite) {
+        // Annule la gravité du monde sur ce corps (net = 0).
+        const gWorld = this.physics.world.gravity.y;
+        if (body.gravity.y !== -gWorld) body.gravity.y = -gWorld;
+        this._inversionGravite = false;
+
+        const enDash = (this._dashJusqu ?? 0) > now;
+        if (immobilise) { body.setVelocity(0, 0); return; }
+        if (enDash) return;   // vélocité du dash préservée jusqu'à expiration
+
+        // Vecteur de déplacement (−1, 0, +1 par axe).
+        let vx = 0, vy = 0;
+        if (iGauche && !iDroite) vx = -1;
+        else if (iDroite && !iGauche) vx = 1;
+        if (i.haut && !i.bas) vy = -1;
+        else if (i.bas && !i.haut) vy = 1;
+
+        // Normalise la diagonale (sinon √2 plus rapide).
+        if (vx !== 0 && vy !== 0) { const k = Math.SQRT1_2; vx *= k; vy *= k; }
+        body.setVelocity(vx * speed, vy * speed);
+
+        // Mémorise la dernière direction (pour l'attaque + le dash à l'arrêt).
+        if (vx !== 0 || vy !== 0) {
+            this._dirTopDown = { x: vx, y: vy };
+            if (vx < 0) this.lastDirection = -1;
+            else if (vx > 0) this.lastDirection = 1;
+        }
+
+        // Courant de Reflux : pousse le joueur tant qu'il est dedans (additif au
+        // déplacement). Posé AVANT le dash → le dash s'en affranchit pour la frame.
+        const pl = this.player;
+        if ((pl._courantJusqu ?? 0) > now) {
+            body.velocity.x += (pl._courantX ?? 0);
+            body.velocity.y += (pl._courantY ?? 0);
+        }
+
+        // Zone d'oubli : le dash est éteint (comme l'attaque/les sorts).
+        const enOubli = (pl._zoneOubliJusqu ?? 0) > now;
+
+        // Dash : burst dans la direction courante (ou la dernière connue).
+        if (i.dash && !enOubli && now > (this._dashCooldownTopDown ?? 0)) {
+            let dx = vx, dy = vy;
+            if (dx === 0 && dy === 0) {
+                const d = this._dirTopDown ?? { x: this.lastDirection || 1, y: 0 };
+                dx = d.x; dy = d.y;
+            }
+            const mag = Math.hypot(dx, dy) || 1;
+            const DASH_SPEED = speed * 2.3;          // réduit (anti-tunneling + feel)
+            body.setVelocity((dx / mag) * DASH_SPEED, (dy / mag) * DASH_SPEED);
+            this._dashJusqu = now + 170;             // durée du burst
+            this._dashCooldownTopDown = now + 750;   // cooldown
+            (this._usageStats ??= { attaque: 0, dash: 0, sort: 0 }).dash++;
+            // i-frames : réutilise l'invincibilité globale (esquive ondes/lasers).
+            this.invincibleJusqu = Math.max(this.invincibleJusqu ?? 0, now + 200);
+            this.audio?.jouerSfx?.('jump');
+            this.playerVisual?.flashBlanc?.();
+        }
+    }
+
+    // ============================================================
     // COMBAT
     // ============================================================
     tenterAttaque() {
@@ -1171,11 +1341,45 @@ export class GameScene extends Phaser.Scene {
         this.cooldownAttaqueFin = now + Math.max(100, this.statsEffectives.attaqueCooldown);
         // Track le dernier moment d'attaque (lu par Reflet-Double 3d)
         this.lastAttaqueAt = now;
+        // Profil de style de jeu (lu par le miroir du Cœur en secret phase).
+        (this._usageStats ??= { attaque: 0, dash: 0, sort: 0 }).attaque++;
 
         const portee = this.statsEffectives.attaquePortee;
+        // Direction : ±1 horizontal en side-scroll ; vecteur 8-dir en VUE DE
+        // DESSUS (Cœur) pour orienter le slash et frapper dans toutes les directions.
         const dir = this.lastDirection;
-        const hx = this.player.x + dir * (PLAYER.WIDTH / 2 + portee / 2);
-        const hy = this.player.y;
+        let aimX = dir, aimY = 0;
+        if (this._topDownMode) {
+            const d = this._dirTopDown ?? { x: dir || 1, y: 0 };
+            const m = Math.hypot(d.x, d.y) || 1; aimX = d.x / m; aimY = d.y / m;
+        }
+        const hx = this.player.x + aimX * (PLAYER.WIDTH / 2 + portee / 2);
+        const hy = this.player.y + aimY * (PLAYER.WIDTH / 2 + portee / 2);
+
+        // === VUE DE DESSUS : slash RADIAL 360° autour du joueur ===
+        if (this._topDownMode) {
+            const rayonV = PLAYER.WIDTH / 2 + portee + 12;
+            const arc = this.add.graphics();
+            arc.x = this.player.x; arc.y = this.player.y;
+            arc.setDepth(DEPTH.EFFETS); arc.setBlendMode(Phaser.BlendModes.ADD);
+            arc.lineStyle(7, 0xffd070, 0.35); arc.strokeCircle(0, 0, rayonV * 0.72);
+            arc.lineStyle(2.5, 0xffffff, 0.9); arc.strokeCircle(0, 0, rayonV * 0.72);
+            // Trait d'orientation : indique la direction visée (où mord le slash).
+            arc.lineStyle(5, 0xffffff, 0.95); arc.lineBetween(0, 0, aimX * rayonV, aimY * rayonV);
+            this.tweens.add({
+                targets: arc, scale: { from: 0.5, to: 1.18 }, alpha: { from: 1, to: 0 },
+                duration: 220, ease: 'Cubic.Out', onComplete: () => arc.destroy()
+            });
+            if (this.textures.exists('_particule')) {
+                const burst = this.add.particles(this.player.x, this.player.y, '_particule', {
+                    lifespan: 360, speed: { min: 130, max: 270 }, angle: { min: 0, max: 360 },
+                    scale: { start: 0.5, end: 0 }, tint: [0xffffff, 0xffd070, 0xff8040],
+                    quantity: 16, blendMode: Phaser.BlendModes.ADD, alpha: { start: 1, end: 0 }
+                });
+                burst.setDepth(DEPTH.EFFETS); burst.explode(16);
+                this.time.delayedCall(400, () => burst.destroy());
+            }
+        } else {
 
         // === SLASH COURBE 3 COUCHES (Bézier quadratique) ===
         // Trois couches concentriques avec une courbe Bézier (traceur custom)
@@ -1239,6 +1443,7 @@ export class GameScene extends Phaser.Scene {
             burst.explode(14);
             this.time.delayedCall(420, () => burst.destroy());
         }
+        }   // ── fin du visuel side-scroll (else de _topDownMode) ──
 
         // Test des ennemis dans la zone — on note si on a touché pour le hit feedback
         let degats = this.statsEffectives.attaqueDegats;
@@ -1251,13 +1456,21 @@ export class GameScene extends Phaser.Scene {
             degats *= (1 + (this.flagsExo.sig_dernier_souffle.params.bonusPct ?? 1.0));
         }
         const halfH = PLAYER.HEIGHT / 2 + 4;
+        // Zone de frappe : boîte directionnelle en side-scroll ; DISQUE radial
+        // 360° autour du joueur en VUE DE DESSUS (frappe omnidirectionnelle).
+        const rayonRadial = PLAYER.WIDTH / 2 + portee + 20;
+        const estDansAttaque = (ex, ey, ew, eh) => {
+            if (this._topDownMode) {
+                const dd = Math.hypot(ex - this.player.x, ey - this.player.y);
+                return dd < rayonRadial + Math.max(ew, eh) / 2;
+            }
+            return Math.abs(ex - hx) < portee / 2 + ew / 2 && Math.abs(ey - hy) < halfH + eh / 2;
+        };
         let aTouche = false;
         let dernierToucheRef = null;
         for (const e of this.enemies) {
             if (e.mort || !e.sprite.active) continue;
-            const dx = Math.abs(e.sprite.x - hx);
-            const dy = Math.abs(e.sprite.y - hy);
-            if (dx < portee / 2 + e.def.largeur / 2 && dy < halfH + e.def.hauteur / 2) {
+            if (estDansAttaque(e.sprite.x, e.sprite.y, e.def.largeur, e.def.hauteur)) {
                 e.recevoirDegats(degats);
                 aTouche = true;
                 dernierToucheRef = e.sprite;
@@ -1285,11 +1498,9 @@ export class GameScene extends Phaser.Scene {
                 if (!o.sprite || !o.sprite.active) continue;
                 if (o.data.type !== 'eboulis' && o.data.type !== 'mur_fissure'
                     && o.data.type !== 'mur_explosif' && o.data.type !== 'mur_secret') continue;
-                const dx = Math.abs(o.sprite.x - hx);
-                const dy = Math.abs(o.sprite.y - hy);
                 const ow = o.sprite.width  ?? 60;
                 const oh = o.sprite.height ?? 60;
-                if (dx < portee / 2 + ow / 2 && dy < halfH + oh / 2) {
+                if (estDansAttaque(o.sprite.x, o.sprite.y, ow, oh)) {
                     o.subirDegats(1);
                     aTouche = true;
                 }
@@ -2686,7 +2897,10 @@ export class GameScene extends Phaser.Scene {
     // HELPERS
     // ============================================================
     creerPlateforme(x, y, largeur, hauteur, couleur, oneWay = false, estSol = false) {
-        const rect = this.add.rectangle(x, y, largeur, hauteur, couleur);
+        // En VUE DE DESSUS, les « plateformes » sont des murs/blocs de pierre vus
+        // d'en haut : pierre cramoisi sombre, sans l'ornement side-scroll.
+        const coulFinale = this._topDownMode ? 0x3a121e : couleur;
+        const rect = this.add.rectangle(x, y, largeur, hauteur, coulFinale);
         rect.setDepth(DEPTH.PLATEFORMES);
         const groupe = oneWay ? this.oneWayPlatforms : this.platforms;
         groupe.add(rect);
@@ -2697,9 +2911,28 @@ export class GameScene extends Phaser.Scene {
             rect.body.checkCollision.right = false;
         }
 
-        // Ornement par-dessus la plateforme physique : pierre cassée Présent /
-        // pavés ornés Miroir avec chasse-pieds doré
-        peindreOrnementPlateforme(this, x, y, largeur, hauteur, this.mondeCourant, this.palette, oneWay, estSol);
+        if (this._topDownMode) {
+            // Anti-tunneling : le dash est rapide ; on épaissit la HITBOX des
+            // murs fins (≥46 px) sans changer le visuel, pour que le corps ne
+            // saute pas par-dessus le mur en un step. Centrée sur le bloc.
+            const MIN = 46;
+            const bw = Math.max(largeur, MIN), bh = Math.max(hauteur, MIN);
+            if (rect.body && (bw !== largeur || bh !== hauteur)) {
+                rect.body.setSize(bw, bh, true);
+            }
+            // Bloc de pierre vu de dessus : liseré cramoisi (arête) + filet
+            // incandescent sur un bord = lecture du relief sans détail max.
+            const bord = this.add.graphics();
+            bord.setDepth(DEPTH.PLATEFORMES + 1);
+            const gx = x - largeur / 2, gy = y - hauteur / 2;
+            bord.lineStyle(2, 0x7a2030, 0.9);
+            bord.strokeRect(gx, gy, largeur, hauteur);
+            bord.lineStyle(1, 0xff3838, 0.45);
+            bord.lineBetween(gx + 2, gy + 2, gx + largeur - 2, gy + 2);
+        } else {
+            // Ornement par-dessus : pierre cassée Présent / pavés ornés Miroir.
+            peindreOrnementPlateforme(this, x, y, largeur, hauteur, this.mondeCourant, this.palette, oneWay, estSol);
+        }
 
         return rect;
     }

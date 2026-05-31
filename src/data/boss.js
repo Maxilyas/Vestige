@@ -109,28 +109,26 @@ export const BOSS = {
     },
     9: {
         etage: 9,
-        nom: 'Échos Multipliés',
-        pattern: 'hydre',
+        nom: 'Le Doyen du Seuil',
+        pattern: 'doyen',            // Phase 9.14 — danmaku radial top-down, 3 phases
         skinBase: 'veilleur_reflux',
         couronne: 'couronne_epines',
         palette: { corps: 0x3a1a1a, accent: 0xff2030, halo: 0xff6060 },
-        hpBase: 90, degats: 22, vitesse: 90, taille: 1.9,
-        seuilPhase2: 0.6, seuilPhase3: 0.3,
-        delaiSmash: 2300, delaiTir: 900, nbProjectiles: 5,
-        homing: true,
+        hpBase: 130, degats: 22, vitesse: 0, taille: 1.9,  // stationnaire ; plus de PV (à refaire)
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
+        delaiTir: 1100, nbProjectiles: 5,
         drop: null
     },
     10: {
         etage: 10,
-        nom: 'Le Souverain du Reflux',
-        pattern: 'hydre',
+        nom: 'Le Cœur du Reflux',
+        pattern: 'coeur',            // Phase 9.15 — boss final top-down, 3 phases → FinScene
         skinBase: 'oeil_du_reflux',
         couronne: 'couronne_yeux',
         palette: { corps: 0x4a0a0a, accent: 0xff2030, halo: 0xff8080 },
-        hpBase: 120, degats: 25, vitesse: 95, taille: 2.0,
+        hpBase: 150, degats: 25, vitesse: 0, taille: 2.0,
         seuilPhase2: 0.66, seuilPhase3: 0.33,
-        delaiSmash: 2000, delaiTir: 800, nbProjectiles: 6,
-        homing: true,
+        delaiTir: 800, nbProjectiles: 6,
         drop: null
     }
 };
