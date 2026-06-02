@@ -478,8 +478,10 @@ export function updateColosseSel(boss, player) {
         s.time.delayedCall(820, () => {
             if (boss.mort || boss._secret) return;
             s.cameras?.main?.shake?.(320, 0.02);
-            // Éjecte le joueur s'il n'est PAS au sol (il grimpe).
-            if (!joueurAuSol(s)) {
+            // Éjecte le joueur s'il GRIMPE (= élevé au-dessus du sol). NB : sur une
+            // corniche, joueurAuSol() est vrai → on teste l'altitude, pas l'appui.
+            const { solY } = arene(boss);
+            if (player.y < solY - 50) {
                 const dir = Math.sign(player.x - boss.sprite.x) || -1;
                 player.body?.setVelocity(dir * 280, -220);
                 degatsJoueur(boss, 9, 0xe6f6ff);
@@ -510,7 +512,6 @@ function dessinerColosse(boss, now) {
     const g = boss._corps; g.clear();
     const fl = intensiteFlash(boss);
     const baseX = 660;
-    // Corps massif de sel : blocs empilés et jaggés.
     const blocs = [
         { x: baseX, y: solY - 30, w: 200, h: 60 },
         { x: baseX + 20, y: solY - 110, w: 175, h: 90 },
@@ -518,25 +519,37 @@ function dessinerColosse(boss, now) {
         { x: baseX + 25, y: solY - 300, w: 150, h: 110 },
         { x: baseX, y: solY - 392, w: 120, h: 100 }
     ];
+    // Halo additif : le sel est LUMINEUX (lit dans le noir du Présent).
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    g.fillStyle(0x9fe0ec, 0.10 + 0.04 * Math.sin(now / 600));
+    g.fillRect(baseX - 130, solY - 440, 260, 440);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+    // Corps massif de sel : blocs empilés et jaggés (clairs, fort contraste).
     for (let i = 0; i < blocs.length; i++) {
         const b = blocs[i];
-        g.fillStyle(fl ? 0xffffff : (i % 2 ? 0xc6bda8 : 0xd6cdb8), 1);
+        g.fillStyle(fl ? 0xffffff : (i % 2 ? 0xdcd8cc : 0xeae6da), 1);
         g.fillRect(b.x - b.w / 2, b.y - b.h, b.w, b.h);
-        g.fillStyle(0xe8e0cf, fl ? 0.2 : 0.5);
-        g.fillRect(b.x - b.w / 2, b.y - b.h, b.w * 0.3, b.h);   // facette claire
-        g.lineStyle(2, 0x9aa8a4, 0.5); g.strokeRect(b.x - b.w / 2, b.y - b.h, b.w, b.h);
+        g.fillStyle(0xfbf8f0, fl ? 0.3 : 0.7);
+        g.fillRect(b.x - b.w / 2, b.y - b.h, b.w * 0.28, b.h);          // facette claire
+        g.fillStyle(0xb8b6ac, 0.7);
+        g.fillRect(b.x + b.w * 0.32, b.y - b.h, b.w * 0.18, b.h);       // ombre
+        g.lineStyle(2, 0x8aa0a4, 0.6); g.strokeRect(b.x - b.w / 2, b.y - b.h, b.w, b.h);
     }
-    // Veines cristallines bleutées
-    g.lineStyle(2, 0x9fe0ec, 0.5);
+    // Veines cristallines bleutées (additif).
+    g.setBlendMode(Phaser.BlendModes.ADD); g.lineStyle(2, 0x9fe0ec, 0.55);
     g.lineBetween(baseX - 40, solY - 40, baseX + 30, solY - 320);
-    // Nœuds de sel : actif = lumineux cyan, autres = ternes.
+    g.lineBetween(baseX + 30, solY - 150, baseX - 20, solY - 360);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+    // Nœuds de sel : actif = BALISE cyan pulsante, autres = ternes.
     const ng = boss._noeudGfx; ng.clear(); ng.setBlendMode(Phaser.BlendModes.ADD);
     for (const n of boss._noeuds) {
         const actif = n.idx === boss._noeudActif && !boss._enSecousse;
-        const c = actif ? 0x9fe0ec : 0x5a6a6a;
-        const pulse = actif ? (0.6 + 0.4 * Math.sin(now / 150)) : 0.5;
-        ng.fillStyle(c, 0.3 * pulse); ng.fillCircle(n.x, n.y, 24);
-        ng.fillStyle(actif ? 0xe6f6ff : 0x88a0a0, 0.9 * pulse); ng.fillCircle(n.x, n.y, 9);
+        const c = actif ? 0x9fe0ec : 0x4a5a5a;
+        const pulse = actif ? (0.55 + 0.45 * Math.sin(now / 150)) : 0.4;
+        if (actif) { ng.fillStyle(0x9fe0ec, 0.22 * pulse); ng.fillCircle(n.x, n.y, 46); }
+        ng.fillStyle(c, 0.4 * pulse); ng.fillCircle(n.x, n.y, 24);
+        ng.fillStyle(actif ? 0xe6f6ff : 0x788888, pulse); ng.fillCircle(n.x, n.y, actif ? 12 : 8);
+        if (actif) { ng.fillStyle(0xffffff, pulse); ng.fillCircle(n.x, n.y, 5); }
     }
 }
 
