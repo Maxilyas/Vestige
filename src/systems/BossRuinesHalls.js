@@ -890,7 +890,8 @@ export function updateEffigieArdente(boss, player) {
     boss.direction = dir;
 
     // Au-dessus d'un bassin et encore ardente → extinction (fenêtre de vuln).
-    if (boss._hot && !boss._eteint && dansBassin(boss, boss.sprite.x)) {
+    // Cooldown après rallumage : empêche le perma-lock si le joueur reste dans l'eau.
+    if (boss._hot && !boss._eteint && now >= (boss._reigniteCd ?? 0) && dansBassin(boss, boss.sprite.x)) {
         boss._hot = false; boss._eteint = true;
         ouvrir(boss, 3600, 'L\'EFFIGIE S\'ÉTEINT', '#a0e0ff');
         vapeur(boss, boss.sprite.x, solY);
@@ -899,6 +900,7 @@ export function updateEffigieArdente(boss, player) {
     }
     if (boss._eteint && now >= boss._fenetreVulnFin) {
         boss._eteint = false; boss._hot = true; boss._vulnerable = false;
+        boss._reigniteCd = now + 2200;   // doit ressortir de l'eau avant de pouvoir ré-éteindre
         s.afficherMessageFlottant?.('elle se rallume', '#ff5020');
     }
 
@@ -951,6 +953,14 @@ function dessinerEffigie(boss, now) {
     const g = boss._corps; g.clear();
     const cx = boss.sprite.x, cy = boss.sprite.y, fl = intensiteFlash(boss);
     const h = boss.def.hauteur, w = boss.def.largeur;
+    // Aura de braise (additif) : large halo qui rend l'Effigie imposante quand ardente.
+    if (boss._hot && !boss._eteint) {
+        const ka = 0.5 + 0.5 * Math.sin(now / 130);
+        g.setBlendMode(Phaser.BlendModes.ADD);
+        g.fillStyle(0xff5020, 0.16 + 0.06 * ka); g.fillCircle(cx, cy, h * 0.95);
+        g.fillStyle(0xff8030, 0.14 + 0.06 * ka); g.fillCircle(cx, cy - 6, h * 0.62);
+        g.setBlendMode(Phaser.BlendModes.NORMAL);
+    }
     // Carcasse de bois/charbon.
     const cCorps = boss._eteint ? 0x2a2420 : (fl ? 0xffffff : 0x3a1a12);
     g.fillStyle(cCorps, 1);
