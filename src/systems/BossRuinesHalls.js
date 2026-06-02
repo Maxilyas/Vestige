@@ -640,7 +640,8 @@ export function initPorteurLanternes(boss) {
     boss._prochainMoth = s.time.now + 2600;
     boss._ombre = s.add.graphics().setDepth(DEPTH.EFFETS + 2);   // voile d'obscurité
     boss._corps = s.add.graphics().setDepth(DEPTH.ENTITES);
-    boss._lumGfx = s.add.graphics().setDepth(DEPTH.EFFETS + 1);
+    // La lumière doit passer AU-DESSUS du voile (additif) — sinon le noir la couvre.
+    boss._lumGfx = s.add.graphics().setDepth(DEPTH.EFFETS + 3);
     boss._vasquesRequis = 1;
 
     installerGate(boss, declencherLanternesChasse);
@@ -708,7 +709,12 @@ export function updatePorteurLanternes(boss, player) {
         boss.sprite.x = vCible.x; boss.sprite.y = vCible.y - 60;
         ouvrir(boss, 4200, 'IL EST DÉBUSQUÉ', '#ffd987');
     }
-    if (boss._vulnerable && now >= boss._fenetreVulnFin) boss._vulnerable = false;
+    // Fin de fenêtre : les vasques sont CONSUMÉES (re-allumer pour la prochaine).
+    if (boss._vulnerable && now >= boss._fenetreVulnFin) {
+        boss._vulnerable = false;
+        boss._vasques.forEach(v => v.lit = 0);
+        s.afficherMessageFlottant?.('Il se renfonce dans l\'ombre', '#6a5a7a');
+    }
 
     // Nuée de phalènes (projectiles vers le joueur).
     if (now >= boss._prochainMoth && !boss._vulnerable) {
@@ -725,8 +731,8 @@ function majOmbre(boss, player, now, nbLit) {
     const { L, solY } = arene(boss);
     // L'obscurité gagne ; les zones éclairées sont sûres.
     boss._ombre.clear();
-    const noirceur = Phaser.Math.Clamp(0.5 - nbLit * 0.12, 0.12, 0.5);
-    boss._ombre.fillStyle(0x05030a, noirceur);
+    const noirceur = Phaser.Math.Clamp(0.58 - nbLit * 0.14, 0.16, 0.58);
+    boss._ombre.fillStyle(0x05030e, noirceur);
     boss._ombre.fillRect(0, 0, L, arene(boss).H);
     // « trous » de lumière (vasques) — soustraits via ADD lumineux dans _lumGfx.
     // Dégâts si le joueur est au sol ET hors de toute lumière (les tendrils mordent).
@@ -744,8 +750,11 @@ function estDansLumiere(boss, x, y, now) {
 
 function dessinerLanternes(boss, now, nbLit) {
     const { solY } = arene(boss);
-    // Halos de lumière (vasques + lanterne portée).
+    // Halos de lumière (vasques + lanterne portée). ADDITIF, AU-DESSUS du voile.
     const lg = boss._lumGfx; lg.clear(); lg.setBlendMode(Phaser.BlendModes.ADD);
+    // Lueur personnelle ténue : on voit un peu autour de soi (ne SAUVE pas de l'ombre).
+    const pl = boss.scene.player;
+    if (pl) { lg.fillStyle(0xffd0a0, 0.11); lg.fillCircle(pl.x, pl.y, 112); lg.fillStyle(0xffe9c0, 0.08); lg.fillCircle(pl.x, pl.y, 58); }
     for (const v of boss._vasques) {
         const g = v.gfx; g.clear();
         // pied de vasque
@@ -776,9 +785,15 @@ function dessinerLanternes(boss, now, nbLit) {
     g.fillStyle(fl ? 0xffffff : (revele ? 0x8a7a5a : 0x241a30), 1);
     g.fillCircle(cx, cy - 50, 16);   // capuche
     if (revele) { g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(0xffb040, 0.4 + 0.3 * Math.sin(now / 150)); g.fillCircle(cx, cy, 18); g.setBlendMode(Phaser.BlendModes.NORMAL); }
-    else { g.fillStyle(0xffb040, 0.8); g.fillCircle(cx - 22, cy - 6, 5); g.fillCircle(cx + 22, cy - 6, 5); }   // yeux
+    else { g.fillStyle(0xffb040, 0.9); g.fillCircle(cx - 22, cy - 6, 5); g.fillCircle(cx + 22, cy - 6, 5); }   // yeux
     // Lanterne-bâton qu'il tient
-    g.fillStyle(0xffb040, 0.9); g.fillCircle(cx + 30, cy - 20, 6);
+    g.fillStyle(0xffe9b0, 0.95); g.fillCircle(cx + 30, cy - 20, 6);
+    // Balise traçable dans le noir (additif, au-dessus du voile) : sa lanterne luit.
+    if (!revele) {
+        const k = 0.5 + 0.5 * Math.sin(now / 220);
+        lg.fillStyle(0xffb050, 0.18 + 0.10 * k); lg.fillCircle(cx + 30, cy - 20, 30);
+        lg.fillStyle(0xff9030, 0.10); lg.fillCircle(cx, cy, 26);   // halo d'ombre du Porteur
+    }
 }
 
 // SECRET PHASE — tout s'éteint, TU portes la lumière, il la TRAQUE.
