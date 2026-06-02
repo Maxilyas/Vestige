@@ -94,6 +94,7 @@ npx live-server .
 - ✅ Phase 5' — Identité visuelle par paire d'étages (5 biomes)
 - ✅ Phase 8 → 8.3 — Refonte génération Ruines : spanning tree, mécanique d'ancrage, mur secret, gouffres mortels
 - ✅ Phase 9.1 → 9.x — Refonte salles compactes 960×540 : Ruines, Halls (+ toolkits v1/v2), Cristaux (fondation + Vagues 1-2), Voile (fondation + inversion gravité Vagues 1-2, salles testées) migrés ; système narratif `vestige_lore`
+- ✅ Refonte boss biomes 1-2 (side-scroll) — 4 encounters bespoke aux verbes opposés : Cariatide (détruire), Colosse de Sel (grimper), Porteur de Lanternes (éclairer), Effigie Ardente (kiter vers l'eau). Chacun 3 phases + secret phase + arène dédiée. `systems/BossRuinesHalls.js`.
 
 **À faire (priorité haut → bas) :**
 - 🟡 **Cœur du Reflux (biome 9-10)** — vision dans [COEUR.md](COEUR.md). **Vue de dessus** jouable de bout en bout : moteur 8-dir+dash, décor top-down, 6 obstacles, tableaux figés + écho-ghosts, entrée découplée (Seuil top-down / Cité Miroir side-scroll), **boss Le Doyen (é9)** + **boss Le Cœur (é10) → FinScene**. **Le jeu 10 étages est finissable en top-down.** Reste (polish) : cinématique bascule 8→9, vraies salles catalogue §6, salles é10 C/D, phase Écho du Cœur, audio. Détail COEUR.md §10.
@@ -119,7 +120,7 @@ npx live-server .
 ### Combat
 - **Joueur** : Rectangle physique invisible + JoueurVisuel (silhouette + cœur lumineux). X attaque / C parry (300ms + bonus Résonance) / 1-2-3 sorts par slot équipé.
 - **~30 archétypes ennemis** répartis sur les 5 biomes (4 comportements basiques + 6 innovants par biome). 4 tiers rareté (Commun / Élite / Rare / Légendaire) avec auras FX et drops boostés.
-- **10 boss** : 3 patterns × 10 skins, gating porte E salle BOSS. Drop : instance score 80+ garantie + 10-25 Sel + 3 Fragments. Boss étage 10 → cinématique fusion → FinScene.
+- **10 boss** : é1-4 (Ruines/Halls) + é9-10 (Cœur) = encounters **bespoke** (verbes uniques, 3 phases + secret phase) ; é5-8 encore génériques (3 patterns colosse/tisseur/hydre × skins). Gating porte E salle BOSS. Drop : instance score 80+ garantie + 10-25 Sel + 3 Fragments. Boss étage 10 → cinématique fusion → FinScene.
 - **Projectiles** : parry-able, homing optionnel, `effetImpact` (immobilise, vulnérabilité…).
 
 ### Loot & économie — Phase 6
@@ -146,12 +147,9 @@ npx live-server .
 ## État actuel
 *Garder court (3 lignes max). Détail dans les commits. À mettre à jour en fin de session.*
 
-- **Cœur du Reflux (biome 9-10) jouable bout-en-bout, VUE DE DESSUS** : fondation 8-dir+dash, décor top-down, 6 obstacles, `TableauSystem`+`EchoGhostSystem`, découplage entrée/Cité, validateur top-down (flood-fill), attaque **radiale 360°**, murs anti-tunnel. Étage 9 = Seuil→Courants→Épreuves→Cortège→Doyen ; étage 10 = Seuil→MilleRegards→Écho→Antichambre→Cœur. **Finissable** (Cœur mort → FinScene).
-- **Dernière étape — 2 BOSS REFONDUS (esprit WoW, verbes opposés)**, dans `BossCoeurReflux.js` (+ helpers `BossHelpers.js`), patterns `doyen`/`coeur` :
-  - **Le Doyen é9 « Procès » (MACRO/danse/soft-rage)** : boss MOBILE entre 4 tribunes ; ramasser des **Preuves** (DoT « Outrage » tant qu'on porte) → déposer sur la **Balance** → fenêtre de vuln ; Orbe de Verdict à parer ; **faucheux rétro-temporel** (retrace tes pas) ; secret phase **« La Cour se retire »** (géant central + ondes par quadrant + parade en courant). hp 130.
-  - **Le Cœur é10 « Polymorphe » (MICRO/exécution/miroir)** : P1 sceaux + **DPS-check des siphons** (sceaux verrouillés tant qu'un siphon vit) ; P2 **relier les 4 battements** ; P3 **gavage à contre-aspiration** (porter une Vérité = ancre, la jeter dans la gueule) ; secret phase **« Procès de tes Choix »** (miroir de TON style le + utilisé via `_usageStats` + montée du Reflux qui rétrécit + sceaux de pourtour) → vraie mort → FinScene. hp 150.
-  - Tout validé navigateur (mobilité, preuves/dépôt, siphons/lock, battements, aspiration, secret phases, style miroir='dash', mort→FinScene, 0 erreur). Designs : `BOSS_CONCEPTS.md` (20 concepts + §22-23).
-- **Reste** : (1) **gros polish + densité/difficulté des SALLES** (demandé, pas fait) ; (2) feel-test des 2 boss (équilibrage : hp 130/150, DoT, vitesse aspiration, durées fenêtres) ; (3) salles catalogue §6 restantes ; (4) audio Tone.js ; (5) polish boss (visuels segments/échos, vrais clones via CloneIllusion).
+- **Refonte boss biomes 1-2 (SIDE-SCROLL), 4 verbes opposés** — `systems/BossRuinesHalls.js` (+ event générique `joueur:attaque` dans GameScene pour frapper des destructibles ; arènes redessinées dans `topographies.js` ; fiches `data/boss.js`). **é1 La Cariatide** (DÉTRUIRE : briser 3 piliers → elle ploie → secret « arrache la voûte », mobile) ; **é2 Le Colosse de Sel** (GRIMPER : corniches = son corps → nœuds de sel, secousse éjecte → secret = éclats à détruire avant reformation) ; **é3 Le Porteur de Lanternes** (ÉCLAIRER : porter ses lanternes, allumer les vasques dans le noir → fenêtre ; secret « tout s'éteint, tu portes la lumière qu'il traque ») ; **é4 L'Effigie Ardente** (KITER : l'attirer dans les bassins → extinction → fenêtre ; secret « l'arène s'embrase », refuges = bassins + dalles refroidies). Tout validé navigateur (mécaniques, phases, secret phases, mort→boss:dead, melee réel, régression é5+ OK, 0 erreur). Designs `BOSS_CONCEPTS.md` #6/#15/#5/#12.
+- **Cœur du Reflux (biome 9-10), VUE DE DESSUS, finissable** : é9 Le Doyen « Procès » + é10 Le Cœur « Polymorphe » (esprit WoW, `BossCoeurReflux.js`) → FinScene. Étage 9 = Seuil→Courants→Épreuves→Cortège→Doyen ; étage 10 = Seuil→MilleRegards→Écho→Antichambre→Cœur. Cf. `BOSS_CONCEPTS.md` §22-23.
+- **Reste** : feel-test/équilibrage des 6 boss refondus (hp, durées de fenêtres, DoT/aspiration) ; **é5-8 toujours sur les 3 patterns génériques** (colosse/tisseur/hydre) — candidats refonte ; gros polish + densité/difficulté des SALLES ; salles catalogue Cœur §6 ; audio Tone.js.
 
 ## Conventions de level design (à respecter)
 - Saut max ABSOLU **96 px vert** ; saut horizontal max **130 px edge-to-edge**. `ÉCART_VERT_SAFE = 70` (préféré). Premiers paliers depuis le sol à ≤ 96, idéalement 70.
