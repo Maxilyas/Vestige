@@ -17,7 +17,8 @@ import {
 } from './BossRuinesHalls.js';
 import {
     initChoeurPetrifie, updateChoeurPetrifie,
-    initJumeauxResonants, updateJumeauxResonants
+    initJumeauxResonants, updateJumeauxResonants,
+    initTyranMiroir, updateTyranMiroir
 } from './BossCristauxVoile.js';
 
 // ============================================================
@@ -153,5 +154,6 @@ export const PATTERNS_BOSS = {
     effigie_ardente:    { init: initEffigieArdente,    update: updateEffigieArdente },    // é4
     // ─── REFONTE biomes 3-4 (Cristaux/Voile, side-scroll) — BossCristauxVoile.js ───
     choeur_petrifie:    { init: initChoeurPetrifie,    update: updateChoeurPetrifie },    // é5
-    jumeaux_resonants:  { init: initJumeauxResonants,  update: updateJumeauxResonants }   // é6
+    jumeaux_resonants:  { init: initJumeauxResonants,  update: updateJumeauxResonants },  // é6
+    tyran_miroir:       { init: initTyranMiroir,       update: updateTyranMiroir }        // é7
 };

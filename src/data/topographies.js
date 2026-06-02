@@ -1233,42 +1233,25 @@ const arene_boss_cristaux_6 = {
     }
 };
 
-// ─── Étage 7 (Voile Inversé) — Sols minimaux + 6 plates flottantes asymétriques ───
+// ─── Étage 7 (Voile) — LE TYRAN-MIROIR : sol + PLAFOND (gravité inversée) ───
+// 960×540 caméra figée. Sol ET plafond solides (le joueur se bat sur l'un ou
+// l'autre selon le sens de la gravité). Les lasers de gel sont dessinés par le
+// pattern. Le boss n'a pas de collision (positionné en miroir).
 const arene_boss_voile_7 = {
     id: 'arene_boss_voile_7',
-    nom: 'Voile Suspendu',
-    dims: { largeur: 1700, hauteur: 800 },
+    nom: 'La Galerie des Reflets',
+    dims: { largeur: 960, hauteur: 540 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = 680;
-        const yTopFosse = 770;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 500
         const plateformes = [];
-        // Petits sols aux extrémités
-        plateformes.push(solHorizontal(yTopSol, 0, 280));
-        plateformes.push(solHorizontal(yTopSol, 1420, dims.largeur));
-        // Fosse centrale longue
-        plateformes.push(solHorizontal(yTopFosse, 280, 1420, 30));
-        // 6 plates flottantes (max 60 vert variation, gap horiz 20-40)
-        const flottantes = [
-            { x: 380,  yTop: 600 },
-            { x: 600,  yTop: 540 },
-            { x: 800,  yTop: 580 },
-            { x: 1000, yTop: 520 },
-            { x: 1200, yTop: 580 },
-            { x: 1400, yTop: 520 }
-        ];
-        for (const f of flottantes) plateformes.push(plateforme(f.x, f.yTop, 180, 14, true));
-        // 4 pieux fosse
-        const obstacles = [];
-        for (const xPieu of [400, 700, 1000, 1300]) obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
+        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));   // sol
+        plateformes.push(solHorizontal(0, 0, dims.largeur));         // plafond (appui gravité inversée)
         const portes = {};
-        for (const dir of portesActives) {
-            const opts = { yTopSol: yTopSol - HAUTEUR_PORTE };
-            portes[dir] = portePos(dir, dims, opts);
-        }
-        return { plateformes, obstacles, portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
+        for (const dir of portesActives) portes[dir] = portePos(dir, dims);
+        return { plateformes, obstacles: [], portes, spawnDefault: { x: 70, y: yTopSol - 20 } };
     }
 };
 

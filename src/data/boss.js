@@ -82,15 +82,13 @@ export const BOSS = {
     },
     7: {
         etage: 7,
-        nom: 'Hydre Naissante',
-        pattern: 'hydre',
+        nom: 'Le Tyran-Miroir',
+        pattern: 'tyran_miroir',        // MIROIR de tes mouvements + gravité inversée (#8)
         skinBase: 'colosse_voile',
         couronne: 'cornes_longues',
-        palette: { corps: 0x5a3a6a, accent: 0xc080ff, halo: 0xe0a0ff },
-        hpBase: 60, degats: 18, vitesse: 85, taille: 1.8,
-        seuilPhase2: 0.5,
-        delaiSmash: 2500, delaiTir: 1100, nbProjectiles: 4,
-        homing: true,
+        palette: { corps: 0x2a1838, accent: 0xff40e0, halo: 0xff80ff },
+        hpBase: 48, degats: 18, vitesse: 0, taille: 1.2, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     8: {

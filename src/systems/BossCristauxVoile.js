@@ -415,3 +415,161 @@ function updateFusion(boss, player, now) {
     sg.fillStyle(0x60ffa0, 0.4 * pulse); sg.fillCircle(sx, sy, 22);
     sg.fillStyle(0xffffff, 0.9 * pulse); sg.fillCircle(sx, sy, 9);
 }
+
+// ════════════════════════════════════════════════════════════════════
+// é7 — LE TYRAN-MIROIR  (miroir de tes mouvements + inversions de gravité)
+// ════════════════════════════════════════════════════════════════════
+const TYRAN_LASER_X = [200, 480, 760];
+
+export function initTyranMiroir(boss) {
+    const s = boss.scene, { L, solY } = arene(boss);
+    boss.phase = 1; boss._vulnerable = false; boss._secret = false; boss._fenetreVulnFin = 0;
+    boss._staggered = false; boss._phaseGrav = 0; boss._contactInoffensif = true;
+    cacherDefaut(boss);
+    placer(boss, L * 0.5, solY - 60);
+    boss._lasers = TYRAN_LASER_X.map(x => ({ x, w: 54, actifJusqu: 0, teleJusqu: 0 }));
+    boss._laserIdx = 0; boss._prochainLaser = s.time.now + 1600;
+    boss._lames = []; boss._prochaineLame = s.time.now + 2400;
+    boss._corps = s.add.graphics().setDepth(DEPTH.ENTITES);
+    boss._laserGfx = s.add.graphics().setDepth(DEPTH.EFFETS);
+
+    // Inversions de gravité (réutilise le pendule du Voile) — lentes au départ.
+    s._initPendule({ periode: 6000, telegraphMs: 1000, depart: 'bas' });
+
+    installerGate(boss, declencherTyranSecret);
+    brancherAttaque(boss, () => {});
+    nettoyer(boss, ['_lasers']);
+    s.events.once('boss:dead', () => { boss._laserGfx?.destroy(); (boss._lames ?? []).forEach(l => l.gfx?.destroy()); s._initPendule(null); });
+    s.events.once('shutdown', () => s._initPendule(null));
+    s.afficherMessageFlottant?.('Il copie ton reflet — piège-le dans un laser de gel', '#ff80ff');
+}
+
+function refletCible(boss, player) {
+    const { L, H } = arene(boss);
+    if (boss._secret) return { x: L - player.x, y: H - player.y };   // symétrie CENTRALE (désapprendre)
+    return { x: L - player.x, y: player.y };                          // miroir HORIZONTAL
+}
+
+function majLasersTyran(boss, player, now) {
+    const intens = boss._secret ? 3 : boss.phase;
+    if (now >= boss._prochainLaser) {
+        const nb = intens >= 2 ? 2 : 1;
+        for (let k = 0; k < nb; k++) {
+            const las = boss._lasers[(boss._laserIdx + k) % 3];
+            las.teleJusqu = now + (intens === 3 ? 600 : 850);
+            las.actifJusqu = las.teleJusqu + (intens === 3 ? 1300 : 1700);
+        }
+        boss._laserIdx = (boss._laserIdx + nb) % 3;
+        boss._prochainLaser = now + (intens === 3 ? 1700 : 2500);
+    }
+    const g = boss._laserGfx; g.clear(); g.setBlendMode(Phaser.BlendModes.ADD);
+    for (const las of boss._lasers) {
+        const tele = now < las.teleJusqu;
+        const actif = now >= las.teleJusqu && now < las.actifJusqu;
+        if (tele) { g.fillStyle(0xff60c0, 0.08 + 0.18 * Math.abs(Math.sin(now / 60))); g.fillRect(las.x - las.w / 2, 0, las.w, 540); }
+        if (actif) {
+            g.fillStyle(0xff40e0, 0.32); g.fillRect(las.x - las.w / 2, 0, las.w, 540);
+            g.fillStyle(0xffffff, 0.6); g.fillRect(las.x - 6, 0, 12, 540);
+            if (Math.abs(player.x - las.x) < las.w / 2) degatsJoueur(boss, 8, 0xff40e0);
+        }
+    }
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+}
+
+function tenterPiege(boss, now, dureeWin) {
+    if (boss._vulnerable) return;
+    for (const las of boss._lasers) {
+        if (now >= las.teleJusqu && now < las.actifJusqu && Math.abs(boss.sprite.x - las.x) < las.w / 2) {
+            las.actifJusqu = 0;                       // le laser se décharge dans le reflet
+            boss._staggered = true;
+            ouvrir(boss, dureeWin, 'REFLET PIÉGÉ — FRAPPE !', '#60ffa0');
+            boss.scene.cameras?.main?.shake?.(220, 0.012);
+            return;
+        }
+    }
+}
+
+function poserLame(boss, player) {
+    boss._lames.push({ x: player.x, y: player.y, t: boss.scene.time.now + 650, gfx: boss.scene.add.graphics().setDepth(DEPTH.EFFETS) });
+}
+function majLames(boss, player, now) {
+    if (!boss._lames) return;
+    boss._lames = boss._lames.filter(l => {
+        const g = l.gfx; g.clear();
+        if (now < l.t) { g.lineStyle(2, 0xff60c0, 0.6); g.strokeCircle(l.x, l.y, 26); return true; }
+        g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(0xff40e0, 0.55); g.fillCircle(l.x, l.y, 30); g.setBlendMode(Phaser.BlendModes.NORMAL);
+        if (Math.hypot(player.x - l.x, player.y - l.y) < 32) degatsJoueur(boss, 9, 0xff40e0);
+        if (now > l.t + 180) { g.destroy(); return false; }
+        return true;
+    });
+}
+
+export function updateTyranMiroir(boss, player) {
+    const s = boss.scene, now = s.time.now, { L, solY } = arene(boss);
+    if (boss.sprite.body) boss.sprite.body.setVelocity(0, 0);
+    if (!player) return;
+
+    if (boss._secret) { updateTyranSecret(boss, player, now); return; }
+    majPhases(boss);
+    // Accélère les inversions de gravité par phase (une re-init par changement).
+    if (boss.phase !== boss._phaseGrav) {
+        boss._phaseGrav = boss.phase;
+        s._initPendule({ periode: boss.phase === 3 ? 3600 : boss.phase === 2 ? 4800 : 6000, telegraphMs: 900, depart: s._penduleInverse ? 'haut' : 'bas' });
+    }
+
+    if (!boss._vulnerable) {
+        const m = refletCible(boss, player);
+        boss.sprite.x = Phaser.Math.Clamp(m.x, 30, L - 30);
+        boss.sprite.y = Phaser.Math.Clamp(m.y, 60, solY - 16);
+        boss.direction = (m.x < player.x) ? 1 : -1;
+    } else if (now >= boss._fenetreVulnFin) { boss._vulnerable = false; boss._staggered = false; }
+
+    majLasersTyran(boss, player, now);
+    tenterPiege(boss, now, 3800);   // le reflet piégé est loin (≈560 px) → fenêtre généreuse
+    if (boss.phase >= 2) { majLames(boss, player, now); if (now >= boss._prochaineLame) { boss._prochaineLame = now + (boss.phase === 3 ? 1400 : 2200); poserLame(boss, player); } }
+    dessinerTyran(boss, now);
+}
+
+function dessinerTyran(boss, now) {
+    const g = boss._corps; g.clear();
+    const cx = boss.sprite.x, cy = boss.sprite.y, fl = intensiteFlash(boss);
+    const expose = boss._vulnerable;
+    // Halo de reflet (miroitement magenta).
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    g.fillStyle(expose ? 0x60ffa0 : 0xc040ff, (expose ? 0.3 : 0.18) + 0.08 * Math.sin(now / 160)); g.fillCircle(cx, cy, 38);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+    // Corps : roi-reflet sombre, couronne dentelée.
+    g.fillStyle(fl ? 0xffffff : (expose ? 0x9a6ad0 : 0x2a1838), 1);
+    g.beginPath(); g.moveTo(cx, cy - 36); g.lineTo(cx + 26, cy + 34); g.lineTo(cx - 26, cy + 34); g.closePath(); g.fillPath();
+    g.fillStyle(fl ? 0xffffff : (expose ? 0xc0a0e8 : 0x3a2450), 1); g.fillCircle(cx, cy - 40, 14);
+    // couronne
+    g.fillStyle(0xff80ff, 0.9);
+    for (const dx of [-12, 0, 12]) { g.fillTriangle(cx + dx - 4, cy - 50, cx + dx + 4, cy - 50, cx + dx, cy - 62); }
+    // yeux
+    g.fillStyle(0xff40e0, 1); g.fillCircle(cx - 6, cy - 40, 3); g.fillCircle(cx + 6, cy - 40, 3);
+}
+
+// SECRET — le miroir s'INVERSE (symétrie centrale) + inversions de gravité rapides.
+function declencherTyranSecret(boss) {
+    const s = boss.scene;
+    boss.hp = Math.round(boss.hpMax * 0.4); boss._vulnerable = false; boss._staggered = false;
+    s._initPendule({ periode: 2600, telegraphMs: 700, depart: s._penduleInverse ? 'haut' : 'bas' });
+    s.afficherMessageFlottant?.('LE MIROIR S\'INVERSE — désapprends', '#ff40e0');
+    s.cameras?.main?.flash?.(400, 60, 0, 80);
+    s.cameras?.main?.shake?.(500, 0.015);
+    s.events.emit('boss:phase', boss, 4);
+}
+function updateTyranSecret(boss, player, now) {
+    const { L, solY } = arene(boss);
+    if (boss.sprite.body) boss.sprite.body.setVelocity(0, 0);
+    if (!boss._vulnerable) {
+        const m = refletCible(boss, player);
+        boss.sprite.x = Phaser.Math.Clamp(m.x, 30, L - 30);
+        boss.sprite.y = Phaser.Math.Clamp(m.y, 60, solY - 16);
+    } else if (now >= boss._fenetreVulnFin) { boss._vulnerable = false; boss._staggered = false; }
+    majLasersTyran(boss, player, now);
+    tenterPiege(boss, now, 3200);
+    majLames(boss, player, now);
+    if (now >= boss._prochaineLame) { boss._prochaineLame = now + 1200; poserLame(boss, player); }
+    dessinerTyran(boss, now);
+}
