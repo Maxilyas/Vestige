@@ -15,6 +15,10 @@ import {
     initPorteurLanternes, updatePorteurLanternes,
     initEffigieArdente, updateEffigieArdente
 } from './BossRuinesHalls.js';
+import {
+    initChoeurPetrifie, updateChoeurPetrifie,
+    initJumeauxResonants, updateJumeauxResonants
+} from './BossCristauxVoile.js';
 
 // ============================================================
 // COLOSSE — smash AOE périodique
@@ -146,5 +150,8 @@ export const PATTERNS_BOSS = {
     cariatide:          { init: initCariatide,        update: updateCariatide },         // é1
     colosse_sel:        { init: initColosseSel,        update: updateColosseSel },        // é2
     porteur_lanternes:  { init: initPorteurLanternes,  update: updatePorteurLanternes },  // é3
-    effigie_ardente:    { init: initEffigieArdente,    update: updateEffigieArdente }     // é4
+    effigie_ardente:    { init: initEffigieArdente,    update: updateEffigieArdente },    // é4
+    // ─── REFONTE biomes 3-4 (Cristaux/Voile, side-scroll) — BossCristauxVoile.js ───
+    choeur_petrifie:    { init: initChoeurPetrifie,    update: updateChoeurPetrifie },    // é5
+    jumeaux_resonants:  { init: initJumeauxResonants,  update: updateJumeauxResonants }   // é6
 };

@@ -1185,66 +1185,51 @@ const arene_boss_halls_4 = {
     }
 };
 
-// ─── Étage 5 (Cristaux Glacés) — Cristaux saillants (pieux) en colonnes ───
+// ─── Étage 5 (Cristaux) — LE CHŒUR PÉTRIFIÉ : écran unique, sol verglacé ───
+// 960×540 → caméra figée (5 statues + Maestro dessinés par le pattern). Le sol
+// est rendu glissant par le boss (verglas). 2 corniches de repli anti-ondes.
 const arene_boss_cristaux_5 = {
     id: 'arene_boss_cristaux_5',
-    nom: 'Caverne de Cristal',
-    dims: { largeur: 1700, hauteur: 720 },
+    nom: 'Le Chœur de Marbre',
+    dims: { largeur: 960, hauteur: 540 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 500
         const plateformes = [];
         plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-        // 2 corniches latérales
-        plateformes.push(plateforme(280, yTopSol - 80, 220, 14, true));
-        plateformes.push(plateforme(1420, yTopSol - 80, 220, 14, true));
-        // 6 cristaux saillants espacés
-        const obstacles = [];
-        for (const xPieu of [550, 720, 850, 950, 1080, 1250]) obstacles.push(pieu(xPieu, yTopSol - 9, 'sol'));
+        plateformes.push(plateforme(230, yTopSol - 92, 150, 14, true));
+        plateformes.push(plateforme(730, yTopSol - 92, 150, 14, true));
         const portes = {};
         for (const dir of portesActives) portes[dir] = portePos(dir, dims);
-        return { plateformes, obstacles, portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
+        return { plateformes, obstacles: [], portes, spawnDefault: { x: 70, y: yTopSol - 20 } };
     }
 };
 
-// ─── Étage 6 (Cristaux Glacés) — 4 îlots fragmentés + 3 plates bypass ───
+// ─── Étage 6 (Cristaux) — LES JUMEAUX RÉSONANTS : écran unique + poste central ───
+// 960×540 caméra figée. Plateforme centrale = poste de combat pour atteindre les
+// jumeaux qui orbitent bas ; le faisceau entre eux balaie l'arène.
 const arene_boss_cristaux_6 = {
     id: 'arene_boss_cristaux_6',
-    nom: 'Sanctuaire Brisé',
-    dims: { largeur: 1700, hauteur: 800 },
+    nom: 'Les Trônes Jumeaux',
+    dims: { largeur: 960, hauteur: 540 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = 680;
-        const yTopFosse = 760;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 500
         const plateformes = [];
-        // 4 îlots de sol
-        plateformes.push(solHorizontal(yTopSol, 0, 350));
-        plateformes.push(solHorizontal(yTopSol, 500, 850));
-        plateformes.push(solHorizontal(yTopSol, 1000, 1350));
-        plateformes.push(solHorizontal(yTopSol, 1500, dims.largeur));
-        // 3 fosses entre îlots
-        plateformes.push(solHorizontal(yTopFosse, 350, 500, 40));
-        plateformes.push(solHorizontal(yTopFosse, 850, 1000, 40));
-        plateformes.push(solHorizontal(yTopFosse, 1350, 1500, 40));
-        // 3 plates bypass au-dessus des fosses
-        plateformes.push(plateforme(420, yTopSol - 80, 180, 14, true));
-        plateformes.push(plateforme(920, yTopSol - 80, 180, 14, true));
-        plateformes.push(plateforme(1420, yTopSol - 80, 180, 14, true));
-        // Pieux dans chaque fosse
+        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
+        // Poste central (atteindre les jumeaux orbitants).
+        plateformes.push(plateforme(dims.largeur / 2, yTopSol - 95, 240, 14, true));
+        // 2 paliers latéraux de repli.
+        plateformes.push(plateforme(170, yTopSol - 80, 150, 14, true));
+        plateformes.push(plateforme(790, yTopSol - 80, 150, 14, true));
         const obstacles = [];
-        for (const xPieu of [380, 420, 470, 880, 920, 960, 1380, 1420, 1470]) {
-            obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
-        }
         const portes = {};
-        for (const dir of portesActives) {
-            const opts = { yTopSol: yTopSol - HAUTEUR_PORTE };
-            portes[dir] = portePos(dir, dims, opts);
-        }
-        return { plateformes, obstacles, portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
+        for (const dir of portesActives) portes[dir] = portePos(dir, dims);
+        return { plateformes, obstacles, portes, spawnDefault: { x: 70, y: yTopSol - 20 } };
     }
 };
 

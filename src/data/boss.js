@@ -56,29 +56,28 @@ export const BOSS = {
         seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
+    // ─── REFONTE biomes 3-4 (Cristaux/Voile) — difficulté escaladante, é8 = climax.
+    //     Patterns side-scroll dédiés dans systems/BossCristauxVoile.js.
     5: {
         etage: 5,
-        nom: 'Voix de l\'Abîme',
-        pattern: 'hydre',
+        nom: 'Le Chœur Pétrifié',
+        pattern: 'choeur_petrifie',     // SÉQUENCE/MÉMOIRE + verglas (#3)
         skinBase: 'idole_fissuree',
         couronne: 'cristaux_dos',
-        palette: { corps: 0x4a5a8a, accent: 0x60d0ff, halo: 0xa0e0ff },
-        hpBase: 42, degats: 16, vitesse: 80, taille: 1.7,
-        seuilPhase2: 0.5,
-        delaiSmash: 2700, delaiTir: 1300, nbProjectiles: 3,
+        palette: { corps: 0x8a93a8, accent: 0x9fe0ec, halo: 0xe6f6ff },
+        hpBase: 30, degats: 16, vitesse: 0, taille: 1.0, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     6: {
         etage: 6,
-        nom: 'Œil Sans Fin',
-        pattern: 'tisseur',
+        nom: 'Les Jumeaux Résonants',
+        pattern: 'jumeaux_resonants',   // DEUX CORPS LIÉS + fusion (#10)
         skinBase: 'cracheur_pale',
         couronne: 'aura_glace',
-        palette: { corps: 0x4a6a8a, accent: 0xa0d0ff, halo: 0xc0e0ff },
-        hpBase: 50, degats: 18, vitesse: 0, taille: 1.8,
-        delaiTir: 1100,
-        nbProjectiles: 4,
-        homing: true,
+        palette: { corps: 0x6fb0e8, accent: 0xb06fe8, halo: 0xe6f6ff },
+        hpBase: 40, degats: 18, vitesse: 0, taille: 1.3, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     7: {
