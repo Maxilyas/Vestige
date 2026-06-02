@@ -18,7 +18,8 @@ import {
 import {
     initChoeurPetrifie, updateChoeurPetrifie,
     initJumeauxResonants, updateJumeauxResonants,
-    initTyranMiroir, updateTyranMiroir
+    initTyranMiroir, updateTyranMiroir,
+    initSouverainVoile, updateSouverainVoile
 } from './BossCristauxVoile.js';
 
 // ============================================================
@@ -155,5 +156,6 @@ export const PATTERNS_BOSS = {
     // ─── REFONTE biomes 3-4 (Cristaux/Voile, side-scroll) — BossCristauxVoile.js ───
     choeur_petrifie:    { init: initChoeurPetrifie,    update: updateChoeurPetrifie },    // é5
     jumeaux_resonants:  { init: initJumeauxResonants,  update: updateJumeauxResonants },  // é6
-    tyran_miroir:       { init: initTyranMiroir,       update: updateTyranMiroir }        // é7
+    tyran_miroir:       { init: initTyranMiroir,       update: updateTyranMiroir },       // é7
+    souverain_voile:    { init: initSouverainVoile,    update: updateSouverainVoile }     // é8 CLIMAX
 };

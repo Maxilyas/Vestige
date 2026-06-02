@@ -93,15 +93,13 @@ export const BOSS = {
     },
     8: {
         etage: 8,
-        nom: 'Tisseuse du Voile',
-        pattern: 'tisseur',
+        nom: 'Le Souverain du Voile',
+        pattern: 'souverain_voile',      // CLIMAX 2D : danmaku + gravité + échos + parade (boss original)
         skinBase: 'larme_tisseuse',
         couronne: 'voile_double',
-        palette: { corps: 0x6a3a8a, accent: 0xff80ff, halo: 0xffa0ff },
-        hpBase: 72, degats: 20, vitesse: 40, taille: 1.8,
-        delaiTir: 950,
-        nbProjectiles: 5,
-        homing: true,
+        palette: { corps: 0x1e1030, accent: 0xff40e0, halo: 0xff80ff },
+        hpBase: 96, degats: 22, vitesse: 0, taille: 1.6, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     9: {

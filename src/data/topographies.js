@@ -1255,36 +1255,24 @@ const arene_boss_voile_7 = {
     }
 };
 
-// ─── Étage 8 (Voile Inversé) — Sol HAUT inversé + gouffre central + ressorts ───
+// ─── Étage 8 (Voile) — LE SOUVERAIN DU VOILE : climax (sol + plafond) ───
+// 960×540 caméra figée. Sol + plafond (inversions de gravité). Tout le reste
+// (danmaku, échos, Orbe, vide qui rétrécit) est piloté par le pattern.
 const arene_boss_voile_8 = {
     id: 'arene_boss_voile_8',
-    nom: 'Voile Inversé',
-    dims: { largeur: 1700, hauteur: 800 },
+    nom: 'Le Trône du Reflux',
+    dims: { largeur: 960, hauteur: 540 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = 600;     // sol "haut" inversé
-        const yTopFosse = 760;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 500
         const plateformes = [];
-        plateformes.push(solHorizontal(yTopSol, 0, 380));
-        plateformes.push(solHorizontal(yTopSol, 1320, dims.largeur));
-        plateformes.push(solHorizontal(yTopFosse, 380, 1320));
-        // 3 plates asym pour traverser (climbs 20 + descents 60)
-        plateformes.push(plateforme(550, 580, 220, 14, true));
-        plateformes.push(plateforme(850, 520, 220, 14, true));
-        plateformes.push(plateforme(1150, 580, 220, 14, true));
-        const obstacles = [];
-        for (const xPieu of [450, 600, 750, 900, 1050, 1250]) obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
-        // Ressorts d'évacuation près des sols haut
-        obstacles.push(ressort(420, yTopFosse - 7));
-        obstacles.push(ressort(1280, yTopFosse - 7));
+        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));   // sol
+        plateformes.push(solHorizontal(0, 0, dims.largeur));         // plafond (appui gravité inversée)
         const portes = {};
-        for (const dir of portesActives) {
-            const opts = { yTopSol: yTopSol - HAUTEUR_PORTE };
-            portes[dir] = portePos(dir, dims, opts);
-        }
-        return { plateformes, obstacles, portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
+        for (const dir of portesActives) portes[dir] = portePos(dir, dims);
+        return { plateformes, obstacles: [], portes, spawnDefault: { x: 70, y: yTopSol - 20 } };
     }
 };
 

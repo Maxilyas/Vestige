@@ -19,6 +19,7 @@ import {
     installerGate, brancherAttaque, majPhases, ouvrir,
     ajouterZoneSol, majZonesSol, lancerOnde, majOndes, chuteGravats, nettoyer
 } from './BossSideScrollHelpers.js';
+import { EchoGhostSystem } from './EchoGhostSystem.js';
 
 // ════════════════════════════════════════════════════════════════════
 // HELPERS LOCAUX
@@ -572,4 +573,210 @@ function updateTyranSecret(boss, player, now) {
     majLames(boss, player, now);
     if (now >= boss._prochaineLame) { boss._prochaineLame = now + 1200; poserLame(boss, player); }
     dessinerTyran(boss, now);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// é8 — LE SOUVERAIN DU VOILE  (CLIMAX du platformer 2D — le plus dur)
+// ════════════════════════════════════════════════════════════════════
+// Empile TOUT : danmaku dense + inversions de gravité télégraphiées + échos de
+// TOI + Orbe du Verdict à parer + arène qui se rétrécit dans le vide. Secret =
+// tout en même temps + DPS-check sur micro-fenêtres post-flip → mène au Cœur.
+
+export function initSouverainVoile(boss) {
+    const s = boss.scene, { L, solY } = arene(boss);
+    boss.phase = 1; boss._vulnerable = false; boss._secret = false; boss._fenetreVulnFin = 0;
+    boss._contactInoffensif = true;
+    cacherDefaut(boss);
+    boss._cx = L / 2; boss._cyAir = 150;          // poste aérien (origine du danmaku)
+    placer(boss, boss._cx, boss._cyAir);
+    boss._spin = 0;
+    boss._prochainAnneau = s.time.now + 1600; boss._prochainSpirale = s.time.now + 100;
+    boss._orbe = null; boss._prochainOrbe = s.time.now + 3500;
+    boss._echos = null; boss._fluxR = 9999; boss._lastInverse = false;
+    boss._corps = s.add.graphics().setDepth(DEPTH.ENTITES);
+    boss._orbeGfx = s.add.graphics().setDepth(DEPTH.EFFETS);
+    boss._fluxGfx = s.add.graphics().setDepth(DEPTH.PLATEFORMES - 1);
+    boss._periodeGrav = 0;
+    souverainGravite(boss, 5200);
+
+    installerGate(boss, declencherSouverainSecret);
+    brancherAttaque(boss, () => {});
+    nettoyer(boss, []);
+    s.events.once('boss:dead', () => {
+        boss._orbeGfx?.destroy(); boss._fluxGfx?.destroy();
+        boss._echos?.ghosts?.forEach(gh => gh.visual?.destroy());
+        s._initPendule(null);
+    });
+    s.events.once('shutdown', () => s._initPendule(null));
+    s.afficherMessageFlottant?.('LE SOUVERAIN DU VOILE', '#ff40e0');
+}
+
+// (Re)configure la cadence des inversions de gravité (réutilise le pendule Voile).
+function souverainGravite(boss, periode) {
+    const s = boss.scene;
+    if (boss._periodeGrav === periode) return;
+    boss._periodeGrav = periode;
+    s._initPendule({ periode, telegraphMs: Math.min(1000, periode * 0.28), depart: s._penduleInverse ? 'haut' : 'bas' });
+}
+
+// Fenêtre de DPS (P1-3) : gravité STABILISÉE (normale) + le boss descend au sol.
+function ouvrirFenetreSouverain(boss, duree) {
+    const s = boss.scene, { L, solY } = arene(boss);
+    s._pendule = null; s._penduleInverse = false;     // pause des flips pendant le DPS
+    boss.sprite.y = solY - 50; boss.sprite.x = Phaser.Math.Clamp(s.player.x + 70, 60, L - 60);
+    ouvrir(boss, duree, 'LE SOUVERAIN VACILLE — FRAPPE', '#60ffa0');
+}
+function fermerFenetreSouverain(boss) {
+    const s = boss.scene;
+    boss._vulnerable = false;
+    boss.sprite.x = boss._cx; boss.sprite.y = boss._cyAir;
+    boss._periodeGrav = 0; souverainGravite(boss, boss.phase === 3 ? 3600 : boss.phase === 2 ? 4400 : 5200);
+}
+
+// ── Orbe du Verdict (géré par le pattern, parable manuellement) ──
+function lancerOrbe(boss, player) {
+    const a = Math.atan2(player.y - boss._cyAir, player.x - boss._cx);
+    boss._orbe = { x: boss._cx, y: boss._cyAir, vx: Math.cos(a) * 2.6, vy: Math.sin(a) * 2.6 };
+    boss.scene.afficherMessageFlottant?.('ORBE DU VERDICT — PARE (C)', '#ffd070');
+}
+function majOrbe(boss, player, now, dureeWin) {
+    const o = boss._orbe, g = boss._orbeGfx; g.clear();
+    if (!o) return;
+    o.x += o.vx; o.y += o.vy;
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    g.fillStyle(0xffd070, 0.3 + 0.1 * Math.sin(now / 90)); g.fillCircle(o.x, o.y, 26);
+    g.fillStyle(0xfff0c0, 0.95); g.fillCircle(o.x, o.y, 12);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+    const { L, H } = arene(boss);
+    if (Math.hypot(player.x - o.x, player.y - o.y) < 40) {
+        if (boss.scene.estParryActif?.()) {
+            boss.scene.parryActifJusqu = 0;
+            boss.scene.resonance?.regagner?.(boss.scene.statsEffectives?.parryBonusResonance ?? 5);
+            boss.scene.afficherMessageFlottant?.('VERDICT PARÉ', '#60ffa0');
+            boss.scene._jouerEffetParryReussi?.();
+            boss._orbe = null; g.clear();
+            boss._prochainOrbe = now + (boss.phase === 3 ? 3200 : 4400);
+            ouvrirFenetreSouverain(boss, dureeWin);
+        } else {
+            degatsJoueur(boss, 14, 0xffd070); boss._orbe = null; g.clear(); boss._prochainOrbe = now + 4400;
+        }
+        return;
+    }
+    if (o.x < -40 || o.x > L + 40 || o.y < -40 || o.y > H + 40) { boss._orbe = null; g.clear(); boss._prochainOrbe = now + 4400; }
+}
+
+// ── Flux qui rétrécit (disque sûr ; hors disque = dégâts) ──
+function majFlux(boss, player, now, minR) {
+    const { L, H } = arene(boss), cx = L / 2, cy = H / 2;
+    if (boss._fluxR > 9000) boss._fluxR = 380;
+    boss._fluxR = Math.max(minR, boss._fluxR - 0.11);
+    const g = boss._fluxGfx; g.clear();
+    g.fillStyle(0x3a0a40, 0.42); g.fillRect(0, 0, L, H);          // vide qui ronge l'arène
+    g.lineStyle(4, 0xff40e0, 0.55 + 0.2 * Math.sin(now / 200)); g.strokeCircle(cx, cy, boss._fluxR);
+    if (Math.hypot(player.x - cx, player.y - cy) > boss._fluxR && now >= (boss._fluxTick ?? 0)) {
+        boss._fluxTick = now + 360; degatsJoueur(boss, 7, 0xff40e0);
+    }
+}
+
+function danmakuSouverain(boss, now, dense) {
+    const cx = boss._cx, cy = boss._cyAir;
+    if (now >= boss._prochainAnneau) {
+        boss._prochainAnneau = now + (dense ? 1700 : 2300);
+        const gap = ((boss._spin % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        anneau(boss, 18 + boss.phase * 2, boss._spin, { x: cx, y: cy, vitesse: 150, degats: 6, gapDeb: gap, gapFin: gap + 0.9 });
+    }
+    if (now >= boss._prochainSpirale) {
+        boss._prochainSpirale = now + 95;
+        tirRadial(boss, boss._spin * 2.2, { x: cx, y: cy, vitesse: 170, degats: 6 });
+        if (dense) tirRadial(boss, boss._spin * 2.2 + Math.PI, { x: cx, y: cy, vitesse: 170, degats: 6 });
+    }
+}
+
+export function updateSouverainVoile(boss, player) {
+    const s = boss.scene, now = s.time.now;
+    if (boss.sprite.body) boss.sprite.body.setVelocity(0, 0);
+    if (!player) return;
+    boss._spin += 0.02;
+
+    if (boss._secret) { updateSouverainSecret(boss, player, now); dessinerSouverain(boss, now); return; }
+
+    majPhases(boss);
+    souverainGravite(boss, boss.phase === 3 ? 3600 : boss.phase === 2 ? 4400 : 5200);
+
+    if (boss._vulnerable) {
+        if (now >= boss._fenetreVulnFin) fermerFenetreSouverain(boss);
+    } else {
+        boss.sprite.x = boss._cx; boss.sprite.y = boss._cyAir;
+        danmakuSouverain(boss, now, boss.phase === 3);
+        majOrbe(boss, player, now, boss.phase === 3 ? 3000 : 3800);
+        if (!boss._orbe && now >= boss._prochainOrbe) lancerOrbe(boss, player);
+    }
+    // Échos de TOI (P2+).
+    if (boss.phase >= 2) {
+        if (!boss._echos) boss._echos = new EchoGhostSystem(s, { nbGhosts: boss.phase >= 3 ? 3 : 2, decalageMs: 820, degats: 6, seuilHit: 26 });
+        boss._echos.update(player, now);
+    }
+    // Arène qui se rétrécit (P3).
+    if (boss.phase >= 3) majFlux(boss, player, now, 240);
+
+    dessinerSouverain(boss, now);
+}
+
+function dessinerSouverain(boss, now) {
+    const g = boss._corps; g.clear();
+    const cx = boss.sprite.x, cy = boss.sprite.y, fl = intensiteFlash(boss);
+    const exp = boss._vulnerable;
+    // Aura de vide.
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    g.fillStyle(exp ? 0x60ffa0 : 0xc040ff, 0.16 + 0.07 * Math.sin(now / 180)); g.fillCircle(cx, cy, 52);
+    g.fillStyle(0xff40e0, 0.12); g.fillCircle(cx, cy, 30);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+    // Manteau (cloche large).
+    g.fillStyle(fl ? 0xffffff : (exp ? 0x7a4ab0 : 0x1e1030), 1);
+    g.beginPath(); g.moveTo(cx, cy - 44); g.lineTo(cx + 42, cy + 40); g.lineTo(cx - 42, cy + 40); g.closePath(); g.fillPath();
+    // Tête + couronne fracturée.
+    g.fillStyle(fl ? 0xffffff : (exp ? 0xc0a0e8 : 0x2e1c44), 1); g.fillCircle(cx, cy - 50, 16);
+    g.fillStyle(0xff80ff, 0.95);
+    for (const dx of [-16, -6, 6, 16]) g.fillTriangle(cx + dx - 4, cy - 62, cx + dx + 4, cy - 62, cx + dx, cy - 78 + Math.abs(dx) * 0.4);
+    // Multiples yeux du Voile.
+    g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(0xff40e0, 0.9);
+    g.fillCircle(cx - 8, cy - 50, 3); g.fillCircle(cx + 8, cy - 50, 3);
+    g.fillStyle(0xffffff, 0.8); g.fillCircle(cx, cy - 30, 4);
+    g.fillCircle(cx - 18, cy - 20, 3); g.fillCircle(cx + 18, cy - 20, 3);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+}
+
+// ── SECRET PHASE — « Le Reflux te réclame » : tout + micro-fenêtres post-flip ──
+function declencherSouverainSecret(boss) {
+    const s = boss.scene;
+    boss.hp = Math.round(boss.hpMax * 0.42); boss._vulnerable = false;
+    if (!boss._echos) boss._echos = new EchoGhostSystem(s, { nbGhosts: 3, decalageMs: 720, degats: 7, seuilHit: 26 });
+    boss._fluxR = 340; boss._lastInverse = s._penduleInverse;
+    boss._cx = arene(boss).L / 2; boss.sprite.x = boss._cx; boss.sprite.y = boss._cyAir;
+    boss._periodeGrav = 0; souverainGravite(boss, 2600);          // flips SERRÉS
+    s.afficherMessageFlottant?.('LE REFLUX TE RÉCLAME', '#ff2060');
+    s.cameras?.main?.flash?.(500, 80, 0, 60); s.cameras?.main?.shake?.(600, 0.02);
+    s.events.emit('boss:phase', boss, 5);
+}
+
+function updateSouverainSecret(boss, player, now) {
+    const s = boss.scene, { L, solY } = arene(boss);
+    souverainGravite(boss, 2600);
+    boss._echos.update(player, now);
+    majFlux(boss, player, now, 150);
+    // Danmaku constant (ne pas re-pauser : c'est le climax).
+    danmakuSouverain(boss, now, true);
+    // Micro-fenêtre : à CHAQUE flip de gravité le Souverain est désorienté ~1.1 s.
+    const inv = s._penduleInverse;
+    if (inv !== boss._lastInverse) {
+        boss._lastInverse = inv;
+        boss._vulnerable = true; boss._fenetreVulnFin = now + 1100;
+        boss.sprite.y = inv ? 96 : solY - 50;
+        boss.sprite.x = Phaser.Math.Clamp(player.x + 50, 60, L - 60);
+        s.afficherMessageFlottant?.('DÉSORIENTÉ — FRAPPE !', '#60ffa0');
+    }
+    if (boss._vulnerable && now >= boss._fenetreVulnFin) { boss._vulnerable = false; boss.sprite.x = boss._cx; boss.sprite.y = boss._cyAir; }
+    // Orbe à parer aussi (fenêtre bonus).
+    majOrbe(boss, player, now, 2600);
+    if (!boss._orbe && now >= (boss._prochainOrbe ?? 0)) lancerOrbe(boss, player);
 }
