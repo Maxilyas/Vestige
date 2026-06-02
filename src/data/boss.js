@@ -9,51 +9,51 @@
 // HP / dégâts / vitesse / taille) + drop garanti (item ID ou null pour Tier 3 random).
 
 export const BOSS = {
+    // ─── REFONTE BIOMES 1-2 (Ruines / Halls) — 4 boss uniques, verbes opposés.
+    //     Patterns side-scroll dédiés dans systems/BossRuinesHalls.js
+    //     (cf. BOSS_CONCEPTS.md #6 Cariatide, #15 Colosse, #5 Lanternes, #12 Effigie).
     1: {
         etage: 1,
-        nom: 'Roi de Pierre',
-        pattern: 'colosse',
+        nom: 'La Cariatide',
+        pattern: 'cariatide',          // DÉTRUIRE l'environnement (#6)
         skinBase: 'gardien_pierre',
         couronne: 'cornes_courtes',
-        palette: { corps: 0x5a5a6a, accent: 0xff4040, halo: 0xff8080 },
-        hpBase: 18, degats: 14, vitesse: 75, taille: 1.6,
-        delaiSmash: 3200,
+        palette: { corps: 0x6a6457, accent: 0xd8c89a, halo: 0xefe4c6 },
+        hpBase: 16, degats: 12, vitesse: 78, taille: 1.9, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null  // Tier 3 random
     },
     2: {
         etage: 2,
-        nom: 'Effigie Brisée',
-        pattern: 'tisseur',
-        skinBase: 'oeil_temoin',
-        couronne: 'voile_double',
-        palette: { corps: 0x5a4a6a, accent: 0xc080ff, halo: 0xe0a0ff },
-        hpBase: 22, degats: 12, vitesse: 0, taille: 1.7,
-        delaiTir: 1400,
-        nbProjectiles: 3,
+        nom: 'Le Colosse de Sel',
+        pattern: 'colosse_sel',        // GRIMPER le boss (#15)
+        skinBase: 'gardien_pierre',
+        couronne: 'cristaux_dos',
+        palette: { corps: 0xcfc6b2, accent: 0x9fe0ec, halo: 0xe6f6ff },
+        hpBase: 18, degats: 13, vitesse: 0, taille: 1.4, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     3: {
         etage: 3,
-        nom: 'Marteau-Glas',
-        pattern: 'colosse',
+        nom: 'Le Porteur de Lanternes',
+        pattern: 'porteur_lanternes',  // ÉCLAIRER + objets à livrer (#5)
         skinBase: 'sentinelle_cendre',
-        couronne: 'cornes_longues',
-        palette: { corps: 0x6a4a3a, accent: 0xffa040, halo: 0xffd070 },
-        hpBase: 28, degats: 16, vitesse: 80, taille: 1.7,
-        delaiSmash: 2900,
+        couronne: 'voile_double',
+        palette: { corps: 0x2a2230, accent: 0xffb040, halo: 0xffd987 },
+        hpBase: 20, degats: 13, vitesse: 65, taille: 1.6, gravite: false,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     4: {
         etage: 4,
-        nom: 'Tisseur de Cendre',
-        pattern: 'tisseur',
-        skinBase: 'suintement',
-        couronne: 'crocs',
-        palette: { corps: 0x5a4a2a, accent: 0xffd070, halo: 0xffe0a0 },
-        hpBase: 34, degats: 14, vitesse: 0, taille: 1.7,
-        delaiTir: 1300,
-        nbProjectiles: 3,
-        homing: true,
+        nom: 'L\'Effigie Ardente',
+        pattern: 'effigie_ardente',    // KITER vers l'eau (#12)
+        skinBase: 'sentinelle_cendre',
+        couronne: 'cornes_longues',
+        palette: { corps: 0x3a1a12, accent: 0xff5020, halo: 0xff9050 },
+        hpBase: 24, degats: 14, vitesse: 96, taille: 1.6, gravite: true,
+        seuilPhase2: 0.66, seuilPhase3: 0.33,
         drop: null
     },
     5: {
@@ -157,8 +157,9 @@ export function definitionBoss(etageNumero, ENEMIES) {
         hp: fiche.hpBase,
         degatsContact: fiche.degats,
         vitesse: fiche.vitesse,
-        // Gravite : Colosse (marcheur) oui, Tisseur/Hydre non (ils lévitent)
-        gravite: fiche.pattern === 'colosse',
+        // Gravite : explicite via fiche.gravite si fournie ; sinon Colosse
+        // (marcheur) oui, Tisseur/Hydre non (ils lévitent).
+        gravite: fiche.gravite ?? (fiche.pattern === 'colosse'),
         rayonDetection: 600,
         // Spécifique pattern
         delaiSmash: fiche.delaiSmash,

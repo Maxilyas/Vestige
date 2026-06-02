@@ -9,6 +9,12 @@
 import {
     initDoyen, updateDoyen, initCoeur, updateCoeur
 } from './BossCoeurReflux.js';
+import {
+    initCariatide, updateCariatide,
+    initColosseSel, updateColosseSel,
+    initPorteurLanternes, updatePorteurLanternes,
+    initEffigieArdente, updateEffigieArdente
+} from './BossRuinesHalls.js';
 
 // ============================================================
 // COLOSSE — smash AOE périodique
@@ -135,5 +141,10 @@ export const PATTERNS_BOSS = {
     tisseur: { init: initTisseur, update: updateTisseur },
     hydre:   { init: initHydre,   update: updateHydre },
     doyen:   { init: initDoyen,   update: updateDoyen },  // VUE DE DESSUS (é9)
-    coeur:   { init: initCoeur,   update: updateCoeur }   // VUE DE DESSUS (é10) → FinScene
+    coeur:   { init: initCoeur,   update: updateCoeur },  // VUE DE DESSUS (é10) → FinScene
+    // ─── REFONTE biomes 1-2 (side-scroll) — BossRuinesHalls.js ───
+    cariatide:          { init: initCariatide,        update: updateCariatide },         // é1
+    colosse_sel:        { init: initColosseSel,        update: updateColosseSel },        // é2
+    porteur_lanternes:  { init: initPorteurLanternes,  update: updatePorteurLanternes },  // é3
+    effigie_ardente:    { init: initEffigieArdente,    update: updateEffigieArdente }     // é4
 };

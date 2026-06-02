@@ -1488,6 +1488,22 @@ export class GameScene extends Phaser.Scene {
             }
         }
         if (dernierToucheRef) this._dernierEnnemiTouche = dernierToucheRef;
+
+        // ─── Event générique d'attaque ─────────────────────────────────
+        // Permet aux patterns de boss (piliers de la Cariatide, points faibles
+        // du Colosse, etc.) de tester LEURS propres destructibles contre la
+        // zone d'attaque courante, sans les ajouter à this.enemies. La closure
+        // `dansZone` gère side-scroll (boîte) ET vue de dessus (disque).
+        let toucheExterne = false;
+        this.events.emit('joueur:attaque', {
+            dansZone: estDansAttaque,
+            degats,
+            x: this.player.x, y: this.player.y,
+            dirX: dir,
+            signalerTouche: () => { toucheExterne = true; }
+        });
+        if (toucheExterne) aTouche = true;
+
         if (aTouche) this.revelation?.incrementer('hits');
 
         // ─── Obstacles cassables (éboulis, mur fissuré) ────────────────
@@ -1822,6 +1838,9 @@ export class GameScene extends Phaser.Scene {
 
     contactEnnemi(ennemi) {
         if (ennemi.mort) return;
+        // Contact rendu inoffensif par le pattern (ex: corps escaladable du
+        // Colosse de Sel — on grimpe dessus sans subir de dégâts, sauf secousse).
+        if (ennemi._contactInoffensif) return;
         const now = this.time.now;
         if (now < this.invincibleJusqu) return;
 

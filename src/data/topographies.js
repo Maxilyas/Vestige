@@ -1084,102 +1084,104 @@ const arene_montee = {
 // Sélection via BOSS_ARENA_PAR_ETAGE (utilisée par EtageGen pour la salle BOSS).
 // ════════════════════════════════════════════════════════════
 
-// ─── Étage 1 (Ruines basses) — Sobre, 2 colonnes brisées ───
+// ─── Étage 1 (Ruines) — LA CARIATIDE : voûte + 3 piliers (dessinés par le boss) ───
+// Sol continu pour courir entre les piliers + 2 corniches de repli pour esquiver
+// les gravats. Les 3 piliers porteurs et la voûte fissurée sont gérés/dessinés
+// par le pattern `cariatide` (BossRuinesHalls.js) aux fractions x 0.18/0.5/0.82.
 const arene_boss_ruines_1 = {
     id: 'arene_boss_ruines_1',
-    nom: 'Sanctuaire en Ruines',
-    dims: { largeur: 1600, hauteur: 720 },
+    nom: 'Sanctuaire de la Voûtière',
+    dims: { largeur: 1400, hauteur: 640 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 600
         const plateformes = [];
         plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-        // 2 colonnes brisées (couvert minimal)
-        plateformes.push(plateforme(450, yTopSol - 60, 32, 60, false));
-        plateformes.push(plateforme(1150, yTopSol - 60, 32, 60, false));
+        // 2 corniches de repli (one-way) pour esquiver les gravats.
+        plateformes.push(plateforme(350, yTopSol - 80, 200, 14, true));
+        plateformes.push(plateforme(1050, yTopSol - 80, 200, 14, true));
         const portes = {};
         for (const dir of portesActives) portes[dir] = portePos(dir, dims);
         return { plateformes, obstacles: [], portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
     }
 };
 
-// ─── Étage 2 (Ruines basses) — Corniches asymétriques + puits étroit ───
+// ─── Étage 2 (Ruines) — LE COLOSSE DE SEL : on escalade son corps ───
+// Les corniches en zigzag SONT les prises d'escalade du colosse (= COLOSSE_LEDGES
+// dans BossRuinesHalls.js). Toutes one-way (montée verticale, ≤96 px d'écart).
+// Le corps + les nœuds de sel sont dessinés par le pattern `colosse_sel`.
 const arene_boss_ruines_2 = {
     id: 'arene_boss_ruines_2',
-    nom: 'Sanctuaire Fracturé',
-    dims: { largeur: 1600, hauteur: 720 },
+    nom: 'Le Géant de Sel',
+    dims: { largeur: 1200, hauteur: 680 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;
-        const yTopFosse = 700;
-        const plateformes = [];
-        // Sol avec petit puits central (100 px de large, franchissable d'un saut)
-        plateformes.push(solHorizontal(yTopSol, 0, 750));
-        plateformes.push(solHorizontal(yTopFosse, 750, 850, 20));
-        plateformes.push(solHorizontal(yTopSol, 850, dims.largeur));
-        // Corniches asymétriques (one-way)
-        plateformes.push(plateforme(300, yTopSol - 80, 400, 14, true));
-        plateformes.push(plateforme(1300, yTopSol - 80, 200, 14, true));
-        // 2 pieux dans le puits
-        const obstacles = [];
-        for (const xPieu of [780, 820]) obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
-        const portes = {};
-        for (const dir of portesActives) portes[dir] = portePos(dir, dims);
-        return { plateformes, obstacles, portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
-    }
-};
-
-// ─── Étage 3 (Halls Cendrés) — Estrade centrale + 2 corniches ───
-const arene_boss_halls_3 = {
-    id: 'arene_boss_halls_3',
-    nom: 'Salle des Échos',
-    dims: { largeur: 1600, hauteur: 720 },
-    archetypesCompatibles: [],
-    portesPossibles: ['E', 'O'],
-    generer({ portesActives = ['E', 'O'] } = {}) {
-        const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 640
         const plateformes = [];
         plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
-        // Estrade centrale solide
-        plateformes.push(plateforme(800, yTopSol - 80, 320, 16, false));
-        // 2 corniches latérales one-way
-        plateformes.push(plateforme(280, yTopSol - 70, 240, 14, true));
-        plateformes.push(plateforme(1320, yTopSol - 70, 240, 14, true));
+        // Prises d'escalade (corps du colosse) — DOIT matcher COLOSSE_LEDGES.
+        const prises = [
+            { x: 720, dy: 60 }, { x: 600, dy: 128 }, { x: 720, dy: 196 },
+            { x: 600, dy: 264 }, { x: 720, dy: 332 }, { x: 610, dy: 400 }
+        ];
+        for (const p of prises) plateformes.push(plateforme(p.x, yTopSol - p.dy, 150, 14, true));
         const portes = {};
         for (const dir of portesActives) portes[dir] = portePos(dir, dims);
         return { plateformes, obstacles: [], portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
     }
 };
 
-// ─── Étage 4 (Halls Cendrés) — Gouffre central + 2 ponts asymétriques ───
-const arene_boss_halls_4 = {
-    id: 'arene_boss_halls_4',
-    nom: 'Pont des Cendres',
-    dims: { largeur: 1700, hauteur: 720 },
+// ─── Étage 3 (Halls) — LE PORTEUR DE LANTERNES : salle obscure + vasques ───
+// 3 vasques (gérées par le pattern) : 2 au sol (x 0.18 / 0.82) + 1 sur la corniche
+// centrale (x 0.5, à solY-84). Corniche + 2 ledges latéraux pour porter la lumière.
+const arene_boss_halls_3 = {
+    id: 'arene_boss_halls_3',
+    nom: 'Le Cortège des Ombres',
+    dims: { largeur: 1300, hauteur: 620 },
     archetypesCompatibles: [],
     portesPossibles: ['E', 'O'],
     generer({ portesActives = ['E', 'O'] } = {}) {
         const dims = this.dims;
-        const yTopSol = dims.hauteur - HAUTEUR_SOL;
-        const yTopFosse = 700;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 580
         const plateformes = [];
-        plateformes.push(solHorizontal(yTopSol, 0, 600));
-        plateformes.push(solHorizontal(yTopFosse, 600, 1100, 20));
-        plateformes.push(solHorizontal(yTopSol, 1100, dims.largeur));
-        // 2 ponts asymétriques au-dessus du gouffre
-        plateformes.push(plateforme(750, yTopSol - 100, 300, 14, true));
-        plateformes.push(plateforme(1000, yTopSol - 180, 250, 14, true));
-        // 5 pieux dans le gouffre
-        const obstacles = [];
-        for (const xPieu of [680, 760, 840, 920, 1020]) obstacles.push(pieu(xPieu, yTopFosse - 9, 'sol'));
+        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
+        // Corniche centrale qui porte la vasque V1 (atteinte d'un saut).
+        plateformes.push(plateforme(650, yTopSol - 84, 220, 14, true));
+        // 2 paliers latéraux de repli.
+        plateformes.push(plateforme(300, yTopSol - 70, 180, 14, true));
+        plateformes.push(plateforme(1000, yTopSol - 70, 180, 14, true));
         const portes = {};
         for (const dir of portesActives) portes[dir] = portePos(dir, dims);
-        return { plateformes, obstacles, portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
+        return { plateformes, obstacles: [], portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
+    }
+};
+
+// ─── Étage 4 (Halls) — L'EFFIGIE ARDENTE : kiter vers l'eau ───
+// Sol CONTINU (l'Effigie est un marcheur — pas de gouffre où elle tomberait).
+// 2 bassins d'eau (zones gérées par le pattern, aux fractions x 0.18-0.30 / 0.70-0.82)
+// + 3 corniches-refuges pour survivre quand l'arène s'embrase (secret phase).
+const arene_boss_halls_4 = {
+    id: 'arene_boss_halls_4',
+    nom: 'La Forge Noyée',
+    dims: { largeur: 1500, hauteur: 640 },
+    archetypesCompatibles: [],
+    portesPossibles: ['E', 'O'],
+    generer({ portesActives = ['E', 'O'] } = {}) {
+        const dims = this.dims;
+        const yTopSol = dims.hauteur - HAUTEUR_SOL;   // 600
+        const plateformes = [];
+        plateformes.push(solHorizontal(yTopSol, 0, dims.largeur));
+        // Corniches-refuges (one-way) : sûres quand le sol brûle.
+        plateformes.push(plateforme(750, yTopSol - 90, 200, 14, true));
+        plateformes.push(plateforme(450, yTopSol - 150, 160, 14, true));
+        plateformes.push(plateforme(1050, yTopSol - 150, 160, 14, true));
+        const portes = {};
+        for (const dir of portesActives) portes[dir] = portePos(dir, dims);
+        return { plateformes, obstacles: [], portes, spawnDefault: { x: 80, y: yTopSol - 20 } };
     }
 };
 
